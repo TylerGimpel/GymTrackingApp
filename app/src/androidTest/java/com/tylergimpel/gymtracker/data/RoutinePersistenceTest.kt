@@ -61,7 +61,7 @@ class RoutinePersistenceTest {
         sessions.finishSession(session.id, routine, push)
         routines.recordCompletion(routine.id, push, session.id)
 
-        routines.deleteRoutine(routine.id)
+        routines.deleteRoutine()
 
         assertNull(routines.observeProgress().first())
         assertEquals(0, countOf("routine_day"))
@@ -80,7 +80,7 @@ class RoutinePersistenceTest {
         val session = sessions.observeActiveSession().first()!!
         sessions.finishSession(session.id, routine, routine.rotation.first())
 
-        routines.deleteRoutine(routine.id)
+        routines.deleteRoutine()
 
         val stored = database.sessionDao().session(session.id)!!
         assertEquals("Push / Pull / Legs", stored.routineName)
@@ -137,11 +137,12 @@ class RoutinePersistenceTest {
         complete(routine.rotation[1])
         routines.recordSkip(routine.id, routine.rotation[2])
 
+        // The cycle ends the moment its last day is dealt with, so what shows is the new one.
         val afterRollover = routines.observeProgress().first()!!
-        assertEquals(1, afterRollover.cycle!!.ordinal)
+        assertEquals(2, afterRollover.cycle!!.ordinal)
+        assertEquals(emptyMap<Long, Any>(), afterRollover.cycle!!.outcomes)
         assertEquals("Push", afterRollover.cursor?.name)
 
-        // The next outcome belongs to a new cycle, which starts with nothing done.
         complete(routine.rotation[0])
 
         val second = routines.observeProgress().first()!!
@@ -169,7 +170,6 @@ class RoutinePersistenceTest {
         val before = routines.observeProgress().first()!!.cycle!!
 
         routines.editProperties(
-            routineId = routine.id,
             name = "Renamed",
             goal = RoutineGoal.STRENGTH,
             cadence = 5,
@@ -198,6 +198,64 @@ class RoutinePersistenceTest {
         val moved = routines.observeProgress().first()!!.routine
         assertEquals("Day 7", moved.rotation[5].name)
         assertEquals("Day 6", moved.rotation[6].name)
+    }
+
+    @Test
+    fun addingADayEndsTheCycleRatherThanReopeningAFinishedOne() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation[0])
+        complete(routine.rotation[1])
+        complete(routine.rotation[2])
+        assertEquals(2, routines.observeProgress().first()!!.cycle!!.ordinal)
+
+        routines.addDay(routine.id, "Arms")
+
+        // Without ending the cycle, the finished one would reopen with only Arms undone and the
+        // lifter would be told to train the day they had just invented.
+        val revised = routines.observeProgress().first()!!
+        assertEquals(3, revised.cycle!!.ordinal)
+        assertEquals(emptyMap<Long, Any>(), revised.cycle!!.outcomes)
+        assertEquals("Push", revised.cursor?.name)
+    }
+
+    @Test
+    fun reorderingTheRotationEndsTheCycle() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation[0])
+        assertEquals("Pull", routines.observeProgress().first()!!.cursor?.name)
+
+        routines.moveDay(routine.rotation[2].id, -1)
+
+        val revised = routines.observeProgress().first()!!
+        assertEquals(2, revised.cycle!!.ordinal)
+        assertEquals("Push", revised.cursor?.name)
+    }
+
+    @Test
+    fun removingADayEndsTheCycle() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation[0])
+
+        routines.removeDay(routine.rotation[2].id)
+
+        val revised = routines.observeProgress().first()!!
+        assertEquals(2, revised.cycle!!.ordinal)
+        assertEquals("Push", revised.cursor?.name)
+        assertEquals(listOf("Push", "Pull"), revised.routine.rotation.map(RoutineDay::name))
+    }
+
+    @Test
+    fun renamingADayIsNotARevisionAndLeavesTheCycleAlone() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation[0])
+        val before = routines.observeProgress().first()!!.cycle!!
+
+        routines.renameDay(routine.rotation[0].id, "Push A")
+
+        val after = routines.observeProgress().first()!!
+        assertEquals(before.id, after.cycle!!.id)
+        assertEquals("Pull", after.cursor?.name)
+        assertEquals("Push A", after.routine.rotation.first().name)
     }
 
     // --- fixtures ----------------------------------------------------------------------------

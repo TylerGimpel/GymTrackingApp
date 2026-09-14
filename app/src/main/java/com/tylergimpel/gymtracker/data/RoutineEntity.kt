@@ -66,16 +66,12 @@ data class RoutineDayEntity(
 
     @ColumnInfo(name = "name")
     val name: String,
-
-    @ColumnInfo(name = "is_cardio")
-    val isCardio: Boolean,
 )
 
 fun RoutineDayEntity.toDomain() = RoutineDay(
     id = id,
     orderIndex = orderIndex,
     name = name,
-    isCardio = isCardio,
 )
 
 fun RoutineEntity.toDomain(days: List<RoutineDayEntity>) = Routine(

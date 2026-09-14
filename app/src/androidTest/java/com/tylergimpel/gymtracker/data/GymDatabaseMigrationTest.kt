@@ -90,8 +90,7 @@ class GymDatabaseMigrationTest {
                     "VALUES ('Push / Pull / Legs', 'HYPERTROPHY', 4, 'barbell', 'MODERATE')",
             )
             db.execSQL(
-                "INSERT INTO routine_day (routine_id, order_index, name, is_cardio) " +
-                    "VALUES (1, 1, 'Push', 0)",
+                "INSERT INTO routine_day (routine_id, order_index, name) VALUES (1, 1, 'Push')",
             )
             db.execSQL("INSERT INTO cycle (routine_id, ordinal, started_at) VALUES (1, 1, 1757869200000)")
             db.execSQL(

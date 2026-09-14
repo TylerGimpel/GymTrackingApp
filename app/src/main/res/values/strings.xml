@@ -35,6 +35,8 @@
     <string name="routine_move_up">Up</string>
     <string name="routine_move_down">Down</string>
     <string name="routine_remove">Remove</string>
+    <string name="routine_default_name">My routine</string>
+    <string name="cancel">Cancel</string>
     <string name="routine_delete">Delete routine</string>
     <string name="routine_next_up">next up</string>
 

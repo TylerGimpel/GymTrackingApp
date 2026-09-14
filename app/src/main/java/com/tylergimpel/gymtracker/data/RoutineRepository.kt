@@ -38,29 +38,27 @@ class RoutineRepository(
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeProgress(): Flow<RoutineProgress?> =
         routines.observeRoutine().flatMapLatest { routine ->
-            if (routine == null) {
-                flowOf(null)
+            if (routine == null) flowOf(null) else observeProgressOf(routine)
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeProgressOf(routine: RoutineEntity): Flow<RoutineProgress> =
+        routines.observeLatestCycle(routine.id).flatMapLatest { cycle ->
+            if (cycle == null) {
+                routines.observeDays(routine.id).map { days ->
+                    RoutineProgress(routine.toDomain(days), cycle = null)
+                }
             } else {
                 combine(
                     routines.observeDays(routine.id),
-                    routines.observeLatestCycle(routine.id),
-                ) { days, cycle -> routine to (days to cycle) }
-                    .flatMapLatest { (routineEntity, state) ->
-                        val (days, cycle) = state
-                        if (cycle == null) {
-                            flowOf(RoutineProgress(routineEntity.toDomain(days), cycle = null))
-                        } else {
-                            combine(
-                                routines.observeCompletions(cycle.id),
-                                routines.observeSkips(cycle.id),
-                            ) { completions, skips ->
-                                RoutineProgress(
-                                    routine = routineEntity.toDomain(days),
-                                    cycle = cycle.toDomain(completions, skips),
-                                )
-                            }
-                        }
-                    }
+                    routines.observeCompletions(cycle.id),
+                    routines.observeSkips(cycle.id),
+                ) { days, completions, skips ->
+                    RoutineProgress(
+                        routine = routine.toDomain(days),
+                        cycle = cycle.toDomain(completions, skips),
+                    )
+                }
             }
         }
 
@@ -80,16 +78,20 @@ class RoutineRepository(
         ),
     )
 
-    /** Edits the routine's properties. Its day structure is untouched, so no cycle ends. */
+    /**
+     * Edits the routine's properties.
+     *
+     * Not a revision: the rotation is untouched, so no cycle ends. Changing a goal or the equipment
+     * at a gym should not cost a lifter their place in the routine.
+     */
     suspend fun editProperties(
-        routineId: Long,
         name: String,
         goal: RoutineGoal,
         cadence: Int,
         equipment: Set<String>,
         repPreference: RepPreference,
     ) {
-        val existing = routines.routine()?.takeIf { it.id == routineId } ?: return
+        val existing = routines.routine() ?: return
         routines.update(
             existing.copy(
                 name = name,
@@ -101,16 +103,25 @@ class RoutineRepository(
         )
     }
 
-    suspend fun addDay(routineId: Long, name: String, isCardio: Boolean = false): Long =
-        routines.insert(
+    /** Adds a day to the end of the rotation. A revision, so the current cycle ends. */
+    suspend fun addDay(routineId: Long, name: String): Long = database.withTransaction {
+        val id = routines.insert(
             RoutineDayEntity(
                 routineId = routineId,
                 orderIndex = routines.highestDayOrder(routineId) + 1,
                 name = name,
-                isCardio = isCardio,
             ),
         )
+        revise(routineId)
+        id
+    }
 
+    /**
+     * Renames a day.
+     *
+     * Not a revision: the rotation still holds the same days in the same order, and completions are
+     * keyed by day rather than by name, so nothing about the cycle becomes ambiguous.
+     */
     suspend fun renameDay(dayId: Long, name: String) = database.withTransaction {
         val routineId = routines.routine()?.id ?: return@withTransaction
         routines.days(routineId).firstOrNull { it.id == dayId }?.let {
@@ -118,12 +129,15 @@ class RoutineRepository(
         }
     }
 
+    /** Removes a day from the rotation. A revision, so the current cycle ends. */
     suspend fun removeDay(dayId: Long) = database.withTransaction {
+        val routineId = routines.routine()?.id ?: return@withTransaction
         routines.deleteDay(dayId)
-        renumber()
+        renumber(routineId)
+        revise(routineId)
     }
 
-    /** Moves a day one position earlier or later in the rotation. */
+    /** Moves a day one position earlier or later. A revision, so the current cycle ends. */
     suspend fun moveDay(dayId: Long, by: Int) = database.withTransaction {
         val routineId = routines.routine()?.id ?: return@withTransaction
         val days = routines.days(routineId).toMutableList()
@@ -132,10 +146,11 @@ class RoutineRepository(
         if (from < 0 || to !in days.indices) return@withTransaction
         days.add(to, days.removeAt(from))
         days.forEachIndexed { index, day -> routines.update(day.copy(orderIndex = index + 1)) }
+        revise(routineId)
     }
 
-    suspend fun deleteRoutine(routineId: Long) {
-        routines.routine()?.takeIf { it.id == routineId }?.let { routines.delete(it) }
+    suspend fun deleteRoutine() {
+        routines.routine()?.let { routines.delete(it) }
     }
 
     /** Records that [day] was trained, by the session that realised it. */
@@ -149,6 +164,7 @@ class RoutineRepository(
                     sessionId = sessionId,
                 ),
             )
+            openNextCycleIfComplete(routineId, cycle)
         }
 
     /** Records that [day] was dealt with without training it — the escape hatch past a day. */
@@ -161,35 +177,46 @@ class RoutineRepository(
                 recordedAt = clock.instant(),
             ),
         )
+        openNextCycleIfComplete(routineId, cycle)
+    }
+
+    /** The cycle in progress, opening the first one if the routine has never started. */
+    private suspend fun currentCycle(routineId: Long): CycleEntity =
+        routines.latestCycle(routineId) ?: openCycle(routineId, ordinal = 1)
+
+    /**
+     * Ends a cycle the moment its last day is dealt with rather than when the next outcome arrives,
+     * so stored state says what the cursor says: the cycle showing is the one being trained.
+     */
+    private suspend fun openNextCycleIfComplete(routineId: Long, cycle: CycleEntity) {
+        val routine = routines.routine()?.toDomain(routines.days(routineId)) ?: return
+        val outcomes = cycle.toDomain(routines.completions(cycle.id), routines.skips(cycle.id))
+        if (outcomes.isComplete(routine)) openCycle(routineId, cycle.ordinal + 1)
     }
 
     /**
-     * The cycle that new outcomes belong to.
+     * Ends the current cycle and starts the next one, with everything undone.
      *
-     * A cycle with every day dealt with is over, so the next outcome opens the following one. This
-     * is where the roll-over actually happens; the cursor only ever reports it.
+     * A change to which days are in the rotation, or to their order, is a revision, and ADR 0006
+     * ends the cycle rather than trying to carry completions across it. Without this, adding a day
+     * to a cycle that had already finished reopens it and points the lifter at the day they have
+     * just invented, with every other day still stamped done from a cycle that is over.
      */
-    private suspend fun currentCycle(routineId: Long): CycleEntity {
-        val days = routines.days(routineId)
-        val latest = routines.latestCycle(routineId)
-        if (latest != null) {
-            val outcomes = latest.toDomain(
-                routines.completions(latest.id),
-                routines.skips(latest.id),
-            )
-            val routine = routines.routine()?.toDomain(days) ?: return latest
-            if (!outcomes.isComplete(routine)) return latest
-        }
-        val next = CycleEntity(
-            routineId = routineId,
-            ordinal = (latest?.ordinal ?: 0) + 1,
-            startedAt = clock.instant(),
-        )
-        return next.copy(id = routines.insert(next))
+    private suspend fun revise(routineId: Long) {
+        val latest = routines.latestCycle(routineId) ?: return
+        openCycle(routineId, latest.ordinal + 1)
     }
 
-    private suspend fun renumber() {
-        val routineId = routines.routine()?.id ?: return
+    private suspend fun openCycle(routineId: Long, ordinal: Int): CycleEntity {
+        val cycle = CycleEntity(
+            routineId = routineId,
+            ordinal = ordinal,
+            startedAt = clock.instant(),
+        )
+        return cycle.copy(id = routines.insert(cycle))
+    }
+
+    private suspend fun renumber(routineId: Long) {
         routines.days(routineId).forEachIndexed { index, day ->
             if (day.orderIndex != index + 1) routines.update(day.copy(orderIndex = index + 1))
         }

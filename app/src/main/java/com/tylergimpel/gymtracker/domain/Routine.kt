@@ -22,12 +22,6 @@ data class RoutineDay(
     /** Where this day sits in the rotation, from 1. */
     val orderIndex: Int,
     val name: String,
-    /**
-     * A position carrying cardio instead of resistance work. It takes its turn in the cycle like
-     * any other day, but contributes no training volume and is excluded when translating volume
-     * targets (ADR 0005).
-     */
-    val isCardio: Boolean = false,
 )
 
 /**

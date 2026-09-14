@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.ui.routine
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +55,7 @@ fun RoutineScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val routine = state.progress?.routine
+    val defaultName = stringResource(R.string.routine_default_name)
 
     Scaffold(
         topBar = {
@@ -66,7 +68,10 @@ fun RoutineScreen(
         },
     ) { insets ->
         if (routine == null) {
-            EmptyRoutine(insets = insets, onCreate = viewModel::createRoutine)
+            EmptyRoutine(
+                insets = insets,
+                onCreate = { viewModel.createRoutine(defaultName) },
+            )
             return@Scaffold
         }
 
@@ -83,7 +88,7 @@ fun RoutineScreen(
             items(routine.rotation, key = RoutineDay::id) { day ->
                 RoutineDayRow(
                     day = day,
-                    position = routine.rotation.indexOf(day) + 1,
+                    position = day.orderIndex,
                     isNext = state.progress?.cursor?.id == day.id,
                     onRename = { viewModel.renameDay(day.id, it) },
                     onMove = { viewModel.moveDay(day.id, it) },
@@ -106,7 +111,7 @@ fun RoutineScreen(
 
 @Composable
 private fun EmptyRoutine(
-    insets: androidx.compose.foundation.layout.PaddingValues,
+    insets: PaddingValues,
     onCreate: () -> Unit,
 ) {
     Column(

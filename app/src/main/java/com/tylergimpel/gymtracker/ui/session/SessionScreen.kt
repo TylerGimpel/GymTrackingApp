@@ -234,7 +234,7 @@ private fun WhichDayDialog(
                 Text(stringResource(R.string.session_no_day))
             }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) } },
     )
 }
 

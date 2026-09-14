@@ -37,8 +37,8 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         RoutineUiState(progress = progress, availableEquipment = equipment)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), RoutineUiState())
 
-    fun createRoutine() {
-        viewModelScope.launch { repository.createRoutine(name = "My routine") }
+    fun createRoutine(name: String) {
+        viewModelScope.launch { repository.createRoutine(name = name) }
     }
 
     fun editProperties(
@@ -48,9 +48,8 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         equipment: Set<String>,
         repPreference: RepPreference,
     ) {
-        val routine = state.value.progress?.routine ?: return
         viewModelScope.launch {
-            repository.editProperties(routine.id, name, goal, cadence, equipment, repPreference)
+            repository.editProperties(name, goal, cadence, equipment, repPreference)
         }
     }
 
@@ -72,8 +71,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun deleteRoutine() {
-        val routine = state.value.progress?.routine ?: return
-        viewModelScope.launch { repository.deleteRoutine(routine.id) }
+        viewModelScope.launch { repository.deleteRoutine() }
     }
 
     private companion object {
