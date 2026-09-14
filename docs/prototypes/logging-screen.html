@@ -1,0 +1,698 @@
+<title>Logging Screen Variants</title>
+
+<!--
+  THROWAWAY PROTOTYPE - not production code, no tests, no error handling.
+
+  Question: what does the live logging screen look like, and how does it behave?
+  Three structurally different variants on one route, switchable via ?variant=A|B|C
+  and the floating bar at the bottom.
+
+  Sub-shape B (new page) is forced: this repo has no app yet, only docs, so there
+  is no existing page to host the variants inside.
+
+  Built mobile-first. Open it on a phone - the question is about one-handed use
+  at arm's length, which a desktop browser cannot answer.
+-->
+
+<style>
+  :root {
+    --bg: #f4f4f5;
+    --surface: #ffffff;
+    --surface-2: #ebebed;
+    --line: #d9d9de;
+    --text: #17171a;
+    --text-dim: #6b6b75;
+    --accent: #2563eb;
+    --accent-text: #ffffff;
+    --good: #15803d;
+    --warn: #b45309;
+    --calib: #7c3aed;
+    --radius: 14px;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0d0d10;
+      --surface: #17171c;
+      --surface-2: #212128;
+      --line: #2e2e38;
+      --text: #f2f2f5;
+      --text-dim: #9a9aa8;
+      --accent: #3b82f6;
+      --good: #22c55e;
+      --warn: #f59e0b;
+      --calib: #a78bfa;
+    }
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0d10; --surface: #17171c; --surface-2: #212128; --line: #2e2e38;
+      --text: #f2f2f5; --text-dim: #9a9aa8; --accent: #3b82f6;
+      --good: #22c55e; --warn: #f59e0b; --calib: #a78bfa;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0d10; --surface: #17171c; --surface-2: #212128; --line: #2e2e38;
+    --text: #f2f2f5; --text-dim: #9a9aa8; --accent: #3b82f6;
+    --good: #22c55e; --warn: #f59e0b; --calib: #a78bfa;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    margin: 0; padding: 0 0 88px;
+    max-width: 480px; margin-inline: auto;
+    -webkit-user-select: none; user-select: none;
+  }
+  button { font: inherit; color: inherit; border: none; background: none; cursor: pointer; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20; background: var(--surface);
+    border-bottom: 1px solid var(--line); padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .topbar .day { font-weight: 650; font-size: 16px; }
+  .topbar .clock { margin-left: auto; text-align: right; font-size: 12px; color: var(--text-dim); line-height: 1.25; }
+  .topbar .clock b { display: block; font-size: 14px; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .wrap { padding: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+
+  .exname { font-size: 20px; font-weight: 680; letter-spacing: -0.01em; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .dim { color: var(--text-dim); }
+  .tabnum { font-variant-numeric: tabular-nums; }
+
+  .chip {
+    font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim);
+  }
+  .chip.warmup { color: var(--warn); }
+  .chip.working { color: var(--good); }
+  .chip.calib { color: var(--calib); }
+  .chip.drop { color: var(--accent); }
+
+  .modebadge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 4px 9px; border-radius: 999px;
+    background: var(--surface-2);
+  }
+  .modebadge.calibrating { color: var(--calib); }
+  .modebadge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .counter { font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .counter b { color: var(--text); font-weight: 620; }
+
+  .iconbtn {
+    width: 38px; height: 38px; border-radius: 10px; background: var(--surface-2);
+    display: grid; place-items: center; font-size: 16px;
+  }
+
+  .hint { font-size: 12.5px; color: var(--text-dim); }
+  .hint.effort { color: var(--warn); }
+
+  /* rest timer */
+  .rest {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    max-width: 480px; margin-inline: auto;
+    background: var(--accent); color: var(--accent-text);
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 12px;
+    transform: translateY(110%); transition: transform .22s ease;
+  }
+  .rest.on { transform: none; }
+  .rest .t { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 76px; }
+  .rest .lab { font-size: 12px; opacity: .85; line-height: 1.25; }
+  .rest button { background: rgba(255,255,255,.18); padding: 8px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; }
+  .rest .spacer { margin-left: auto; display: flex; gap: 7px; }
+
+  /* switcher */
+  .switcher {
+    position: fixed; z-index: 60; bottom: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 2px;
+    background: #111318; color: #fff; border: 1px solid #3a3f4b;
+    border-radius: 999px; padding: 5px 6px; box-shadow: 0 6px 24px rgba(0,0,0,.45);
+    font-size: 12px;
+  }
+  .switcher button { padding: 5px 10px; border-radius: 999px; font-size: 15px; line-height: 1; }
+  .switcher .lbl { padding: 0 8px; white-space: nowrap; font-weight: 600; letter-spacing: .01em; }
+  .switcher .lbl span { opacity: .6; font-weight: 500; }
+
+  /* ---------- Variant A ---------- */
+  .a-presc { text-align: center; padding: 20px 14px 8px; }
+  .a-presc .big { font-size: 54px; font-weight: 730; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .a-presc .big small { font-size: 21px; font-weight: 600; color: var(--text-dim); }
+  .a-step { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
+  .a-step .grp { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border-radius: 12px; padding: 6px; }
+  .a-step .grp b { min-width: 54px; text-align: center; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .a-step .grp button { width: 40px; height: 40px; border-radius: 9px; background: var(--surface); font-size: 19px; font-weight: 600; }
+  .a-step .cap { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); text-align: center; margin-bottom: 4px; }
+  .a-log {
+    width: 100%; margin-top: 18px; padding: 20px; border-radius: 16px;
+    background: var(--accent); color: var(--accent-text); font-size: 19px; font-weight: 700;
+  }
+  .a-log.done { background: var(--good); }
+  .a-next { margin-top: 14px; font-size: 13px; color: var(--text-dim); text-align: center; }
+
+  /* ---------- Variant B ---------- */
+  .b-list { margin-top: 10px; }
+  .b-set {
+    display: flex; align-items: center; gap: 10px; padding: 11px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .b-set:last-child { border-bottom: none; }
+  .b-set.cur { background: var(--surface-2); }
+  .b-set.logged .val { color: var(--text-dim); }
+  .b-set .n { width: 20px; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .b-set .val { font-size: 16px; font-weight: 620; font-variant-numeric: tabular-nums; }
+  .b-set .prev { font-size: 11.5px; color: var(--text-dim); }
+  .b-set .tick { margin-left: auto; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 15px; }
+  .b-set .tick.idle { background: transparent; color: var(--text-dim); }
+  .b-set.logged .tick { background: transparent; color: var(--good); }
+  .b-edit { display: flex; gap: 8px; padding: 0 12px 12px; }
+  .b-edit input {
+    flex: 1; min-width: 0; font: inherit; font-size: 17px; font-weight: 600; text-align: center;
+    padding: 11px 6px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums;
+  }
+  .b-rest { padding: 8px 12px; font-size: 12px; color: var(--accent); font-weight: 600; }
+  .b-day { margin-top: 14px; }
+  .b-dayrow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .b-dayrow:last-child { border-bottom: none; }
+  .b-dayrow.cur { font-weight: 650; }
+  .b-dayrow .s { margin-left: auto; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Variant C ---------- */
+  .c-top { padding: 16px 14px 10px; }
+  .c-dials { margin-top: 16px; }
+  .c-dial { margin-bottom: 14px; }
+  .c-dial .cap { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); margin-bottom: 6px; }
+  .c-dial .cap b { font-size: 22px; text-transform: none; letter-spacing: -0.01em; color: var(--text); font-variant-numeric: tabular-nums; }
+  .c-track {
+    display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+  }
+  .c-track::-webkit-scrollbar { display: none; }
+  .c-track button {
+    flex: 0 0 auto; scroll-snap-align: center; min-width: 62px; padding: 13px 8px;
+    border-radius: 12px; background: var(--surface-2); font-size: 16px; font-weight: 600;
+    font-variant-numeric: tabular-nums; border: 2px solid transparent;
+  }
+  .c-track button.sel { background: var(--accent); color: var(--accent-text); }
+  .c-track button.rec { border-color: var(--accent); }
+  .c-log { width: 100%; padding: 19px; border-radius: 16px; background: var(--accent); color: var(--accent-text); font-size: 18px; font-weight: 700; }
+  .c-log.done { background: var(--good); }
+
+  /* cardio */
+  .cardio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .cardio-f { background: var(--surface-2); border-radius: 12px; padding: 11px 12px; }
+  .cardio-f .cap { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); }
+  .cardio-f .v { font-size: 21px; font-weight: 660; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .cardio-f.opt { opacity: .62; }
+
+  /* sheets */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 40; display: none; }
+  .scrim.on { display: block; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; max-width: 480px; margin-inline: auto;
+    background: var(--surface); border-radius: 18px 18px 0 0; padding: 16px 14px calc(20px + env(safe-area-inset-bottom));
+    transform: translateY(110%); transition: transform .24s ease; max-height: 82vh; overflow-y: auto;
+  }
+  .sheet.on { transform: none; }
+  .sheet h3 { margin: 0 0 3px; font-size: 17px; }
+  .sheet .sub { font-size: 12.5px; color: var(--text-dim); margin-bottom: 12px; }
+  .cand { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); margin-bottom: 8px; }
+  .cand .nm { font-weight: 600; font-size: 14.5px; }
+  .cand .mt { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
+  .cand .tag { margin-left: auto; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; }
+  .cand .tag.hist { color: var(--good); }
+  .cand .tag.new { color: var(--calib); }
+  .sheet .act { display: block; width: 100%; padding: 14px; border-radius: 12px; background: var(--surface-2); font-weight: 620; margin-top: 8px; text-align: center; }
+  .sheet .act.primary { background: var(--accent); color: var(--accent-text); }
+
+  .toast {
+    position: fixed; bottom: 76px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 10px 15px; border-radius: 11px;
+    font-size: 13px; font-weight: 560; z-index: 70; opacity: 0; transition: all .2s; pointer-events: none;
+    max-width: 90vw; text-align: center;
+  }
+  .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+
+<div class="topbar">
+  <div>
+    <div class="day" id="dayName">Push</div>
+    <div class="counter" id="posCounter"></div>
+  </div>
+  <div class="clock">
+    <b id="elapsed">0:00</b>
+    <span id="remaining">~52 min left</span>
+  </div>
+</div>
+
+<div class="wrap" id="app"></div>
+
+<div class="rest" id="rest">
+  <div class="t" id="restT">2:00</div>
+  <div class="lab" id="restLab">Rest<br>working set</div>
+  <div class="spacer">
+    <button onclick="addRest(30)">+30s</button>
+    <button onclick="skipRest()">Skip</button>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<div class="switcher">
+  <button onclick="cycle(-1)" aria-label="Previous variant">‹</button>
+  <div class="lbl" id="vlabel"></div>
+  <button onclick="cycle(1)" aria-label="Next variant">›</button>
+</div>
+
+<script>
+// ---------------------------------------------------------------- state
+const VARIANTS = { A: 'Big accept', B: 'Set list', C: 'Dial' };
+
+function mkSets(spec) {
+  return spec.map((s, i) => ({
+    idx: i, type: s.t, recW: s.w, recR: s.r, w: s.w, r: s.r,
+    rest: s.rest, drops: s.drops || null, done: false, prev: s.prev || null
+  }));
+}
+
+const session = {
+  day: 'Push',
+  startedAt: Date.now() - 14 * 60000,
+  exercises: [
+    {
+      name: 'Barbell Bench Press', mode: 'prescribing', unit: 'kg', type: 'weight_reps',
+      group: null,
+      sets: mkSets([
+        { t: 'warmup', w: 20, r: 10, rest: 45 },
+        { t: 'warmup', w: 45, r: 5,  rest: 45 },
+        { t: 'warmup', w: 65, r: 3,  rest: 60 },
+        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '80 × 8' },
+        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '80 × 7' },
+        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '80 × 6' },
+        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '77.5 × 8' }
+      ])
+    },
+    {
+      name: 'Incline Hammer Strength Chest Press', mode: 'prescribing', unit: 'kg', type: 'weight_reps',
+      group: null,
+      sets: mkSets([
+        { t: 'working', w: 60, r: 10, rest: 120, prev: '57.5 × 10' },
+        { t: 'working', w: 60, r: 10, rest: 120, prev: '57.5 × 9' },
+        { t: 'working', w: 60, r: 10, rest: 120, prev: '55 × 11' },
+        { t: 'working', w: 50, r: 12, rest: 120, prev: '—', drops: [{ w: 40, r: 8 }, { w: 30, r: 6 }] }
+      ])
+    },
+    {
+      name: 'Seated Machine Fly', mode: 'prescribing', unit: 'kg', type: 'weight_reps',
+      group: 'A',
+      sets: mkSets([
+        { t: 'working', w: 45, r: 12, rest: 0, prev: '45 × 12' },
+        { t: 'working', w: 45, r: 12, rest: 0, prev: '45 × 11' },
+        { t: 'working', w: 45, r: 12, rest: 0, prev: '42.5 × 12' }
+      ])
+    },
+    {
+      name: 'Rope Triceps Pushdown', mode: 'prescribing', unit: 'kg', type: 'weight_reps',
+      group: 'A',
+      sets: mkSets([
+        { t: 'working', w: 32.5, r: 12, rest: 90, prev: '30 × 12' },
+        { t: 'working', w: 32.5, r: 12, rest: 90, prev: '30 × 12' },
+        { t: 'working', w: 32.5, r: 12, rest: 90, prev: '30 × 10' }
+      ])
+    },
+    {
+      name: 'Lateral Dumbbell Raise', mode: 'calibrating', unit: 'kg', type: 'weight_reps',
+      group: null,
+      sets: mkSets([
+        { t: 'calibration', w: 6, r: 12, rest: 60 },
+        { t: 'calibration', w: 8, r: 12, rest: 60 },
+        { t: 'working', w: 10, r: 15, rest: 75 },
+        { t: 'working', w: 10, r: 15, rest: 75 }
+      ])
+    },
+    {
+      name: 'Treadmill', mode: 'prescribing', unit: 'kg', type: 'distance_time',
+      group: null, cardio: { mins: 20, km: 2.6, level: 'Incline 4', hr: null, rpe: null },
+      sets: mkSets([{ t: 'working', w: 0, r: 0, rest: 0 }])
+    }
+  ],
+  ei: 0, si: 3   // start mid-exercise so the screen shows a realistic middle state
+};
+
+let variant = new URLSearchParams(location.search).get('variant');
+if (!VARIANTS[variant]) variant = 'A';
+
+let restLeft = 0, restTimer = null, restLabel = '';
+
+// ---------------------------------------------------------------- helpers
+const ex = () => session.exercises[session.ei];
+const st = () => ex().sets[session.si];
+const isCardio = e => e.type === 'distance_time';
+
+function counters() {
+  const e = ex(), all = e.sets.length;
+  const workIdx = e.sets.filter(s => s.type === 'working' || s.type === 'amrap');
+  const curWork = e.sets.slice(0, session.si + 1).filter(s => s.type === 'working' || s.type === 'amrap').length;
+  return { all, n: session.si + 1, workTotal: workIdx.length, workN: Math.max(curWork, 1) };
+}
+
+function remainingMins() {
+  let secs = 0;
+  session.exercises.forEach((e, i) => {
+    e.sets.forEach((s, j) => {
+      if (i < session.ei || (i === session.ei && j < session.si)) return;
+      if (s.done) return;
+      secs += isCardio(e) ? e.cardio.mins * 60 : 40 + (s.rest || 0);
+    });
+  });
+  return Math.round(secs / 60);
+}
+
+function fmt(sec) { const m = Math.floor(sec / 60), s = sec % 60; return m + ':' + String(s).padStart(2, '0'); }
+
+function tickClock() {
+  const el = Math.floor((Date.now() - session.startedAt) / 1000);
+  document.getElementById('elapsed').textContent = fmt(el);
+  document.getElementById('remaining').textContent = '~' + remainingMins() + ' min left';
+}
+setInterval(tickClock, 1000);
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600);
+}
+
+// ---------------------------------------------------------------- actions
+function logSet() {
+  const s = st(), e = ex();
+  s.done = true;
+
+  if (isCardio(e)) { toast('Cardio logged · session complete'); finishPrompt(); return; }
+
+  const beatBy = s.r - s.recR;
+  if (beatBy >= 4) toast('Beat target by ' + beatBy + ' reps — re-anchoring, next time ' + (s.w + 5) + ' kg');
+
+  const rest = s.rest;
+  restLabel = s.type === 'warmup' ? 'warm-up set' : s.type === 'calibration' ? 'calibration set' : 'working set';
+
+  // superset: jump to the paired exercise rather than resting
+  const grp = e.group;
+  if (grp) {
+    const partnerIdx = session.exercises.findIndex((o, i) => o.group === grp && i !== session.ei);
+    const partner = session.exercises[partnerIdx];
+    const nextUndone = partner.sets.findIndex(x => !x.done);
+    if (nextUndone !== -1) {
+      session.ei = partnerIdx; session.si = nextUndone;
+      toast('Superset — jumped to ' + partner.name);
+      render(); return;
+    }
+  }
+
+  advance();
+  if (rest > 0) startRest(rest);
+  render();
+}
+
+function advance() {
+  const e = ex();
+  const next = e.sets.findIndex(x => !x.done);
+  if (next !== -1) { session.si = next; return; }
+  for (let i = session.ei + 1; i < session.exercises.length; i++) {
+    const n = session.exercises[i].sets.findIndex(x => !x.done);
+    if (n !== -1) { session.ei = i; session.si = n; return; }
+  }
+  finishPrompt();
+}
+
+function startRest(sec) {
+  restLeft = sec;
+  document.getElementById('rest').classList.add('on');
+  document.getElementById('restLab').innerHTML = 'Rest<br>' + restLabel;
+  clearInterval(restTimer);
+  restTimer = setInterval(() => {
+    restLeft--;
+    document.getElementById('restT').textContent = fmt(Math.max(restLeft, 0));
+    if (restLeft <= 0) { skipRest(); toast('Rest done'); }
+  }, 1000);
+  document.getElementById('restT').textContent = fmt(restLeft);
+}
+function addRest(n) { restLeft += n; document.getElementById('restT').textContent = fmt(restLeft); }
+function skipRest() { clearInterval(restTimer); document.getElementById('rest').classList.remove('on'); }
+
+function adj(field, delta) {
+  const s = st();
+  if (field === 'w') s.w = Math.max(0, Math.round((s.w + delta) * 4) / 4);
+  else s.r = Math.max(0, s.r + delta);
+  render();
+}
+function setVal(field, v) { const s = st(); s[field] = Number(v) || 0; render(); }
+
+function jumpTo(ei, si) { session.ei = ei; session.si = si; render(); }
+
+// ---------------------------------------------------------------- sheets
+function openSheet(html) {
+  document.getElementById('sheet').innerHTML = html;
+  document.getElementById('sheet').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+}
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('on');
+  document.getElementById('scrim').classList.remove('on');
+}
+
+function swapSheet() {
+  const cands = [
+    { n: 'Dumbbell Bench Press', m: 'Chest · dumbbell · compound', tag: 'hist', note: 'last: 32.5 × 9' },
+    { n: 'Smith Machine Close Grip Bench Press', m: 'Chest · machine · compound', tag: 'hist', note: 'last: 60 × 8' },
+    { n: 'Chest Press Machine', m: 'Chest · machine · compound', tag: 'hist', note: 'last: 55 × 10' },
+    { n: 'Decline Hammer Strength Chest Press', m: 'Chest · machine · compound', tag: 'new', note: 'no history — will calibrate' },
+    { n: 'Push-Up', m: 'Chest · body only · compound', tag: 'new', note: 'no history — will calibrate' }
+  ];
+  openSheet(`
+    <h3>Swap ${ex().name}</h3>
+    <div class="sub">Ranked by what you've done before — those need no calibration.</div>
+    ${cands.map(c => `
+      <div class="cand" onclick="doSwap('${c.n.replace(/'/g, "\\'")}','${c.tag}')">
+        <div><div class="nm">${c.n}</div><div class="mt">${c.m} · ${c.note}</div></div>
+        <div class="tag ${c.tag}">${c.tag === 'hist' ? 'history' : 'new'}</div>
+      </div>`).join('')}
+    <button class="act" onclick="toast('(prototype) search + add-new not wired')">Search all exercises…</button>
+    <button class="act" onclick="toast('(prototype) search + add-new not wired')">Add a new exercise</button>
+  `);
+}
+function doSwap(name, tag) {
+  const e = ex();
+  e.name = name;
+  if (tag === 'new') { e.mode = 'calibrating'; e.sets.forEach(s => { if (!s.done) s.type = 'calibration'; }); }
+  closeSheet();
+  toast(tag === 'new' ? 'Swapped — no history, so calibrating' : 'Swapped — history found, prescribing');
+  render();
+}
+
+function skipPrompt() {
+  openSheet(`
+    <h3>You've skipped this in 6 of the last 8 sessions</h3>
+    <div class="sub">Lateral Dumbbell Raise</div>
+    <button class="act" onclick="closeSheet();toast('Kept — nothing changed')">Keep it</button>
+    <button class="act" onclick="closeSheet();swapSheet()">Swap it</button>
+    <button class="act" onclick="closeSheet();toast('Removed from recommendations')">Remove it</button>
+  `);
+}
+
+function finishPrompt() {
+  openSheet(`
+    <h3>Finish this workout?</h3>
+    <div class="sub">That was the last exercise in Push. 6 exercises · 22 sets · 71 min.</div>
+    <button class="act primary" onclick="closeSheet();toast('Session finished and logged')">Finish workout</button>
+    <button class="act" onclick="closeSheet()">Keep going</button>
+  `);
+}
+
+// ---------------------------------------------------------------- render
+function header(e) {
+  const c = counters();
+  document.getElementById('dayName').textContent = session.day;
+  document.getElementById('posCounter').innerHTML =
+    `Set <b>${c.n}</b> of ${c.all} · working <b>${c.workN}</b> of ${c.workTotal}`;
+  return `
+    <div class="row" style="margin-bottom:8px">
+      <div style="min-width:0">
+        <div class="exname">${e.name}</div>
+        <div class="row" style="gap:6px;margin-top:6px">
+          <span class="modebadge ${e.mode}"><span class="dot"></span>${e.mode}</span>
+          ${e.group ? '<span class="chip">superset</span>' : ''}
+        </div>
+      </div>
+      <button class="iconbtn" style="margin-left:auto" onclick="swapSheet()" title="Swap">⇄</button>
+    </div>`;
+}
+
+function modeHint(e, s) {
+  if (e.mode === 'calibrating')
+    return `<div class="hint" style="color:var(--calib)">Finding your weight — stop when it gets hard. Being wrong here is expected.</div>`;
+  if (s && s.r >= 15)
+    return `<div class="hint effort">Take this close to failure — high reps only work hard.</div>`;
+  return s && s.prev ? `<div class="hint">Last time: ${s.prev}</div>` : `<div class="hint">No previous set</div>`;
+}
+
+function cardioPanel(e) {
+  const c = e.cardio;
+  return `
+    <div class="cardio-grid">
+      <div class="cardio-f"><div class="cap">Duration</div><div class="v">${c.mins} min</div></div>
+      <div class="cardio-f"><div class="cap">Distance</div><div class="v">${c.km} km</div></div>
+      <div class="cardio-f"><div class="cap">Setting</div><div class="v" style="font-size:16px">${c.level}</div></div>
+      <div class="cardio-f opt"><div class="cap">Heart rate · optional</div><div class="v">—</div></div>
+      <div class="cardio-f opt" style="grid-column:1/-1"><div class="cap">RPE · optional</div><div class="v">—</div></div>
+    </div>
+    <div class="hint" style="margin-top:10px">Target from last time — change anything, nothing is progressed automatically.</div>`;
+}
+
+function renderA() {
+  const e = ex(), s = st();
+  if (isCardio(e)) return `
+    <div class="card" style="padding:14px">${header(e)}${cardioPanel(e)}
+      <button class="a-log" onclick="logSet()">Log cardio</button></div>`;
+  return `
+    <div class="card" style="padding:14px">
+      ${header(e)}
+      <div class="a-presc">
+        <div class="row" style="justify-content:center;margin-bottom:10px">
+          <span class="chip ${s.type}">${s.type}</span>
+          ${s.drops ? '<span class="chip drop">drop set</span>' : ''}
+        </div>
+        <div class="big">${s.w}<small> kg</small> × ${s.r}</div>
+        <div style="margin-top:10px">${modeHint(e, s)}</div>
+      </div>
+      <div class="a-step">
+        <div>
+          <div class="cap">Weight</div>
+          <div class="grp"><button onclick="adj('w',-2.5)">−</button><b>${s.w}</b><button onclick="adj('w',2.5)">+</button></div>
+        </div>
+        <div>
+          <div class="cap">Reps</div>
+          <div class="grp"><button onclick="adj('r',-1)">−</button><b>${s.r}</b><button onclick="adj('r',1)">+</button></div>
+        </div>
+      </div>
+      ${s.drops ? `<div class="hint" style="text-align:center;margin-top:12px">then drop to ${s.drops.map(d => d.w + ' × ' + d.r).join(' → ')}</div>` : ''}
+      <button class="a-log" onclick="logSet()">Log set</button>
+      <div class="a-next">Next: ${nextLabel()}</div>
+    </div>`;
+}
+
+function nextLabel() {
+  const e = ex();
+  const n = e.sets.findIndex(x => !x.done && x.idx > session.si);
+  if (n !== -1) return 'set ' + (n + 1) + ' of ' + e.name;
+  const ni = session.exercises.findIndex((o, i) => i > session.ei && o.sets.some(x => !x.done));
+  return ni === -1 ? 'finish workout' : session.exercises[ni].name;
+}
+
+function renderB() {
+  const e = ex(), s = st();
+  if (isCardio(e)) return `
+    <div class="card" style="padding:14px">${header(e)}${cardioPanel(e)}
+      <button class="a-log" onclick="logSet()">Log cardio</button></div>`;
+  return `
+    <div class="card" style="padding:14px 14px 0">
+      ${header(e)}
+      <div class="b-list" style="margin:0 -14px">
+        ${e.sets.map((x, i) => `
+          <div class="b-set ${i === session.si ? 'cur' : ''} ${x.done ? 'logged' : ''}" onclick="jumpTo(${session.ei},${i})">
+            <div class="n">${i + 1}</div>
+            <span class="chip ${x.type}">${x.type.slice(0, 4)}</span>
+            <div>
+              <div class="val">${x.w} kg × ${x.r}</div>
+              ${x.prev ? `<div class="prev">was ${x.prev}</div>` : ''}
+            </div>
+            <div class="tick ${x.done || i === session.si ? '' : 'idle'}">${x.done ? '✓' : (i === session.si ? '›' : '·')}</div>
+          </div>
+          ${i === session.si && !x.done ? `
+            <div class="b-edit">
+              <input type="number" inputmode="decimal" value="${x.w}" onchange="setVal('w',this.value)" aria-label="weight">
+              <input type="number" inputmode="numeric" value="${x.r}" onchange="setVal('r',this.value)" aria-label="reps">
+              <button class="tick" style="width:52px;height:auto" onclick="event.stopPropagation();logSet()">✓</button>
+            </div>
+            <div class="b-rest">${modeHint(e, x).replace(/<[^>]+>/g, '')}</div>` : ''}
+        `).join('')}
+      </div>
+    </div>
+    <div class="card b-day">
+      ${session.exercises.map((o, i) => `
+        <div class="b-dayrow ${i === session.ei ? 'cur' : ''}" onclick="jumpTo(${i},${Math.max(o.sets.findIndex(x => !x.done), 0)})">
+          ${o.group ? '<span class="chip">SS</span>' : ''}
+          <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.name}</span>
+          <span class="s">${o.sets.filter(x => x.done).length}/${o.sets.length}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderC() {
+  const e = ex(), s = st();
+  if (isCardio(e)) return `
+    <div class="card" style="padding:14px">${header(e)}${cardioPanel(e)}
+      <button class="c-log" onclick="logSet()">Log cardio</button></div>`;
+  const wOpts = [], base = s.recW;
+  for (let d = -3; d <= 4; d++) wOpts.push(Math.max(0, Math.round((base + d * 2.5) * 4) / 4));
+  const rOpts = []; for (let d = -3; d <= 5; d++) rOpts.push(Math.max(1, s.recR + d));
+  return `
+    <div class="card c-top">
+      ${header(e)}
+      <div class="row" style="gap:6px;margin:10px 0 6px">
+        <span class="chip ${s.type}">${s.type}</span>
+        ${s.drops ? '<span class="chip drop">drop set</span>' : ''}
+      </div>
+      ${modeHint(e, s)}
+      <div class="c-dials">
+        <div class="c-dial">
+          <div class="cap"><span>Weight</span><b>${s.w} kg</b></div>
+          <div class="c-track">
+            ${wOpts.map(v => `<button class="${v === s.w ? 'sel' : ''} ${v === s.recW ? 'rec' : ''}" onclick="setVal('w',${v})">${v}</button>`).join('')}
+          </div>
+        </div>
+        <div class="c-dial">
+          <div class="cap"><span>Reps</span><b>${s.r}</b></div>
+          <div class="c-track">
+            ${rOpts.map(v => `<button class="${v === s.r ? 'sel' : ''} ${v === s.recR ? 'rec' : ''}" onclick="setVal('r',${v})">${v}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+      <button class="c-log" onclick="logSet()">Log ${s.w} kg × ${s.r}</button>
+      <div class="a-next">Outlined = recommended · Next: ${nextLabel()}</div>
+    </div>`;
+}
+
+function render() {
+  const e = ex();
+  document.getElementById('app').innerHTML =
+    variant === 'A' ? renderA() : variant === 'B' ? renderB() : renderC();
+  document.getElementById('vlabel').innerHTML = variant + ' <span>' + VARIANTS[variant] + '</span>';
+  tickClock();
+}
+
+function cycle(dir) {
+  const ks = Object.keys(VARIANTS);
+  variant = ks[(ks.indexOf(variant) + dir + ks.length) % ks.length];
+  const u = new URL(location); u.searchParams.set('variant', variant);
+  history.replaceState(null, '', u);
+  render();
+}
+
+addEventListener('keydown', ev => {
+  const t = ev.target.tagName;
+  if (t === 'INPUT' || t === 'TEXTAREA' || ev.target.isContentEditable) return;
+  if (ev.key === 'ArrowLeft') cycle(-1);
+  if (ev.key === 'ArrowRight') cycle(1);
+});
+
+render();
+setTimeout(() => toast('Tap ‹ › at the bottom to switch layouts'), 700);
+</script>
