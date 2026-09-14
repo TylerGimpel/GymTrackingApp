@@ -67,6 +67,12 @@ A routine position carrying cardio instead of resistance work. It takes its turn
 **Plan**:
 The list of exercises a session was supposed to contain, copied from its routine day when the session begins. What makes a skipped exercise visible rather than merely absent.
 
+**Revision**:
+A change to the active routine. Revising ends the current cycle and starts a new one; it can never affect logged history.
+
+**Pin**:
+Marking an exercise to be kept through a revision, so regeneration treats it as a fixed constraint and works around it. Concerns the shape of the routine, never the safety of its history.
+
 **Set**:
 One unit of effort against an exercise, identified by its position within that exercise in a session. A set is one set regardless of how many rows record it — a drop set and a per-side set are each still one set.
 
