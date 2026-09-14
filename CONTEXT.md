@@ -51,3 +51,21 @@ _Avoid_: workout — ambiguous between the plan and the record, so it is not use
 
 **Skip**:
 Marking a routine day as dealt with without a session. Distinct from completion in history, because the user did not train.
+
+**Set**:
+One unit of effort against an exercise, identified by its position within that exercise in a session. A set is one set regardless of how many rows record it — a drop set and a per-side set are each still one set.
+
+**Set type**:
+What a set is for — one of `warmup`, `working`, `calibration`, `backoff`, `amrap`. Determines whether the set counts toward training volume.
+
+**Calibration set**:
+A set performed to find out what the user can lift, rather than to train. Produced by the cold-start ramp on an exercise with no history. Never counts toward volume.
+
+**Drop**:
+A continuation of the same set at reduced weight with no rest. Belongs to the set it continues; never counted as a set of its own.
+
+**Superset**:
+Two or more exercises within a session performed alternately with no rest between them. Rest is taken after the group, not between its members.
+
+**Prescription**:
+What the app tells the user to do for a given set — weight, reps, and rest. Recorded alongside what they actually did, so the two can be compared.
