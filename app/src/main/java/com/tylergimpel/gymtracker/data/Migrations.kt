@@ -88,4 +88,21 @@ internal val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
-internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+/**
+ * Version 4 gives every set an explicit type.
+ *
+ * The first migration here that has to put a value in existing rows rather than only add tables.
+ * The default is declared on the entity too, because Room compares defaults when it validates a
+ * migrated schema: an `ALTER` whose default differs from the entity's fails the identity check on
+ * the next open, which is a crash rather than a compile error.
+ */
+internal val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `set_entry` ADD COLUMN `type` TEXT NOT NULL " +
+                "DEFAULT '" + SetEntryEntity.DEFAULT_TYPE + "'",
+        )
+    }
+}
+
+internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)

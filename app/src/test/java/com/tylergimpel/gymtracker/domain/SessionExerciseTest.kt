@@ -54,13 +54,25 @@ class SessionExerciseTest {
 
     private fun sessionExercise(vararg setIndices: Int) = SessionExercise(
         id = 1,
-        exerciseId = "Barbell_Bench_Press",
-        exerciseName = "Barbell Bench Press",
+        exercise = Exercise(
+            id = "Barbell_Bench_Press",
+            name = "Barbell Bench Press",
+            primaryMuscles = listOf("chest"),
+            secondaryMuscles = listOf("shoulders", "triceps"),
+            equipment = "barbell",
+            mechanic = "compound",
+            force = "push",
+            category = "strength",
+            level = "beginner",
+            loggingType = LoggingType.WEIGHT_REPS,
+            unilateral = false,
+        ),
         orderIndex = 1,
         sets = setIndices.map { index ->
             LoggedSet(
                 id = index.toLong(),
                 setIndex = index,
+                type = SetType.WORKING,
                 weight = Kilograms(60.0 + index),
                 reps = 5,
                 note = null,

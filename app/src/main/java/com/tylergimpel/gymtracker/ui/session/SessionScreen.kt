@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.ui.session
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,11 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +41,8 @@ import com.tylergimpel.gymtracker.domain.LoggedSet
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.volumeByMuscle
 import com.tylergimpel.gymtracker.domain.SetDraft
 
 /**
@@ -154,6 +159,10 @@ fun SessionScreen(
             items(state.exercises, key = SessionExercise::id) { exercise ->
                 LoggedExercise(exercise, onEditSet)
                 HorizontalDivider()
+            }
+
+            if (state.exercises.isNotEmpty()) {
+                item { SessionVolume(state.exercises) }
             }
 
             state.session?.let { session ->
@@ -302,13 +311,42 @@ private fun SetDraftFields(draft: SetDraft, onChange: (SetDraft) -> Unit) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        SetTypeChooser(draft.type) { onChange(draft.copy(type = it)) }
+    }
+}
+
+/**
+ * Which kind of set this is.
+ *
+ * Always on screen rather than hidden behind a menu, because the type is chosen by the lifter and
+ * never inferred: a warm-up that goes in as working quietly inflates every volume figure built on
+ * it, and nothing later can tell the difference.
+ */
+@Composable
+private fun SetTypeChooser(selected: SetType, onSelect: (SetType) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.set_type), style = MaterialTheme.typography.labelLarge)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SetType.entries.forEach { type ->
+                FilterChip(
+                    selected = type == selected,
+                    onClick = { onSelect(type) },
+                    label = { Text(stringResource(type.label)) },
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> Unit) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text(exercise.exerciseName, style = MaterialTheme.typography.titleMedium)
+        Text(exercise.exercise.name, style = MaterialTheme.typography.titleMedium)
         exercise.sets.forEachIndexed { position, set ->
             Row(
                 modifier = Modifier
@@ -326,6 +364,13 @@ private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> 
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(set.summary(), style = MaterialTheme.typography.bodyLarge)
+                if (set.type != SetType.WORKING) {
+                    Text(
+                        text = stringResource(set.type.label),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 set.note?.let {
                     Text(
                         text = it,
@@ -337,6 +382,34 @@ private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> 
         }
     }
 }
+
+/**
+ * Sets per muscle for the session so far, counting only the work that counted.
+ *
+ * Shown here because a volume figure that silently included warm-ups would look exactly like one
+ * that did not, and the only way to notice is to see it move when a set type changes.
+ */
+@Composable
+private fun SessionVolume(performed: List<SessionExercise>) {
+    val volume = volumeByMuscle(performed)
+    if (volume.isEmpty()) return
+
+    val parts = volume.entries
+        .sortedWith(compareByDescending<Map.Entry<String, Double>> { it.value }.thenBy { it.key })
+        .map { stringResource(R.string.session_volume_muscle, it.key, it.value.asSetCount()) }
+    val summary = parts.joinToString("   ")
+
+    Text(
+        text = stringResource(R.string.session_volume, summary),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+    )
+}
+
+/** Half sets are real, so 1.5 stays 1.5 while 2.0 reads as 2. */
+private fun Double.asSetCount(): String =
+    if (this % 1.0 == 0.0) toLong().toString() else toString()
 
 /**
  * The session note.

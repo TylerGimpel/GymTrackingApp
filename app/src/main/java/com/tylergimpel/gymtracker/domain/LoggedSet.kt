@@ -11,6 +11,8 @@ package com.tylergimpel.gymtracker.domain
 data class LoggedSet(
     val id: Long,
     val setIndex: Int,
+    /** What this set was for, and therefore whether it earns any volume. */
+    val type: SetType,
     val weight: Kilograms,
     val reps: Int,
     val note: String?,

@@ -12,6 +12,11 @@ data class SetDraft(
     val weightText: String = "",
     val repsText: String = "",
     val note: String? = null,
+    /**
+     * Defaults to working, because most sets are. It is a choice the lifter makes rather than
+     * something the app infers from the numbers.
+     */
+    val type: SetType = SetType.WORKING,
 ) {
     /** The weight entered, or null while it is blank or unreadable. Zero is a real answer. */
     val weight: Kilograms?

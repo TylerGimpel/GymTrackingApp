@@ -3,8 +3,14 @@ package com.tylergimpel.gymtracker.domain
 /** The sets logged against one exercise within one session, in the order they were performed. */
 data class SessionExercise(
     val id: Long,
-    val exerciseId: String,
-    val exerciseName: String,
+    /**
+     * The exercise itself, not just its name.
+     *
+     * Volume is counted per muscle, so interpreting these sets needs what the movement targets —
+     * carrying the whole exercise keeps that a fact about the exercise rather than something each
+     * caller has to go and look up.
+     */
+    val exercise: Exercise,
     /** Where this exercise sits among the others in the session. Unrelated to any set's index. */
     val orderIndex: Int,
     val sets: List<LoggedSet>,

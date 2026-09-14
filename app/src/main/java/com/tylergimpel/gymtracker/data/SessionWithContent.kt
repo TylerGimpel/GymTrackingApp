@@ -31,8 +31,7 @@ data class SessionWithContent(
 
 fun SessionExerciseWithSets.toDomain() = SessionExercise(
     id = sessionExercise.id,
-    exerciseId = sessionExercise.exerciseId,
-    exerciseName = exercise.name,
+    exercise = exercise.toDomain(),
     orderIndex = sessionExercise.orderIndex,
     sets = sets.map(SetEntryEntity::toDomain).sortedBy { it.setIndex },
 )

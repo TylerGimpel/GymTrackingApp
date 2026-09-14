@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSet
+import com.tylergimpel.gymtracker.domain.SetType
 
 /**
  * One set, stored as a row.
@@ -43,6 +44,13 @@ data class SetEntryEntity(
     @ColumnInfo(name = "set_index")
     val setIndex: Int,
 
+    /**
+     * What the set was for. Stored explicitly and never inferred: position and load cannot tell a
+     * back-off set from a warm-up, and guessing corrupts every volume figure downstream.
+     */
+    @ColumnInfo(name = "type", defaultValue = SetEntryEntity.DEFAULT_TYPE)
+    val type: String,
+
     /** Canonical kilograms, always. Display units never reach storage. */
     @ColumnInfo(name = "weight_kg")
     val weightKg: Double,
@@ -52,11 +60,24 @@ data class SetEntryEntity(
 
     @ColumnInfo(name = "note")
     val note: String?,
-)
+) {
+    companion object {
+        /**
+         * The value existing rows take when the type column arrives.
+         *
+         * Declared on the entity as well as in the migration so the two agree: a migrated table
+         * whose default differs from Room's expectation fails the identity check on next open.
+         * Every set logged before types existed was intended as work, so `working` is what they
+         * were — this is not a guess standing in for a missing answer.
+         */
+        const val DEFAULT_TYPE = "working"
+    }
+}
 
 fun SetEntryEntity.toDomain() = LoggedSet(
     id = id,
     setIndex = setIndex,
+    type = SetType.fromStored(type),
     weight = Kilograms(weightKg),
     reps = reps,
     note = note,

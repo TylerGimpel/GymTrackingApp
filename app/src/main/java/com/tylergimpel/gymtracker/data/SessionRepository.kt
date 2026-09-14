@@ -66,6 +66,7 @@ class SessionRepository(
                 SetEntryEntity(
                     sessionExerciseId = performed.id,
                     setIndex = SessionExercise.nextSetIndex(existing),
+                    type = draft.type.stored,
                     weightKg = weight.value,
                     reps = reps,
                     note = draft.note,
@@ -81,7 +82,12 @@ class SessionRepository(
         val existing = sessions.setEntry(setId) ?: return false
 
         sessions.update(
-            existing.copy(weightKg = weight.value, reps = reps, note = draft.note),
+            existing.copy(
+                weightKg = weight.value,
+                reps = reps,
+                note = draft.note,
+                type = draft.type.stored,
+            ),
         )
         return true
     }

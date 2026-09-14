@@ -6,6 +6,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.LoggedSet
 import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.volumeByMuscle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -86,7 +88,7 @@ class SessionPersistenceTest {
 
         val logged = currentSession()
 
-        assertEquals(listOf("Barbell Bench Press - Medium Grip", "Barbell Squat"), logged.exercises.map { it.exerciseName })
+        assertEquals(listOf("Barbell Bench Press - Medium Grip", "Barbell Squat"), logged.exercises.map { it.exercise.name })
         assertEquals(listOf(1, 2), logged.exercises[0].sets.map(LoggedSet::setIndex))
         assertEquals(listOf(1), logged.exercises[1].sets.map(LoggedSet::setIndex))
     }
@@ -212,6 +214,51 @@ class SessionPersistenceTest {
         val current = repository.observeActiveSession().first()!!
         assertEquals(LocalDate.of(2026, 9, 17), current.date)
         assertEquals(1, currentSession().exercises.single().sets.size)
+    }
+
+    @Test
+    fun aSetKeepsTheTypeItWasLoggedWith() = runBlocking {
+        repository.logSet(BENCH, SetDraft("40", "10", type = SetType.WARMUP))
+        repository.logSet(BENCH, SetDraft("60", "5", type = SetType.WORKING))
+        repository.logSet(BENCH, SetDraft("50", "8", type = SetType.BACKOFF))
+
+        val sets = currentSession().exercises.single().sets
+        assertEquals(
+            listOf(SetType.WARMUP, SetType.WORKING, SetType.BACKOFF),
+            sets.map(LoggedSet::type),
+        )
+    }
+
+    @Test
+    fun aSetLoggedWithNoStatedTypeIsWorking() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+
+        assertEquals(SetType.WORKING, currentSession().exercises.single().sets.single().type)
+    }
+
+    @Test
+    fun correctingASetCanChangeWhatItWasFor() = runBlocking {
+        repository.logSet(BENCH, SetDraft("40", "10", type = SetType.WORKING))
+        val logged = currentSession().exercises.single().sets.single()
+
+        repository.editSet(logged.id, SetDraft("40", "10", type = SetType.WARMUP))
+
+        val corrected = currentSession().exercises.single().sets.single()
+        assertEquals(SetType.WARMUP, corrected.type)
+        assertEquals(logged.setIndex, corrected.setIndex)
+    }
+
+    @Test
+    fun volumeReadsBackFromStoredSetsCountingOnlyTheWork() = runBlocking {
+        repository.logSet(BENCH, SetDraft("40", "10", type = SetType.WARMUP))
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        repository.logSet(BENCH, SetDraft("60", "5"))
+
+        // Bench is chest primary, shoulders and triceps secondary; the warm-up earns nothing.
+        val volume = volumeByMuscle(currentSession().exercises)
+        assertEquals(2.0, volume["chest"]!!, 0.0)
+        assertEquals(1.0, volume["shoulders"]!!, 0.0)
+        assertEquals(1.0, volume["triceps"]!!, 0.0)
     }
 
     private suspend fun currentSession(): LoggedSession {
