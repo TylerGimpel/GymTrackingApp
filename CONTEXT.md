@@ -73,6 +73,12 @@ A change to the active routine. Revising ends the current cycle and starts a new
 **Pin**:
 Marking an exercise to be kept through a revision, so regeneration treats it as a fixed constraint and works around it. Concerns the shape of the routine, never the safety of its history.
 
+**Swap**:
+Substituting one exercise for another for a single session, because the equipment is unavailable or the user does not want it today. Situational and temporary; making a substitution permanent is a revision instead.
+
+**Dislike**:
+A standing exclusion of an exercise from everything the app suggests. Global, reversible, and never affects logged history.
+
 **Set**:
 One unit of effort against an exercise, identified by its position within that exercise in a session. A set is one set regardless of how many rows record it — a drop set and a per-side set are each still one set.
 
