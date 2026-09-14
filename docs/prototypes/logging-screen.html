@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Logging Screen Variants</title>
 
 <!--
@@ -243,7 +244,11 @@
   .d-slot.focus .d-val small.unit { cursor: pointer; }
   .a-step .grp b { cursor: pointer; }
   .d-slot .d-prev { font-size: 11.5px; color: var(--text-dim); }
+  /* The rep range, sitting above the number rather than replacing it. Small and
+     dim on purpose: the range is context for the number, not a rival to it. */
+  .d-slot .d-range { font-size: 10.5px; font-weight: 600; color: var(--text-dim); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
   .d-slot.focus .d-val { font-size: 46px; font-weight: 730; letter-spacing: -0.03em; }
+  .d-slot.focus .d-range { font-size: 13.5px; }
   .d-slot.focus .d-prev { font-size: 13px; }
   .d-slot.logged .d-val { color: var(--text-dim); }
   .d-slot.logged .d-val::after { content: ' ✓'; color: var(--good); }
@@ -319,12 +324,38 @@
 // ---------------------------------------------------------------- state
 const VARIANTS = { D: 'Wheel + drawer', A: 'Big accept', B: 'Set list', C: 'Dial' };
 
+// A working set is prescribed inside a REP RANGE. Double progression moves
+// through it: hold the weight, climb from the bottom to the top, then add weight
+// and drop back to the bottom. The big value stays ONE number - the number to go
+// and do - with the range printed small above it, because a set is logged as one
+// number and the headline has to read as what the next tap records.
+//
+// Warm-up and calibration sets carry no range: neither is progressed, so neither
+// has a top to reach.
+//
+// `recR` is the number recommended, and it is the conservative one: last time's
+// reps if the weight has not changed, otherwise the bottom of the range. The top
+// would make the one-tap path claim an advance that may not have happened, and
+// too-heavy is the one direction this app must never be confidently wrong in.
 function mkSets(spec) {
-  return spec.map((s, i) => ({
-    idx: i, type: s.t, recW: s.w, recR: s.r, w: s.w, r: s.r,
-    rest: s.rest, drops: s.drops || null, done: false, prev: s.prev || null
-  }));
+  return spec.map((s, i) => {
+    const range = Array.isArray(s.r) ? { lo: s.r[0], hi: s.r[1] } : null;
+    const rec = range ? openingReps(range, s.w, s.prev) : s.r;
+    return {
+      idx: i, type: s.t, recW: s.w, range, recR: rec, w: s.w, r: rec,
+      rest: s.rest, drops: s.drops || null, done: false, prev: s.prev || null
+    };
+  });
 }
+
+function openingReps(range, w, prev) {
+  const m = prev && prev.match(/^([\d.]+)\s*.\s*(\d+)/);
+  if (m && Number(m[1]) === w) return Math.min(range.hi, Math.max(range.lo, Number(m[2])));
+  return range.lo;
+}
+
+/** Spaced hyphen, not a dash: "6 - 8" reads as a span at a glance on a rack. */
+function repRangeText(range) { return range.lo + ' - ' + range.hi; }
 
 const session = {
   day: 'Push',
@@ -337,38 +368,38 @@ const session = {
         { t: 'warmup', w: 20, r: 10, rest: 45 },
         { t: 'warmup', w: 45, r: 5,  rest: 45 },
         { t: 'warmup', w: 65, r: 3,  rest: 60 },
-        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '80 × 8' },
-        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '80 × 7' },
-        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '80 × 6' },
-        { t: 'working', w: 82.5, r: 8, rest: 150, prev: '77.5 × 8' }
+        { t: 'working', w: 82.5, r: [6, 8], rest: 150, prev: '80 × 8' },
+        { t: 'working', w: 82.5, r: [6, 8], rest: 150, prev: '80 × 7' },
+        { t: 'working', w: 82.5, r: [6, 8], rest: 150, prev: '80 × 6' },
+        { t: 'working', w: 82.5, r: [6, 8], rest: 150, prev: '77.5 × 8' }
       ])
     },
     {
       name: 'Incline Hammer Strength Chest Press', mode: 'prescribing', unit: 'kg', type: 'weight_reps',
       group: null,
       sets: mkSets([
-        { t: 'working', w: 60, r: 10, rest: 120, prev: '57.5 × 10' },
-        { t: 'working', w: 60, r: 10, rest: 120, prev: '57.5 × 9' },
-        { t: 'working', w: 60, r: 10, rest: 120, prev: '55 × 11' },
-        { t: 'working', w: 50, r: 12, rest: 120, prev: '—', drops: [{ w: 40, r: 8 }, { w: 30, r: 6 }] }
+        { t: 'working', w: 60, r: [8, 10], rest: 120, prev: '57.5 × 10' },
+        { t: 'working', w: 60, r: [8, 10], rest: 120, prev: '57.5 × 9' },
+        { t: 'working', w: 60, r: [8, 10], rest: 120, prev: '55 × 11' },
+        { t: 'working', w: 50, r: [10, 12], rest: 120, prev: '—', drops: [{ w: 40, r: 8 }, { w: 30, r: 6 }] }
       ])
     },
     {
       name: 'Seated Machine Fly', mode: 'prescribing', unit: 'kg', type: 'weight_reps',
       group: 'A',
       sets: mkSets([
-        { t: 'working', w: 45, r: 12, rest: 0, prev: '45 × 12' },
-        { t: 'working', w: 45, r: 12, rest: 0, prev: '45 × 11' },
-        { t: 'working', w: 45, r: 12, rest: 0, prev: '42.5 × 12' }
+        { t: 'working', w: 45, r: [10, 12], rest: 0, prev: '45 × 12' },
+        { t: 'working', w: 45, r: [10, 12], rest: 0, prev: '45 × 11' },
+        { t: 'working', w: 45, r: [10, 12], rest: 0, prev: '42.5 × 12' }
       ])
     },
     {
       name: 'Rope Triceps Pushdown', mode: 'prescribing', unit: 'kg', type: 'weight_reps',
       group: 'A',
       sets: mkSets([
-        { t: 'working', w: 32.5, r: 12, rest: 90, prev: '30 × 12' },
-        { t: 'working', w: 32.5, r: 12, rest: 90, prev: '30 × 12' },
-        { t: 'working', w: 32.5, r: 12, rest: 90, prev: '30 × 10' }
+        { t: 'working', w: 32.5, r: [10, 12], rest: 90, prev: '30 × 12' },
+        { t: 'working', w: 32.5, r: [10, 12], rest: 90, prev: '30 × 12' },
+        { t: 'working', w: 32.5, r: [10, 12], rest: 90, prev: '30 × 10' }
       ])
     },
     {
@@ -377,8 +408,8 @@ const session = {
       sets: mkSets([
         { t: 'calibration', w: 6, r: 12, rest: 60 },
         { t: 'calibration', w: 8, r: 12, rest: 60 },
-        { t: 'working', w: 10, r: 15, rest: 75 },
-        { t: 'working', w: 10, r: 15, rest: 75 }
+        { t: 'working', w: 10, r: [12, 15], rest: 75 },
+        { t: 'working', w: 10, r: [12, 15], rest: 75 }
       ])
     },
     {
@@ -456,8 +487,11 @@ function logSet() {
 
   if (isCardio(e)) { toast('Cardio logged · session complete'); finishPrompt(); return; }
 
-  const beatBy = s.r - s.recR;
-  if (beatBy >= 4) toast('Beat target by ' + beatBy + ' reps — re-anchoring, next time ' + (s.w + 5) + ' kg');
+  // Nothing moves until the TOP of the range is beaten; beating it substantially
+  // is information about the anchor being low, not a reason to step one increment.
+  const top = s.range ? s.range.hi : s.recR;
+  const beatBy = s.r - top;
+  if (beatBy >= 4) toast('Beat the top of the range by ' + beatBy + ' — re-anchoring, next time ' + (s.w + 5) + ' kg');
 
   const rest = s.rest;
   restLabel = s.type === 'warmup' ? 'warm-up set' : s.type === 'calibration' ? 'calibration set' : 'working set';
@@ -597,7 +631,11 @@ function header(e) {
 function modeHint(e, s) {
   if (e.mode === 'calibrating')
     return `<div class="hint" style="color:var(--calib)">Calibrating — stop when it gets hard. Being wrong here is expected.</div>`;
-  if (s && s.r >= 15)
+  // Keyed off the TOP of the range: a 12-15 set is asking the user to reach 15,
+  // and 15 is the rep count the effort requirement attaches to. Keying off the
+  // recommended number would silence the line on exactly the ranges where a
+  // lighter load is being justified by high reps.
+  if (s && (s.range ? s.range.hi : s.r) >= 15)
     return `<div class="hint effort">Take this close to failure — high reps only work hard.</div>`;
   return '';
 }
@@ -751,6 +789,7 @@ function renderD() {
               <span class="chip ${x.type}">${x.type}</span>
               ${x.drops ? '<span class="chip drop">drop</span>' : ''}
             </div>
+            ${x.range ? `<div class="d-range">${repRangeText(x.range)} reps</div>` : ''}
             <div class="d-val">${toDisp(x.w, dispUnit(e))}<small class="unit" onclick="event.stopPropagation();toggleUnit()"> ${dispUnit(e)}</small> × ${x.r}</div>
             <div class="d-prev">${x.prev ? 'was ' + x.prev : 'no previous set'}</div>
           </div>`).join('')}
