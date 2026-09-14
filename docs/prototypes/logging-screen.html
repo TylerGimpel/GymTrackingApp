@@ -238,11 +238,11 @@
   .d-slot .d-chips { display: flex; gap: 5px; }
   .d-slot .d-val { font-size: 19px; font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .d-slot .d-val small { color: var(--text-dim); font-size: .72em; font-weight: 550; }
-  .d-slot.focus .d-val .tap {
-    cursor: pointer; text-decoration: underline; text-decoration-style: dotted;
-    text-decoration-color: var(--text-dim); text-underline-offset: 6px;
+  .d-slot.focus .d-val small.unit {
+    text-decoration: underline; text-decoration-style: dotted;
+    text-underline-offset: 4px; cursor: pointer;
   }
-  .d-slot:not(.focus) .d-val .tap { text-decoration: none; pointer-events: none; }
+  .a-step .grp b { cursor: pointer; }
   .d-slot .d-prev { font-size: 11.5px; color: var(--text-dim); }
   .d-slot.focus .d-val { font-size: 46px; font-weight: 730; letter-spacing: -0.03em; }
   .d-slot.focus .d-prev { font-size: 13px; }
@@ -751,27 +751,26 @@ function renderD() {
               <span class="chip ${x.type}">${x.type}</span>
               ${x.drops ? '<span class="chip drop">drop</span>' : ''}
             </div>
-            <div class="d-val">${slotVal(x, e)}</div>
+            <div class="d-val">${toDisp(x.w, dispUnit(e))}<small class="unit" onclick="event.stopPropagation();toggleUnit()"> ${dispUnit(e)}</small> × ${x.r}</div>
             <div class="d-prev">${x.prev ? 'was ' + x.prev : 'no previous set'}</div>
           </div>`).join('')}
         <div class="d-pad"></div>
       </div>
       <div class="d-ctrl">
         <div class="d-hintline" id="dHint"></div>
-        <div class="hint" style="text-align:center;margin:-4px 0 10px;opacity:.75">Tap a number to type it · tap the unit to switch kg/lb</div>
+        <div class="a-step" style="margin-top:0">
+          <div>
+            <div class="cap">Weight · tap to type</div>
+            <div class="grp"><button onclick="adjD('w',-1)">−</button><b id="dW" onclick="typeIn('w')">—</b><button onclick="adjD('w',1)">+</button></div>
+          </div>
+          <div>
+            <div class="cap">Reps · tap to type</div>
+            <div class="grp"><button onclick="adjD('r',-1)">−</button><b id="dR" onclick="typeIn('r')">—</b><button onclick="adjD('r',1)">+</button></div>
+          </div>
+        </div>
         <button class="a-log" id="dLog" onclick="logSet()">Log set</button>
       </div>
     </div>`;
-}
-
-// The focused set's numbers are the entry points: tap a number to type it,
-// tap the unit to toggle kg/lb. No stepper row - it duplicated what tapping
-// the value already does, and cost a third of the control area.
-function slotVal(x, e) {
-  const u = dispUnit(e);
-  return `<span class="tap" data-f="w" onclick="event.stopPropagation();typeInSlot('w')">${toDisp(x.w, u)}</span>` +
-         `<small class="unit tap" onclick="event.stopPropagation();toggleUnit()"> ${u}</small>` +
-         ` × <span class="tap" data-f="r" onclick="event.stopPropagation();typeInSlot('r')">${x.r}</span>`;
 }
 
 let wheelRaf = null;
@@ -807,10 +806,11 @@ function wireWheel() {
 }
 
 function syncCtrl() {
-  const s = st(), e = ex();
-  const hint = document.getElementById('dHint');
-  if (!hint) return;
-  hint.innerHTML = modeHint(e, s);
+  const s = st(), e = ex(), u = dispUnit(e);
+  const W = document.getElementById('dW'), R = document.getElementById('dR');
+  if (!W) return;
+  W.textContent = toDisp(s.w, u) + ' ' + u; R.textContent = s.r;
+  document.getElementById('dHint').innerHTML = modeHint(e, s);
   const btn = document.getElementById('dLog');
   btn.textContent = s.done ? 'Logged ✓ — log again' : 'Log set';
   btn.classList.toggle('done', !!s.done);
@@ -819,22 +819,35 @@ function syncCtrl() {
     `Set <b>${c.n}</b> of ${c.all} · working <b>${c.workN}</b> of ${c.workTotal}`;
 }
 
-function typeInSlot(f) {
-  const slot = document.querySelector(`.d-slot[data-i="${session.si}"]`);
-  if (!slot || !slot.classList.contains('focus')) return;
+function adjD(f, dir) {
   const s = st(), e = ex(), u = dispUnit(e);
-  const host = slot.querySelector(`.d-val .tap[data-f="${f}"]`);
-  if (!host || host.querySelector('input')) return;
+  if (f === 'w') {
+    const next = Math.max(0, toDisp(s.w, u) + dir * stepFor(u));
+    s.w = fromDisp(next, u);
+  } else {
+    s.r = Math.max(0, s.r + dir);
+  }
+  paintSlot(); syncCtrl();
+}
+
+// Tap a value to type it, rather than stepping there one increment at a time.
+// Matters most in calibrating mode, where overriding is the expected path.
+function typeIn(f) {
+  const s = st(), e = ex(), u = dispUnit(e);
+  const host = document.getElementById(f === 'w' ? 'dW' : 'dR');
+  if (host.querySelector('input')) return;
   const cur = f === 'w' ? toDisp(s.w, u) : s.r;
   host.innerHTML = `<input type="number" inputmode="decimal" value="${cur}"
-    style="width:${f === 'w' ? '2.7em' : '1.9em'};font:inherit;color:inherit;text-align:center;
-           background:var(--surface-2);border:none;border-bottom:2px solid var(--accent);
-           border-radius:6px 6px 0 0;padding:0">`;
+      style="width:66px;font:inherit;font-size:15px;font-weight:inherit;text-align:center;
+             background:var(--bg);color:var(--text);border:1px solid var(--accent);
+             border-radius:7px;padding:3px 2px">`;
   const inp = host.querySelector('input');
   inp.focus(); inp.select();
   const commit = () => {
     const v = Number(inp.value);
-    if (!Number.isNaN(v) && v >= 0) { if (f === 'w') s.w = fromDisp(v, u); else s.r = Math.round(v); }
+    if (!Number.isNaN(v) && v >= 0) {
+      if (f === 'w') s.w = fromDisp(v, u); else s.r = Math.round(v);
+    }
     paintSlot(); syncCtrl();
   };
   inp.addEventListener('blur', commit);
@@ -842,8 +855,9 @@ function typeInSlot(f) {
 }
 
 function paintSlot() {
+  const s = st(), e = ex(), u = dispUnit(e);
   const el = document.querySelector(`.d-slot[data-i="${session.si}"] .d-val`);
-  if (el) el.innerHTML = slotVal(st(), ex());
+  if (el) el.innerHTML = `${toDisp(s.w, u)}<small class="unit" onclick="event.stopPropagation();toggleUnit()"> ${u}</small> × ${s.r}`;
 }
 
 // ---- left drawer: the routine overview, swiped or tapped out
