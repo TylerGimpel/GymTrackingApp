@@ -40,6 +40,14 @@ abstract class GenerateExerciseBankTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val cardioRetag: RegularFileProperty
 
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val aliases: RegularFileProperty
+
+    /** Where the shorthand lands inside assets, beside the database rather than inside it. */
+    @get:Input
+    abstract val aliasAssetPath: Property<String>
+
     /** Where the database lands inside assets, as Room's `createFromAsset()` will name it. */
     @get:Input
     abstract val assetPath: Property<String>
@@ -55,19 +63,25 @@ abstract class GenerateExerciseBankTask : DefaultTask() {
     @TaskAction
     fun generate() {
         val schema = RoomSchema.parse(roomSchema.get().asFile.readText())
-        val exercises = ExerciseBankBuilder.build(
+        val bank = ExerciseBankBuilder.build(
             upstreamJson = upstreamExercises.get().asFile.readText(),
             authoredJson = authoredExercises.get().asFile.readText(),
             cardioRetagJson = cardioRetag.get().asFile.readText(),
+            aliasesJson = aliases.get().asFile.readText(),
         )
 
         val target = outputDirectory.file(assetPath).get().asFile
-        ExerciseBankDatabaseWriter.write(target, schema, exercises)
+        ExerciseBankDatabaseWriter.write(target, schema, bank.exercises)
 
-        val authored = exercises.count { it.source == ExerciseBankBuilder.SOURCE_AUTHORED }
+        val aliasTarget = outputDirectory.file(aliasAssetPath).get().asFile
+        aliasTarget.parentFile?.mkdirs()
+        aliasTarget.writeText(ExerciseAliasWriter.toJson(bank.aliases))
+
+        val authored = bank.exercises.count { it.source == ExerciseBankBuilder.SOURCE_AUTHORED }
         logger.lifecycle(
-            "Exercise bank: ${exercises.size} exercises " +
-                "(${exercises.size - authored} upstream, $authored authored), " +
+            "Exercise bank: ${bank.exercises.size} exercises " +
+                "(${bank.exercises.size - authored} upstream, $authored authored), " +
+                "${bank.aliases.size} aliases, " +
                 "schema v${schema.version} ${schema.identityHash}, " +
                 "${target.length() / 1024} KB"
         )

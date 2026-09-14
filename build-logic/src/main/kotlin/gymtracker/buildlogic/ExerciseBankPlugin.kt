@@ -25,6 +25,9 @@ interface ExerciseBankExtension {
 
     /** Path inside assets, as Room's `createFromAsset()` will name it. */
     val assetPath: Property<String>
+
+    /** Path inside assets for the shorthand, which travels beside the database. */
+    val aliasAssetPath: Property<String>
 }
 
 /**
@@ -41,6 +44,7 @@ class ExerciseBankPlugin : Plugin<Project> {
     override fun apply(project: Project) {
         val extension = project.extensions.create(EXTENSION_NAME, ExerciseBankExtension::class.java)
         extension.assetPath.convention(DEFAULT_ASSET_PATH)
+        extension.aliasAssetPath.convention(DEFAULT_ALIAS_ASSET_PATH)
         extension.sourceDataDirectory.convention(
             project.rootProject.layout.projectDirectory.dir(DEFAULT_SOURCE_DATA_DIRECTORY),
         )
@@ -66,7 +70,9 @@ class ExerciseBankPlugin : Plugin<Project> {
                     upstreamExercises.set(extension.sourceDataDirectory.file("upstream-exercises.json"))
                     authoredExercises.set(extension.sourceDataDirectory.file("authored-exercises.json"))
                     cardioRetag.set(extension.sourceDataDirectory.file("cardio-retag.json"))
+                    aliases.set(extension.sourceDataDirectory.file("aliases.json"))
                     assetPath.set(extension.assetPath)
+                    aliasAssetPath.set(extension.aliasAssetPath)
                 }
                 variant.sources.assets?.addGeneratedSourceDirectory(
                     generate,
@@ -80,6 +86,7 @@ class ExerciseBankPlugin : Plugin<Project> {
         const val EXTENSION_NAME = "exerciseBank"
         const val ROOM_SCHEMA_TASK = "copyRoomSchemas"
         const val DEFAULT_ASSET_PATH = "databases/gym-bank.db"
+        const val DEFAULT_ALIAS_ASSET_PATH = "exercise-aliases.json"
         const val DEFAULT_SOURCE_DATA_DIRECTORY = "data"
     }
 }

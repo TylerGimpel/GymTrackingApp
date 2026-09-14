@@ -21,6 +21,18 @@ data class BankExercise(
     val source: String,
 )
 
+/**
+ * Everything the build produces: the exercises, and the shorthand people actually type.
+ *
+ * Aliases are shipped data with no user-specific state, so they travel beside the database rather
+ * than inside it — nothing about them ever needs reconciling against what a lifter has done.
+ */
+data class ExerciseBank(
+    val exercises: List<BankExercise>,
+    /** Alias to the names it resolves to, which may be several. */
+    val aliases: Map<String, List<String>>,
+)
+
 /** Thrown when the source data cannot produce a valid bank. Carries every problem, not just the first. */
 class ExerciseBankException(val problems: List<String>) : RuntimeException(
     buildString {
@@ -67,7 +79,8 @@ object ExerciseBankBuilder {
         upstreamJson: String,
         authoredJson: String,
         cardioRetagJson: String,
-    ): List<BankExercise> {
+        aliasesJson: String,
+    ): ExerciseBank {
         val problems = mutableListOf<String>()
 
         val upstream = readRows(upstreamJson, "upstream-exercises.json", problems)
@@ -79,9 +92,51 @@ object ExerciseBankBuilder {
         checkCollisions(upstream, authored, problems)
         val patched = applyPatches(upstream, patches, problems)
 
+        val exercises = (patched + authored)
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+        val aliases = readAliases(aliasesJson, exercises, problems)
+
         if (problems.isNotEmpty()) throw ExerciseBankException(problems)
 
-        return (patched + authored).sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+        return ExerciseBank(exercises, aliases)
+    }
+
+    /**
+     * Reads the shorthand, checking every target names an exercise that survived the merge.
+     *
+     * An alias pointing at a name that is not there fails silently at runtime — the shorthand finds
+     * nothing and nothing says why — which is the worst failure mode a search feature has.
+     */
+    private fun readAliases(
+        json: String,
+        exercises: List<BankExercise>,
+        problems: MutableList<String>,
+    ): Map<String, List<String>> {
+        val parsed = JsonParser.parseString(json)
+        if (!parsed.isJsonObject) {
+            problems += "aliases.json: expected an object of alias to exercise names"
+            return emptyMap()
+        }
+
+        val byName = exercises.associateBy { it.name.lowercase() }
+
+        return parsed.asJsonObject.entrySet().associate { (alias, value) ->
+            val targets = when {
+                value.isJsonArray -> value.asJsonArray.mapNotNull { it.stringOrNull() }
+                else -> listOfNotNull(value.stringOrNull())
+            }
+            if (targets.isEmpty()) {
+                problems += "aliases.json: `$alias` names no exercise at all"
+            }
+            targets.forEach { target ->
+                if (target.lowercase() !in byName) {
+                    problems += "aliases.json: `$alias` names `$target`, which is not in the bank"
+                }
+            }
+            // Stored under the name the bank actually uses, so a differently-cased target in the
+            // source resolves to something the app can find.
+            alias to targets.map { byName[it.lowercase()]?.name ?: it }
+        }
     }
 
     // --- reading -----------------------------------------------------------------------------

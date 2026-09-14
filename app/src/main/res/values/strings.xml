@@ -3,6 +3,9 @@
     <string name="app_name">Gym Tracker</string>
     <string name="exercise_bank_title">Exercise bank</string>
 
+    <string name="exercise_search">Search exercises</string>
+    <string name="exercise_bank_count">%1$d of %2$d</string>
+    <string name="exercise_bank_none">Nothing matches. Try a shorter word, or what you would call it.</string>
     <string name="session_title">Session</string>
     <string name="session_finish">Finish</string>
     <string name="session_pick_exercise">Pick an exercise</string>

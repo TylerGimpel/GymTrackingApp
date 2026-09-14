@@ -1,16 +1,22 @@
 package com.tylergimpel.gymtracker.ui.bank
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -33,22 +39,36 @@ fun ExerciseBankScreen(
     onSelect: (Exercise) -> Unit,
     viewModel: ExerciseBankViewModel = viewModel(),
 ) {
-    val exercises by viewModel.exercises.collectAsStateWithLifecycle()
-    ExerciseBankScreen(exercises, onSelect)
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    ExerciseBankScreen(
+        state = state,
+        onSelect = onSelect,
+        onSearch = viewModel::search,
+        onFilterBy = viewModel::filterBy,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExerciseBankScreen(exercises: List<Exercise>, onSelect: (Exercise) -> Unit = {}) {
+fun ExerciseBankScreen(
+    state: ExerciseBankUiState,
+    onSelect: (Exercise) -> Unit = {},
+    onSearch: (String) -> Unit = {},
+    onFilterBy: (String) -> Unit = {},
+) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(stringResource(R.string.exercise_bank_title))
-                        if (exercises.isNotEmpty()) {
+                        if (state.total > 0) {
                             Text(
-                                text = "${exercises.size} exercises",
+                                text = stringResource(
+                                    R.string.exercise_bank_count,
+                                    state.exercises.size,
+                                    state.total,
+                                ),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -58,13 +78,59 @@ fun ExerciseBankScreen(exercises: List<Exercise>, onSelect: (Exercise) -> Unit =
             )
         },
     ) { insets ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = insets,
+        Column(modifier = Modifier.fillMaxSize().padding(insets)) {
+            SearchControls(state, onSearch, onFilterBy)
+            HorizontalDivider()
+
+            if (state.exercises.isEmpty() && state.total > 0) {
+                Text(
+                    text = stringResource(R.string.exercise_bank_none),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
+                )
+                return@Column
+            }
+
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(state.exercises, key = Exercise::id) { exercise ->
+                    ExerciseRow(exercise, Modifier.clickable { onSelect(exercise) })
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchControls(
+    state: ExerciseBankUiState,
+    onSearch: (String) -> Unit,
+    onFilterBy: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = state.query,
+            onValueChange = onSearch,
+            label = { Text(stringResource(R.string.exercise_search)) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(exercises, key = Exercise::id) { exercise ->
-                ExerciseRow(exercise, Modifier.clickable { onSelect(exercise) })
-                HorizontalDivider()
+            state.muscles.forEach { muscle ->
+                FilterChip(
+                    selected = muscle == state.muscle,
+                    onClick = { onFilterBy(muscle) },
+                    label = { Text(muscle) },
+                )
             }
         }
     }
@@ -103,33 +169,25 @@ private fun Exercise.subtitle(): String =
 private fun ExerciseBankPreview() {
     GymTrackerTheme {
         ExerciseBankScreen(
-            listOf(
-                Exercise(
-                    id = "Barbell_Bench_Press_-_Medium_Grip",
-                    name = "Barbell Bench Press - Medium Grip",
-                    primaryMuscles = listOf("chest"),
-                    secondaryMuscles = listOf("shoulders", "triceps"),
-                    equipment = "barbell",
-                    mechanic = "compound",
-                    force = "push",
-                    category = "strength",
-                    level = "beginner",
-                    loggingType = LoggingType.WEIGHT_REPS,
-                    unilateral = false,
+            ExerciseBankUiState(
+                exercises = listOf(
+                    Exercise(
+                        id = "Butterfly",
+                        name = "Butterfly",
+                        primaryMuscles = listOf("chest"),
+                        secondaryMuscles = listOf("shoulders"),
+                        equipment = "machine",
+                        mechanic = "isolation",
+                        force = "push",
+                        category = "strength",
+                        level = "beginner",
+                        loggingType = LoggingType.WEIGHT_REPS,
+                        unilateral = false,
+                    ),
                 ),
-                Exercise(
-                    id = "Rowing_Stationary",
-                    name = "Rowing, Stationary",
-                    primaryMuscles = listOf("lats"),
-                    secondaryMuscles = emptyList(),
-                    equipment = "rower",
-                    mechanic = "compound",
-                    force = "pull",
-                    category = "cardio",
-                    level = "beginner",
-                    loggingType = LoggingType.DISTANCE_TIME,
-                    unilateral = false,
-                ),
+                query = "pec deck",
+                muscles = listOf("chest", "lats", "quadriceps"),
+                total = 896,
             ),
         )
     }

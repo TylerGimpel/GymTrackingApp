@@ -18,11 +18,12 @@ class ExerciseBankBuilderTest {
             upstreamJson = upstream(row(id = "Bench_Press", name = "Bench Press")),
             authoredJson = authored(row(id = "Belt_Squat", name = "Belt Squat")),
             cardioRetagJson = NO_PATCHES,
+            aliasesJson = NO_ALIASES,
         )
 
-        assertEquals(listOf("Belt Squat", "Bench Press"), bank.map { it.name })
-        assertEquals(ExerciseBankBuilder.SOURCE_UPSTREAM, bank.single { it.id == "Bench_Press" }.source)
-        assertEquals(ExerciseBankBuilder.SOURCE_AUTHORED, bank.single { it.id == "Belt_Squat" }.source)
+        assertEquals(listOf("Belt Squat", "Bench Press"), bank.exercises.map { it.name })
+        assertEquals(ExerciseBankBuilder.SOURCE_UPSTREAM, bank.exercises.single { it.id == "Bench_Press" }.source)
+        assertEquals(ExerciseBankBuilder.SOURCE_AUTHORED, bank.exercises.single { it.id == "Belt_Squat" }.source)
     }
 
     @Test
@@ -115,6 +116,56 @@ class ExerciseBankBuilderTest {
     }
 
     @Test
+    fun `rejects an alias that names no exercise`() {
+        // A silently broken alias is the worst failure mode for search: the shorthand simply finds
+        // nothing, and nothing anywhere says why.
+        val problems = problemsFrom(
+            upstreamJson = upstream(row(id = "Butterfly", name = "Butterfly")),
+            aliasesJson = """{"pec deck": ["Butterfly"], "hacks": ["Hack Squat"]}""",
+        )
+
+        assertTrue(problems.toString(), problems.single().contains("Hack Squat"))
+    }
+
+    @Test
+    fun `an alias may name an authored exercise`() {
+        val problems = problemsFrom(
+            authoredJson = authored(row(id = "Belt_Squat", name = "Belt Squat")),
+            aliasesJson = """{"belt": ["Belt Squat"]}""",
+        )
+
+        assertEquals(emptyList<String>(), problems)
+    }
+
+    @Test
+    fun `an alias target matches an exercise name regardless of case`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(row(id = "Butterfly", name = "Butterfly")),
+            aliasesJson = """{"pec deck": ["butterfly"]}""",
+        )
+
+        assertEquals(emptyList<String>(), problems)
+    }
+
+    @Test
+    fun `an alias may name several exercises`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = upstream(
+                row(id = "A", name = "Barbell Curl"),
+                row(id = "B", name = "Dumbbell Bicep Curl"),
+            ),
+            authoredJson = "[]",
+            cardioRetagJson = NO_PATCHES,
+            aliasesJson = """{"bicep curl": ["Barbell Curl", "Dumbbell Bicep Curl"]}""",
+        )
+
+        assertEquals(
+            mapOf("bicep curl" to listOf("Barbell Curl", "Dumbbell Bicep Curl")),
+            bank.aliases,
+        )
+    }
+
+    @Test
     fun `reports every problem at once`() {
         val problems = problemsFrom(
             upstreamJson = upstream(
@@ -136,9 +187,10 @@ class ExerciseBankBuilderTest {
             cardioRetagJson = patches(
                 """{"Running_Treadmill": {"equipment": "treadmill", "loggingType": "distance_time"}}""",
             ),
+            aliasesJson = NO_ALIASES,
         )
 
-        val treadmill = bank.single()
+        val treadmill = bank.exercises.single()
         assertEquals("treadmill", treadmill.equipment)
         assertEquals("distance_time", treadmill.loggingType)
     }
@@ -155,9 +207,10 @@ class ExerciseBankBuilderTest {
                 ),
             ),
             cardioRetagJson = NO_PATCHES,
+            aliasesJson = NO_ALIASES,
         )
 
-        assertEquals("assisted", bank.single().loggingType)
+        assertEquals("assisted", bank.exercises.single().loggingType)
     }
 
     @Test
@@ -193,9 +246,10 @@ class ExerciseBankBuilderTest {
                 row(id = "Bulgarian_Split_Squat", name = "Bulgarian Split Squat", extra = mapOf("unilateral" to true)),
             ),
             cardioRetagJson = NO_PATCHES,
+            aliasesJson = NO_ALIASES,
         )
 
-        assertTrue(bank.single().unilateral)
+        assertTrue(bank.exercises.single().unilateral)
     }
 
     // --- fixtures ----------------------------------------------------------------------------
@@ -204,8 +258,9 @@ class ExerciseBankBuilderTest {
         upstreamJson: String = "[]",
         authoredJson: String = "[]",
         cardioRetagJson: String = NO_PATCHES,
+        aliasesJson: String = NO_ALIASES,
     ): List<String> = try {
-        ExerciseBankBuilder.build(upstreamJson, authoredJson, cardioRetagJson)
+        ExerciseBankBuilder.build(upstreamJson, authoredJson, cardioRetagJson, aliasesJson)
         emptyList()
     } catch (e: ExerciseBankException) {
         e.problems
@@ -250,5 +305,6 @@ class ExerciseBankBuilderTest {
 
     private companion object {
         const val NO_PATCHES = """{"patches": {}}"""
+        const val NO_ALIASES = "{}"
     }
 }
