@@ -238,10 +238,9 @@
   .d-slot .d-chips { display: flex; gap: 5px; }
   .d-slot .d-val { font-size: 19px; font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .d-slot .d-val small { color: var(--text-dim); font-size: .72em; font-weight: 550; }
-  .d-slot.focus .d-val small.unit {
-    text-decoration: underline; text-decoration-style: dotted;
-    text-underline-offset: 4px; cursor: pointer;
-  }
+  /* The unit stays tappable to toggle kg/lb, but carries no underline —
+     the affordance is taught once elsewhere, not decorated on every set. */
+  .d-slot.focus .d-val small.unit { cursor: pointer; }
   .a-step .grp b { cursor: pointer; }
   .d-slot .d-prev { font-size: 11.5px; color: var(--text-dim); }
   .d-slot.focus .d-val { font-size: 46px; font-weight: 730; letter-spacing: -0.03em; }
