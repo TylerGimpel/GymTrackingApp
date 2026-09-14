@@ -114,6 +114,50 @@ class VolumeTest {
         assertEquals(mapOf("chest" to 1.0, "shoulders" to 0.5, "triceps" to 0.5), volumeByMuscle(logged))
     }
 
+    @Test
+    fun `a muscle named as both primary and secondary is counted once, in full`() {
+        // Nine rows in the shipped bank do this. Barbell Step Ups names quadriceps in both lists;
+        // stacking direct and indirect credit would report 1.5 sets for one set of work.
+        val stepUps = exercise(
+            id = "Barbell_Step_Ups",
+            primary = listOf("quadriceps"),
+            secondary = listOf("quadriceps", "glutes", "hamstrings"),
+        )
+
+        val volume = volumeByMuscle(performed(stepUps, working(1)))
+
+        assertEquals(1.0, volume.getValue("quadriceps"), 0.0)
+        assertEquals(0.5, volume.getValue("glutes"), 0.0)
+        assertEquals(0.5, volume.getValue("hamstrings"), 0.0)
+    }
+
+    @Test
+    fun `an exercise that targets two muscles primarily works both of them in full`() {
+        // One row in the bank names two primaries. Splitting the credit would invent a rule and
+        // taking only the first would lose a muscle the movement genuinely trains.
+        val halo = exercise(
+            id = "Kettlebell_Halo",
+            primary = listOf("shoulders", "triceps"),
+            secondary = emptyList(),
+        )
+
+        assertEquals(
+            mapOf("shoulders" to 1.0, "triceps" to 1.0),
+            volumeByMuscle(performed(halo, working(1))),
+        )
+    }
+
+    @Test
+    fun `a muscle listed twice as a secondary is still only counted once`() {
+        val odd = exercise(
+            id = "Odd_Row",
+            primary = listOf("lats"),
+            secondary = listOf("biceps", "biceps"),
+        )
+
+        assertEquals(mapOf("lats" to 1.0, "biceps" to 0.5), volumeByMuscle(performed(odd, working(1))))
+    }
+
     private fun exercise(id: String, primary: List<String>, secondary: List<String>) = Exercise(
         id = id,
         name = id.replace('_', ' '),

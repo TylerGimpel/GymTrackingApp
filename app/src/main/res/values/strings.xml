@@ -24,8 +24,6 @@
     <string name="set_type_calibration">calibration</string>
     <string name="set_type_backoff">back-off</string>
     <string name="set_type_amrap">amrap</string>
-    <string name="session_volume">Volume: %1$s</string>
-    <string name="session_volume_muscle">%1$s %2$s</string>
     <string name="set_summary">%1$s kg × %2$d</string>
 
     <string name="routine_title">Routine</string>

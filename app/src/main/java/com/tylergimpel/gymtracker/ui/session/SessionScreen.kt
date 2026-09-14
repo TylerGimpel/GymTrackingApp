@@ -42,7 +42,6 @@ import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetType
-import com.tylergimpel.gymtracker.domain.volumeByMuscle
 import com.tylergimpel.gymtracker.domain.SetDraft
 
 /**
@@ -159,10 +158,6 @@ fun SessionScreen(
             items(state.exercises, key = SessionExercise::id) { exercise ->
                 LoggedExercise(exercise, onEditSet)
                 HorizontalDivider()
-            }
-
-            if (state.exercises.isNotEmpty()) {
-                item { SessionVolume(state.exercises) }
             }
 
             state.session?.let { session ->
@@ -344,10 +339,10 @@ private fun SetTypeChooser(selected: SetType, onSelect: (SetType) -> Unit) {
 }
 
 @Composable
-private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> Unit) {
+private fun LoggedExercise(performed: SessionExercise, onEditSet: (LoggedSet) -> Unit) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text(exercise.exercise.name, style = MaterialTheme.typography.titleMedium)
-        exercise.sets.forEachIndexed { position, set ->
+        Text(performed.exercise.name, style = MaterialTheme.typography.titleMedium)
+        performed.sets.forEachIndexed { position, set ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -382,34 +377,6 @@ private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> 
         }
     }
 }
-
-/**
- * Sets per muscle for the session so far, counting only the work that counted.
- *
- * Shown here because a volume figure that silently included warm-ups would look exactly like one
- * that did not, and the only way to notice is to see it move when a set type changes.
- */
-@Composable
-private fun SessionVolume(performed: List<SessionExercise>) {
-    val volume = volumeByMuscle(performed)
-    if (volume.isEmpty()) return
-
-    val parts = volume.entries
-        .sortedWith(compareByDescending<Map.Entry<String, Double>> { it.value }.thenBy { it.key })
-        .map { stringResource(R.string.session_volume_muscle, it.key, it.value.asSetCount()) }
-    val summary = parts.joinToString("   ")
-
-    Text(
-        text = stringResource(R.string.session_volume, summary),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-    )
-}
-
-/** Half sets are real, so 1.5 stays 1.5 while 2.0 reads as 2. */
-private fun Double.asSetCount(): String =
-    if (this % 1.0 == 0.0) toLong().toString() else toString()
 
 /**
  * The session note.

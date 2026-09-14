@@ -21,6 +21,12 @@ data class Exercise(
     /** Trained one side at a time. Logged as a single entry by default, expandable to per-side. */
     val unilateral: Boolean,
 ) {
-    /** The muscle the exercise primarily targets, which is what the bank lists it under. */
+    /**
+     * The muscle to list this exercise under, which is the first of its primary muscles.
+     *
+     * For display only. Volume counts every primary muscle in full and must not use this — a
+     * movement that names two works both of them, and showing one is a shorter label rather than a
+     * statement about what it trains.
+     */
     val primaryMuscle: String? get() = primaryMuscles.firstOrNull()
 }
