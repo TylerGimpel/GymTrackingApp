@@ -108,5 +108,8 @@ The mode the app is in when it has no useful anchor for an exercise — a first 
 **Prescribing**:
 The mode the app is in when real history supports the recommendation.
 
+**Personal record**:
+The best set a user has performed at a given rep count for an exercise — best at 5, best at 8, and so on. Rep-specific because a single "best set" is ambiguous once weight and reps both vary.
+
 **Increment**:
 The smallest weight step actually achievable on a given exercise, set by the equipment rather than by arithmetic — plate pairs on a barbell, rack steps on dumbbells, and for machines, the stack positions the user has been observed to use.
