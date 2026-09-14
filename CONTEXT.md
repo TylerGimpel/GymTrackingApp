@@ -69,3 +69,17 @@ Two or more exercises within a session performed alternately with no rest betwee
 
 **Prescription**:
 What the app tells the user to do for a given set — weight, reps, and rest. Recorded alongside what they actually did, so the two can be compared.
+
+### Recommending
+
+**Anchor**:
+The app's current estimate of what a user can lift on one exercise, held as an estimated one-rep max and updated from their own logged sets for that exercise alone. Never inferred from a different exercise.
+
+**Calibrating**:
+The mode the app is in when it has no useful anchor for an exercise — a first session, or a return after a long layoff. It still suggests a weight, but expects to be wrong and to be corrected by what the user actually lifts.
+
+**Prescribing**:
+The mode the app is in when real history supports the recommendation.
+
+**Increment**:
+The smallest weight step actually achievable on a given exercise, set by the equipment rather than by arithmetic — plate pairs on a barbell, rack steps on dumbbells, and for machines, the stack positions the user has been observed to use.
