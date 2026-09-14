@@ -1,0 +1,23 @@
+# Personal training data — never commit.
+# These are real training history. The repo is private today, but a repo can be
+# made public and history cannot easily be unmade, so keep them out entirely.
+*.fitnotes
+FitNotes_Export_*.csv
+/fixtures/
+/.local/
+
+# Android / Gradle
+*.apk
+*.aab
+*.keystore
+*.jks
+local.properties
+/build/
+**/build/
+.gradle/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
