@@ -13,4 +13,13 @@ interface ExerciseDao {
 
     @Query("SELECT COUNT(*) FROM exercise")
     suspend fun count(): Int
+
+    /**
+     * The equipment values the bank actually uses, which is what the gym checklist offers.
+     *
+     * Read from the bank rather than restated in the app, so the closed vocabulary the build step
+     * enforces stays the only place it is written down.
+     */
+    @Query("SELECT DISTINCT equipment FROM exercise WHERE equipment IS NOT NULL ORDER BY equipment")
+    fun observeEquipment(): Flow<List<String>>
 }

@@ -19,4 +19,29 @@
     <string name="set_reps">Reps</string>
     <string name="set_note">Set note</string>
     <string name="set_summary">%1$s kg × %2$d</string>
+
+    <string name="routine_title">Routine</string>
+    <string name="routine_done">Done</string>
+    <string name="routine_none">No routine yet. One is a name and an ordered list of days — rest is implied by not training, so it takes no position.</string>
+    <string name="routine_create">Create a routine</string>
+    <string name="routine_name">Routine name</string>
+    <string name="routine_cadence">Sessions per week</string>
+    <string name="routine_goal">Goal</string>
+    <string name="routine_rep_preference">Rep preference</string>
+    <string name="routine_equipment">Equipment at your gym</string>
+    <string name="routine_days">Days</string>
+    <string name="routine_new_day">New day</string>
+    <string name="routine_add">Add</string>
+    <string name="routine_move_up">Up</string>
+    <string name="routine_move_down">Down</string>
+    <string name="routine_remove">Remove</string>
+    <string name="routine_delete">Delete routine</string>
+    <string name="routine_next_up">next up</string>
+
+    <string name="session_next_up">Next up: %1$s</string>
+    <string name="session_no_routine">No routine</string>
+    <string name="session_open_routine">Routine</string>
+    <string name="session_which_day">Which day did this session realise?</string>
+    <string name="session_no_day">No routine day</string>
+    <string name="session_cycle">Cycle %1$d</string>
 </resources>

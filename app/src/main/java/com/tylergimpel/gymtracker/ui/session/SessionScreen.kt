@@ -35,6 +35,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.LoggedSet
+import com.tylergimpel.gymtracker.data.RoutineProgress
+import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
 
@@ -48,6 +50,7 @@ import com.tylergimpel.gymtracker.domain.SetDraft
 @Composable
 fun SessionScreen(
     onPickExercise: () -> Unit,
+    onOpenRoutine: () -> Unit,
     viewModel: SessionViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -63,7 +66,10 @@ fun SessionScreen(
         onDeleteEditing = viewModel::deleteEditing,
         onCancelEditing = viewModel::cancelEditing,
         onSessionNoteChange = viewModel::noteSession,
-        onFinish = viewModel::finishSession,
+        onFinish = viewModel::startFinishing,
+        onFinishAs = viewModel::finishSession,
+        onCancelFinishing = viewModel::cancelFinishing,
+        onOpenRoutine = onOpenRoutine,
     )
 }
 
@@ -81,6 +87,9 @@ fun SessionScreen(
     onCancelEditing: () -> Unit = {},
     onSessionNoteChange: (String) -> Unit = {},
     onFinish: () -> Unit = {},
+    onFinishAs: (RoutineDay?) -> Unit = {},
+    onCancelFinishing: () -> Unit = {},
+    onOpenRoutine: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -98,6 +107,9 @@ fun SessionScreen(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onOpenRoutine) {
+                        Text(stringResource(R.string.session_open_routine))
+                    }
                     if (state.session != null) {
                         TextButton(onClick = onFinish) { Text(stringResource(R.string.session_finish)) }
                     }
@@ -126,6 +138,8 @@ fun SessionScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = insets,
         ) {
+            item { NextUp(state.routine) }
+
             state.selected?.let { selected ->
                 item {
                     SetEntryControls(selected.name, state.draft, onDraftChange, onLogSet)
@@ -151,6 +165,77 @@ fun SessionScreen(
     state.editing?.let { editing ->
         EditSetDialog(editing, onEditingDraftChange, onSaveEditing, onDeleteEditing, onCancelEditing)
     }
+
+    if (state.finishing) {
+        WhichDayDialog(state.routine, onFinishAs, onCancelFinishing)
+    }
+}
+
+/**
+ * What comes next in the routine.
+ *
+ * Derived from which days of the current cycle are still undone, never from the date — so this line
+ * reads the same after a fortnight off as it did the evening before.
+ */
+@Composable
+private fun NextUp(progress: RoutineProgress?) {
+    val cursor = progress?.cursor
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(
+            text = if (cursor == null) {
+                stringResource(R.string.session_no_routine)
+            } else {
+                stringResource(R.string.session_next_up, cursor.name)
+            },
+            style = MaterialTheme.typography.titleMedium,
+        )
+        progress?.cycle?.let {
+            Text(
+                text = stringResource(R.string.session_cycle, it.ordinal),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * Asks which routine day the finishing session realised, defaulting to nothing in particular.
+ *
+ * The cursor is offered first but any day can be chosen, because training out of order is ordinary
+ * and the cursor holding its place afterwards is the whole point of deriving it.
+ */
+@Composable
+private fun WhichDayDialog(
+    progress: RoutineProgress?,
+    onFinishAs: (RoutineDay?) -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.session_which_day)) },
+        text = {
+            Column {
+                progress?.routine?.rotation.orEmpty().forEach { day ->
+                    TextButton(onClick = { onFinishAs(day) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = if (progress?.cursor?.id == day.id) {
+                                "${day.name}  ·  ${stringResource(R.string.routine_next_up)}"
+                            } else {
+                                day.name
+                            },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onFinishAs(null) }) {
+                Text(stringResource(R.string.session_no_day))
+            }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
 }
 
 @Composable

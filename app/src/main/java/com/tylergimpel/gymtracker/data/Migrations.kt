@@ -35,4 +35,57 @@ internal val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+/**
+ * Version 3 adds the routine, its ordered days, and the cycle state the cursor is derived from.
+ *
+ * The two columns added to `session` are the snapshot that makes revising a routine safe: names
+ * only, deliberately nullable, and deliberately not a foreign key.
+ */
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `routine` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `goal` TEXT NOT NULL, `cadence` INTEGER NOT NULL, `equipment` TEXT NOT NULL, `rep_preference` TEXT NOT NULL)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `routine_day` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `routine_id` INTEGER NOT NULL, `order_index` INTEGER NOT NULL, `name` TEXT NOT NULL, `is_cardio` INTEGER NOT NULL, FOREIGN KEY(`routine_id`) REFERENCES `routine`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_routine_day_routine_id` ON `routine_day` (`routine_id`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `cycle` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `routine_id` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `started_at` INTEGER NOT NULL, FOREIGN KEY(`routine_id`) REFERENCES `routine`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_cycle_routine_id` ON `cycle` (`routine_id`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `cycle_completion` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cycle_id` INTEGER NOT NULL, `routine_day_id` INTEGER NOT NULL, `session_id` INTEGER NOT NULL, FOREIGN KEY(`cycle_id`) REFERENCES `cycle`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`routine_day_id`) REFERENCES `routine_day`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`session_id`) REFERENCES `session`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_cycle_completion_cycle_id` ON `cycle_completion` (`cycle_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_cycle_completion_routine_day_id` ON `cycle_completion` (`routine_day_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_cycle_completion_session_id` ON `cycle_completion` (`session_id`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `skip` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cycle_id` INTEGER NOT NULL, `routine_day_id` INTEGER NOT NULL, `recorded_at` INTEGER NOT NULL, FOREIGN KEY(`cycle_id`) REFERENCES `cycle`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`routine_day_id`) REFERENCES `routine_day`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_skip_cycle_id` ON `skip` (`cycle_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_skip_routine_day_id` ON `skip` (`routine_day_id`)",
+        )
+        db.execSQL(
+            "ALTER TABLE `session` ADD COLUMN `routine_name` TEXT",
+        )
+        db.execSQL(
+            "ALTER TABLE `session` ADD COLUMN `routine_day_name` TEXT",
+        )
+    }
+}
+
+internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

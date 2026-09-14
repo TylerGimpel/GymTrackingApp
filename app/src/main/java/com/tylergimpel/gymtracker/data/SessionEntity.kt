@@ -33,6 +33,19 @@ data class SessionEntity(
 
     @ColumnInfo(name = "note")
     val note: String?,
+
+    /**
+     * The routine this session realised, copied by name at the moment it was recorded.
+     *
+     * A name and not a reference. This is the seam that makes revising a routine safe: there is no
+     * constraint here for a deletion to travel along, so regenerating or throwing away a routine
+     * cannot reach a single logged set. Do not turn either of these into a foreign key.
+     */
+    @ColumnInfo(name = "routine_name")
+    val routineName: String?,
+
+    @ColumnInfo(name = "routine_day_name")
+    val routineDayName: String?,
 )
 
 fun SessionEntity.toDomain() = Session(
@@ -41,6 +54,8 @@ fun SessionEntity.toDomain() = Session(
     finishedAt = finishedAt,
     date = date,
     note = note,
+    routineName = routineName,
+    routineDayName = routineDayName,
 )
 
 fun Session.toEntity() = SessionEntity(
@@ -49,4 +64,6 @@ fun Session.toEntity() = SessionEntity(
     finishedAt = finishedAt,
     date = date,
     note = note,
+    routineName = routineName,
+    routineDayName = routineDayName,
 )

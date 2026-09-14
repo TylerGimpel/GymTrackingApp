@@ -24,6 +24,12 @@ data class Session(
      */
     val date: LocalDate,
     val note: String?,
+    /**
+     * The routine and routine day this session realised, held as copied names rather than as a
+     * reference. A session can have neither: training with no routine at all is ordinary.
+     */
+    val routineName: String? = null,
+    val routineDayName: String? = null,
 ) {
     val isActive: Boolean get() = finishedAt == null
 
@@ -47,6 +53,15 @@ data class Session(
 
     fun finish(at: Instant): Session = copy(finishedAt = at)
 
+    /**
+     * The same session, recorded as having realised [day] of [routine].
+     *
+     * Copies the names rather than taking a reference, so that nothing about this session depends
+     * on the routine continuing to exist or to look the way it does now.
+     */
+    fun realising(routine: Routine, day: RoutineDay): Session =
+        copy(routineName = routine.name, routineDayName = day.name)
+
     /** The same session, refiled on [date]. When it was trained is untouched. */
     fun on(date: LocalDate): Session = copy(date = date)
 
@@ -65,5 +80,6 @@ data class Session(
             date = at.atZone(zone).toLocalDate(),
             note = note,
         )
+
     }
 }

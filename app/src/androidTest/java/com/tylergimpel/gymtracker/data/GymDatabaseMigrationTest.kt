@@ -4,6 +4,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,7 +66,46 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesFromTheLogSchemaToTheRoutineAndCycleSchema() {
+        helper.createDatabase(SECOND_DATABASE, 2).use { version2 ->
+            version2.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note) " +
+                    "VALUES (1757869200000, NULL, '2026-09-14', NULL)",
+            )
+        }
+
+        val version3 = helper.runMigrationsAndValidate(SECOND_DATABASE, 3, true, MIGRATION_2_3)
+
+        version3.use { db ->
+            // The session survives, and gains the snapshot columns as null rather than losing its
+            // place in history.
+            db.query("SELECT routine_name, routine_day_name FROM session").use {
+                it.moveToFirst()
+                assertTrue(it.isNull(0))
+                assertTrue(it.isNull(1))
+            }
+            db.execSQL(
+                "INSERT INTO routine (name, goal, cadence, equipment, rep_preference) " +
+                    "VALUES ('Push / Pull / Legs', 'HYPERTROPHY', 4, 'barbell', 'MODERATE')",
+            )
+            db.execSQL(
+                "INSERT INTO routine_day (routine_id, order_index, name, is_cardio) " +
+                    "VALUES (1, 1, 'Push', 0)",
+            )
+            db.execSQL("INSERT INTO cycle (routine_id, ordinal, started_at) VALUES (1, 1, 1757869200000)")
+            db.execSQL(
+                "INSERT INTO cycle_completion (cycle_id, routine_day_id, session_id) VALUES (1, 1, 1)",
+            )
+            db.query("SELECT COUNT(*) FROM cycle_completion").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
+        const val SECOND_DATABASE = "gym-migration-test-2.db"
     }
 }

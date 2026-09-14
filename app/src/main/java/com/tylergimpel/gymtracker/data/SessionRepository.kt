@@ -1,6 +1,8 @@
 package com.tylergimpel.gymtracker.data
 
 import androidx.room.withTransaction
+import com.tylergimpel.gymtracker.domain.Routine
+import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
@@ -86,9 +88,19 @@ class SessionRepository(
 
     suspend fun deleteSet(setId: Long) = sessions.deleteSet(setId)
 
-    suspend fun finishSession(sessionId: Long) {
+    /**
+     * Closes the session, recording the routine day it realised as copied names if it realised one.
+     *
+     * Both are optional and stay null for a session trained with no routine at all, which is an
+     * ordinary session rather than an incomplete one.
+     */
+    suspend fun finishSession(sessionId: Long, routine: Routine? = null, day: RoutineDay? = null) {
         val session = sessions.session(sessionId) ?: return
-        sessions.update(session.toDomain().finish(clock.instant()).toEntity())
+        val finished = session.toDomain().finish(clock.instant())
+        sessions.update(
+            (if (routine != null && day != null) finished.realising(routine, day) else finished)
+                .toEntity(),
+        )
     }
 
     suspend fun noteSession(sessionId: Long, note: String?) {

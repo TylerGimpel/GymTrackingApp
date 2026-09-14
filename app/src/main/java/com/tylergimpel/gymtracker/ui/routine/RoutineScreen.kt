@@ -1,0 +1,305 @@
+package com.tylergimpel.gymtracker.ui.routine
+
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tylergimpel.gymtracker.R
+import com.tylergimpel.gymtracker.domain.RepPreference
+import com.tylergimpel.gymtracker.domain.Routine
+import com.tylergimpel.gymtracker.domain.RoutineDay
+import com.tylergimpel.gymtracker.domain.RoutineGoal
+
+/**
+ * A minimal routine editor: a name, the properties, and an ordered list of day names.
+ *
+ * Deliberately provisional. Generation, pinning, validation and revision belong to the routines
+ * spec; this exists so that the cursor has a routine to point into and so the day structure can be
+ * exercised by hand.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RoutineScreen(
+    onBack: () -> Unit,
+    viewModel: RoutineViewModel = viewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val routine = state.progress?.routine
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.routine_title)) },
+                actions = {
+                    TextButton(onClick = onBack) { Text(stringResource(R.string.routine_done)) }
+                },
+            )
+        },
+    ) { insets ->
+        if (routine == null) {
+            EmptyRoutine(insets = insets, onCreate = viewModel::createRoutine)
+            return@Scaffold
+        }
+
+        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
+            item { RoutineProperties(routine, state.availableEquipment, viewModel) }
+            item { HorizontalDivider() }
+            item {
+                Text(
+                    text = stringResource(R.string.routine_days),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+            items(routine.rotation, key = RoutineDay::id) { day ->
+                RoutineDayRow(
+                    day = day,
+                    position = routine.rotation.indexOf(day) + 1,
+                    isNext = state.progress?.cursor?.id == day.id,
+                    onRename = { viewModel.renameDay(day.id, it) },
+                    onMove = { viewModel.moveDay(day.id, it) },
+                    onRemove = { viewModel.removeDay(day.id) },
+                )
+                HorizontalDivider()
+            }
+            item { AddDay(onAdd = viewModel::addDay) }
+            item {
+                TextButton(
+                    onClick = viewModel::deleteRoutine,
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Text(stringResource(R.string.routine_delete))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyRoutine(
+    insets: androidx.compose.foundation.layout.PaddingValues,
+    onCreate: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(insets)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.routine_none),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(onClick = onCreate) { Text(stringResource(R.string.routine_create)) }
+    }
+}
+
+/**
+ * The routine's properties.
+ *
+ * Editable without touching the day structure, which is why they live in their own block: changing
+ * a goal or the equipment at a gym is not a revision of the rotation and ends no cycle.
+ */
+@Composable
+private fun RoutineProperties(
+    routine: Routine,
+    availableEquipment: List<String>,
+    viewModel: RoutineViewModel,
+) {
+    var name by rememberSaveable(routine.id) { mutableStateOf(routine.name) }
+    var cadence by rememberSaveable(routine.id) { mutableStateOf(routine.cadence.toString()) }
+
+    fun save(
+        goal: RoutineGoal = routine.goal,
+        repPreference: RepPreference = routine.repPreference,
+        equipment: Set<String> = routine.equipment,
+    ) = viewModel.editProperties(
+        name = name.ifBlank { routine.name },
+        goal = goal,
+        cadence = cadence.toIntOrNull()?.coerceAtLeast(1) ?: routine.cadence,
+        equipment = equipment,
+        repPreference = repPreference,
+    )
+
+    Column(
+        modifier = Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it; save() },
+            label = { Text(stringResource(R.string.routine_name)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = cadence,
+            onValueChange = { cadence = it; save() },
+            label = { Text(stringResource(R.string.routine_cadence)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        ChoiceRow(
+            label = stringResource(R.string.routine_goal),
+            options = RoutineGoal.entries.map { it to it.name.lowercase() },
+            selected = routine.goal,
+            onSelect = { save(goal = it) },
+        )
+        ChoiceRow(
+            label = stringResource(R.string.routine_rep_preference),
+            options = RepPreference.entries.map { it to it.name.lowercase() },
+            selected = routine.repPreference,
+            onSelect = { save(repPreference = it) },
+        )
+
+        Text(stringResource(R.string.routine_equipment), style = MaterialTheme.typography.labelLarge)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            availableEquipment.forEach { item ->
+                val owned = item in routine.equipment
+                FilterChip(
+                    selected = owned,
+                    onClick = {
+                        save(
+                            equipment = if (owned) {
+                                routine.equipment - item
+                            } else {
+                                routine.equipment + item
+                            },
+                        )
+                    },
+                    label = { Text(item) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> ChoiceRow(
+    label: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, text) ->
+                FilterChip(
+                    selected = value == selected,
+                    onClick = { onSelect(value) },
+                    label = { Text(text) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoutineDayRow(
+    day: RoutineDay,
+    position: Int,
+    isNext: Boolean,
+    onRename: (String) -> Unit,
+    onMove: (Int) -> Unit,
+    onRemove: () -> Unit,
+) {
+    var name by rememberSaveable(day.id) { mutableStateOf(day.name) }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = position.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it; onRename(it) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (isNext) {
+                Text(
+                    text = stringResource(R.string.routine_next_up),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            }
+            TextButton(onClick = { onMove(-1) }) { Text(stringResource(R.string.routine_move_up)) }
+            TextButton(onClick = { onMove(1) }) { Text(stringResource(R.string.routine_move_down)) }
+            TextButton(onClick = onRemove) { Text(stringResource(R.string.routine_remove)) }
+        }
+    }
+}
+
+@Composable
+private fun AddDay(onAdd: (String) -> Unit) {
+    var name by rememberSaveable { mutableStateOf("") }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text(stringResource(R.string.routine_new_day)) },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        Button(
+            onClick = { onAdd(name.trim()); name = "" },
+            enabled = name.isNotBlank(),
+        ) {
+            Text(stringResource(R.string.routine_add))
+        }
+    }
+}

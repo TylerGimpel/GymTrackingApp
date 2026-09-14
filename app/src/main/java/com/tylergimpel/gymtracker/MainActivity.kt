@@ -8,10 +8,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.ui.bank.ExerciseBankScreen
+import com.tylergimpel.gymtracker.ui.routine.RoutineScreen
 import com.tylergimpel.gymtracker.ui.session.SessionScreen
 import com.tylergimpel.gymtracker.ui.session.SessionViewModel
 import com.tylergimpel.gymtracker.ui.theme.GymTrackerTheme
@@ -29,29 +30,38 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class Destination { SESSION, EXERCISE_PICKER, ROUTINE }
+
 /**
- * Two destinations, switched by hand.
+ * Three destinations, switched by hand.
  *
- * A navigation library would earn its place once there are more screens and a back stack worth
- * modelling; with the session and the bank picker it would be more machinery than the app has
- * behaviour.
+ * A navigation library would earn its place once there is a back stack worth modelling; with a
+ * session, a picker and an editor it would be more machinery than the app has behaviour.
  */
 @Composable
 private fun GymTracker(viewModel: SessionViewModel = viewModel()) {
-    var pickingExercise by rememberSaveable { mutableStateOf(false) }
+    var destination by rememberSaveable { mutableStateOf(Destination.SESSION) }
 
-    if (pickingExercise) {
-        BackHandler { pickingExercise = false }
-        ExerciseBankScreen(
+    if (destination != Destination.SESSION) {
+        BackHandler { destination = Destination.SESSION }
+    }
+
+    when (destination) {
+        Destination.SESSION -> SessionScreen(
+            onPickExercise = { destination = Destination.EXERCISE_PICKER },
+            onOpenRoutine = { destination = Destination.ROUTINE },
+            viewModel = viewModel,
+        )
+
+        Destination.EXERCISE_PICKER -> ExerciseBankScreen(
             onSelect = { exercise ->
                 viewModel.select(exercise)
-                pickingExercise = false
+                destination = Destination.SESSION
             },
         )
-    } else {
-        SessionScreen(
-            onPickExercise = { pickingExercise = true },
-            viewModel = viewModel,
+
+        Destination.ROUTINE -> RoutineScreen(
+            onBack = { destination = Destination.SESSION },
         )
     }
 }

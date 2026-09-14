@@ -58,7 +58,7 @@ room {
 exerciseBank {
     schemaDirectory.set(roomSchemaDirectory)
     databaseClass.set("com.tylergimpel.gymtracker.data.GymDatabase")
-    databaseVersion.set(2)
+    databaseVersion.set(3)
     assetPath.set("databases/gym-bank.db")
 }
 

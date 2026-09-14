@@ -3,13 +3,17 @@ package com.tylergimpel.gymtracker.ui.session
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.data.LoggedSession
+import com.tylergimpel.gymtracker.data.RoutineProgress
+import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.SessionRepository
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggedSet
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.SetDraft
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,22 +40,33 @@ data class SessionUiState(
     val selected: SelectedExercise? = null,
     val draft: SetDraft = SetDraft(),
     val editing: EditingSet? = null,
+    /** The routine and where it has got to, so the screen can say what comes next. */
+    val routine: RoutineProgress? = null,
+    /** Set while the screen is asking which routine day the finishing session realised. */
+    val finishing: Boolean = false,
 )
 
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = GymDatabase.getInstance(application).let { database ->
-        SessionRepository(
-            database = database,
-            sessions = database.sessionDao(),
-            clock = Clock.systemDefaultZone(),
-            zone = ZoneId.systemDefault(),
-        )
-    }
+    private val database = GymDatabase.getInstance(application)
+
+    private val repository = SessionRepository(
+        database = database,
+        sessions = database.sessionDao(),
+        clock = Clock.systemDefaultZone(),
+        zone = ZoneId.systemDefault(),
+    )
+
+    private val routines = RoutineRepository(
+        database = database,
+        routines = database.routineDao(),
+        clock = Clock.systemDefaultZone(),
+    )
 
     private val selected = MutableStateFlow<SelectedExercise?>(null)
     private val draft = MutableStateFlow(SetDraft())
     private val editing = MutableStateFlow<EditingSet?>(null)
+    private val finishing = MutableStateFlow(false)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val logged: StateFlow<LoggedSession?> = repository.observeActiveSession()
@@ -60,16 +75,24 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
-    val state: StateFlow<SessionUiState> =
-        combine(logged, selected, draft, editing) { logged, selected, draft, editing ->
-            SessionUiState(
-                session = logged?.session,
-                exercises = logged?.exercises.orEmpty(),
-                selected = selected,
-                draft = draft,
-                editing = editing,
-            )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
+    val state: StateFlow<SessionUiState> = combine(
+        logged,
+        selected,
+        draft,
+        editing,
+        combine(routines.observeProgress(), finishing) { routine, finishing -> routine to finishing },
+    ) { logged, selected, draft, editing, routineState ->
+        val (routine, finishing) = routineState
+        SessionUiState(
+            session = logged?.session,
+            exercises = logged?.exercises.orEmpty(),
+            selected = selected,
+            draft = draft,
+            editing = editing,
+            routine = routine,
+            finishing = finishing,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
     fun select(exercise: Exercise) {
         selected.value = SelectedExercise(exercise.id, exercise.name)
@@ -127,10 +150,30 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.noteSession(session.id, text) }
     }
 
-    fun finishSession() {
+    /** Opens the question of which routine day this session realised, or just finishes it. */
+    fun startFinishing() {
+        if (state.value.routine?.routine?.days.orEmpty().isEmpty()) finishSession(null) else finishing.value = true
+    }
+
+    fun cancelFinishing() { finishing.value = false }
+
+    /**
+     * Closes the session, and records [day] as trained if one was named.
+     *
+     * Both writes go in one transaction: a finished session that failed to advance the cycle would
+     * leave the cursor pointing at work already done, with nothing to show why.
+     */
+    fun finishSession(day: RoutineDay?) {
         val session = logged.value?.session ?: return
+        val routine = state.value.routine?.routine
         viewModelScope.launch {
-            repository.finishSession(session.id)
+            database.withTransaction {
+                repository.finishSession(session.id, routine.takeIf { day != null }, day)
+                if (routine != null && day != null) {
+                    routines.recordCompletion(routine.id, day, session.id)
+                }
+            }
+            finishing.value = false
             selected.value = null
             draft.value = SetDraft()
         }
