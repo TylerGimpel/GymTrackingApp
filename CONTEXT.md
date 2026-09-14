@@ -61,6 +61,12 @@ _Avoid_: workout — ambiguous between the plan and the record, so it is not use
 **Skip**:
 Marking a routine day as dealt with without a session. Distinct from completion in history, because the user did not train.
 
+**Cardio day**:
+A routine position carrying cardio instead of resistance work. It takes its turn in the cycle like any other routine day, but contributes no training volume and is excluded when translating volume targets.
+
+**Plan**:
+The list of exercises a session was supposed to contain, copied from its routine day when the session begins. What makes a skipped exercise visible rather than merely absent.
+
 **Set**:
 One unit of effort against an exercise, identified by its position within that exercise in a session. A set is one set regardless of how many rows record it — a drop set and a per-side set are each still one set.
 
