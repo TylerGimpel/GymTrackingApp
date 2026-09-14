@@ -216,6 +216,58 @@
   .sheet .act { display: block; width: 100%; padding: 14px; border-radius: 12px; background: var(--surface-2); font-weight: 620; margin-top: 8px; text-align: center; }
   .sheet .act.primary { background: var(--accent); color: var(--accent-text); }
 
+  /* ---------- Variant D: wheel + drawer (synthesis of A and B) ---------- */
+  .d-handle {
+    position: fixed; left: max(0px, calc(50% - 240px)); top: 50%; transform: translateY(-50%); z-index: 25;
+    width: 22px; height: 92px; border-radius: 0 12px 12px 0;
+    background: var(--surface-2); border: 1px solid var(--line); border-left: none;
+    display: grid; place-items: center; color: var(--text-dim); font-size: 13px;
+  }
+  .d-wheel {
+    height: 46vh; min-height: 290px; overflow-y: auto; overscroll-behavior: contain;
+    scroll-snap-type: y mandatory; perspective: 800px; perspective-origin: 50% 50%;
+    margin: 0 -14px; padding: 0 14px;
+  }
+  .d-wheel::-webkit-scrollbar { display: none; }
+  .d-pad { height: calc(23vh - 55px); min-height: 90px; }
+  .d-slot {
+    height: 110px; scroll-snap-align: center; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px;
+    transition: opacity .12s linear; will-change: transform, opacity;
+  }
+  .d-slot .d-chips { display: flex; gap: 5px; }
+  .d-slot .d-val { font-size: 19px; font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .d-slot .d-val small { color: var(--text-dim); font-size: .72em; font-weight: 550; }
+  .d-slot .d-prev { font-size: 11.5px; color: var(--text-dim); }
+  .d-slot.focus .d-val { font-size: 46px; font-weight: 730; letter-spacing: -0.03em; }
+  .d-slot.focus .d-prev { font-size: 13px; }
+  .d-slot.logged .d-val { color: var(--text-dim); }
+  .d-slot.logged .d-val::after { content: ' ✓'; color: var(--good); }
+
+  .d-ctrl {
+    position: sticky; bottom: 0; background: var(--surface);
+    border-top: 1px solid var(--line); margin: 0 -14px -14px; padding: 12px 14px 14px;
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+  .d-hintline { text-align: center; margin-bottom: 10px; min-height: 17px; }
+
+  .drawer {
+    position: fixed; top: 0; bottom: 0; left: max(0px, calc(50% - 240px)); z-index: 50; width: 82%; max-width: 330px;
+    background: var(--surface); border-right: 1px solid var(--line);
+    transform: translateX(-102%); transition: transform .22s ease;
+    overflow-y: auto; padding: 16px 0 24px;
+  }
+  .drawer.on { transform: none; }
+  .drawer h3 { margin: 0 16px 2px; font-size: 16px; }
+  .drawer .sub { margin: 0 16px 12px; font-size: 12px; color: var(--text-dim); }
+  .drawer .dex { display: flex; align-items: center; gap: 9px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .drawer .dex.cur { background: var(--surface-2); }
+  .drawer .dex .nm { font-size: 14px; font-weight: 560; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drawer .dex.cur .nm { font-weight: 680; }
+  .drawer .dex .s { margin-left: auto; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .drawer .dex .bar { width: 34px; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+  .drawer .dex .bar i { display: block; height: 100%; background: var(--good); }
+
   .toast {
     position: fixed; bottom: 76px; left: 50%; transform: translateX(-50%) translateY(20px);
     background: var(--text); color: var(--bg); padding: 10px 15px; border-radius: 11px;
@@ -247,8 +299,9 @@
   </div>
 </div>
 
-<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="scrim" id="scrim" onclick="closeSheet();closeDrawer()"></div>
 <div class="sheet" id="sheet"></div>
+<div class="drawer" id="drawer"></div>
 <div class="toast" id="toast"></div>
 
 <div class="switcher">
@@ -259,7 +312,7 @@
 
 <script>
 // ---------------------------------------------------------------- state
-const VARIANTS = { A: 'Big accept', B: 'Set list', C: 'Dial' };
+const VARIANTS = { D: 'Wheel + drawer', A: 'Big accept', B: 'Set list', C: 'Dial' };
 
 function mkSets(spec) {
   return spec.map((s, i) => ({
@@ -333,7 +386,7 @@ const session = {
 };
 
 let variant = new URLSearchParams(location.search).get('variant');
-if (!VARIANTS[variant]) variant = 'A';
+if (!VARIANTS[variant]) variant = 'D';
 
 let restLeft = 0, restTimer = null, restLabel = '';
 
@@ -656,11 +709,158 @@ function renderC() {
     </div>`;
 }
 
+// ---------------------------------------------------------------- variant D
+// Synthesis: A's zoomed prescription as the focus of a vertical wheel, B's set
+// rows receding above and below, B's routine overview moved to a left drawer.
+// The wheel renders once per exercise; scrolling updates focus imperatively so
+// a full re-render never fights the scroll position.
+
+function renderD() {
+  const e = ex();
+  if (isCardio(e)) return `
+    <div class="card" style="padding:14px">${header(e)}${cardioPanel(e)}
+      <button class="a-log" onclick="logSet()">Log cardio</button></div>`;
+  return `
+    <div class="card" style="padding:14px">
+      ${header(e)}
+      <div class="d-wheel" id="dWheel">
+        <div class="d-pad"></div>
+        ${e.sets.map((x, i) => `
+          <div class="d-slot ${x.done ? 'logged' : ''}" data-i="${i}">
+            <div class="d-chips">
+              <span class="chip ${x.type}">${x.type}</span>
+              ${x.drops ? '<span class="chip drop">drop</span>' : ''}
+            </div>
+            <div class="d-val">${x.w}<small> kg</small> × ${x.r}</div>
+            <div class="d-prev">${x.prev ? 'was ' + x.prev : 'no previous set'}</div>
+          </div>`).join('')}
+        <div class="d-pad"></div>
+      </div>
+      <div class="d-ctrl">
+        <div class="d-hintline" id="dHint"></div>
+        <div class="a-step" style="margin-top:0">
+          <div>
+            <div class="cap">Weight</div>
+            <div class="grp"><button onclick="adjD('w',-2.5)">−</button><b id="dW">—</b><button onclick="adjD('w',2.5)">+</button></div>
+          </div>
+          <div>
+            <div class="cap">Reps</div>
+            <div class="grp"><button onclick="adjD('r',-1)">−</button><b id="dR">—</b><button onclick="adjD('r',1)">+</button></div>
+          </div>
+        </div>
+        <button class="a-log" id="dLog" onclick="logSet()">Log set</button>
+      </div>
+    </div>`;
+}
+
+let wheelRaf = null;
+function wireWheel() {
+  const w = document.getElementById('dWheel');
+  if (!w) return;
+  const slots = [...w.querySelectorAll('.d-slot')];
+  const paint = () => {
+    const mid = w.scrollTop + w.clientHeight / 2;
+    let best = null, bestD = 1e9;
+    slots.forEach(s => {
+      const c = s.offsetTop + s.offsetHeight / 2;
+      const d = (c - mid) / s.offsetHeight;
+      const a = Math.abs(d);
+      // 3D wheel falloff: rows tilt away and shrink with distance from centre
+      s.style.transform = `translateZ(${-70 * a}px) rotateX(${Math.max(-52, Math.min(52, -d * 26))}deg) scale(${Math.max(0.62, 1 - a * 0.16)})`;
+      s.style.opacity = String(Math.max(0.30, 1 - a * 0.34));
+      s.classList.toggle('focus', a < 0.5);
+      if (a < bestD) { bestD = a; best = s; }
+    });
+    if (best) {
+      const i = Number(best.dataset.i);
+      if (i !== session.si) { session.si = i; syncCtrl(); }
+    }
+  };
+  w.addEventListener('scroll', () => {
+    if (wheelRaf) return;
+    wheelRaf = requestAnimationFrame(() => { wheelRaf = null; paint(); });
+  }, { passive: true });
+  const target = w.querySelector(`.d-slot[data-i="${session.si}"]`);
+  if (target) w.scrollTop = target.offsetTop + target.offsetHeight / 2 - w.clientHeight / 2;
+  paint(); syncCtrl();
+}
+
+function syncCtrl() {
+  const s = st(), e = ex();
+  const W = document.getElementById('dW'), R = document.getElementById('dR');
+  if (!W) return;
+  W.textContent = s.w; R.textContent = s.r;
+  document.getElementById('dHint').innerHTML = modeHint(e, s);
+  const btn = document.getElementById('dLog');
+  btn.textContent = s.done ? 'Logged ✓ — log again' : 'Log set';
+  btn.classList.toggle('done', !!s.done);
+  const c = counters();
+  document.getElementById('posCounter').innerHTML =
+    `Set <b>${c.n}</b> of ${c.all} · working <b>${c.workN}</b> of ${c.workTotal}`;
+}
+
+function adjD(f, d) {
+  const s = st();
+  if (f === 'w') s.w = Math.max(0, Math.round((s.w + d) * 4) / 4); else s.r = Math.max(0, s.r + d);
+  const slot = document.querySelector(`.d-slot[data-i="${session.si}"] .d-val`);
+  if (slot) slot.innerHTML = `${s.w}<small> kg</small> × ${s.r}`;
+  syncCtrl();
+}
+
+// ---- left drawer: the routine overview, swiped or tapped out
+function openDrawer() {
+  const d = document.getElementById('drawer');
+  d.innerHTML = `
+    <h3>${session.day}</h3>
+    <div class="sub">Tap anything to jump there.</div>
+    ${session.exercises.map((o, i) => {
+      const done = o.sets.filter(x => x.done).length, tot = o.sets.length;
+      return `<div class="dex ${i === session.ei ? 'cur' : ''}" onclick="jumpFromDrawer(${i})">
+        ${o.group ? '<span class="chip">SS</span>' : ''}
+        <span class="nm">${o.name}</span>
+        <span class="bar"><i style="width:${Math.round(done / tot * 100)}%"></i></span>
+        <span class="s">${done}/${tot}</span>
+      </div>`;
+    }).join('')}`;
+  d.classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('on');
+  document.getElementById('scrim').classList.remove('on');
+}
+function jumpFromDrawer(i) {
+  const o = session.exercises[i];
+  session.ei = i;
+  session.si = Math.max(o.sets.findIndex(x => !x.done), 0);
+  closeDrawer(); render();
+}
+
+// edge swipe to open
+let touchX0 = null;
+addEventListener('touchstart', ev => { touchX0 = ev.touches[0].clientX; }, { passive: true });
+addEventListener('touchend', ev => {
+  if (touchX0 === null || variant !== 'D') return;
+  const dx = ev.changedTouches[0].clientX - touchX0;
+  if (touchX0 < 28 && dx > 45) openDrawer();
+  touchX0 = null;
+}, { passive: true });
+
 function render() {
   const e = ex();
   document.getElementById('app').innerHTML =
-    variant === 'A' ? renderA() : variant === 'B' ? renderB() : renderC();
+    variant === 'A' ? renderA() : variant === 'B' ? renderB() :
+    variant === 'C' ? renderC() : renderD();
   document.getElementById('vlabel').innerHTML = variant + ' <span>' + VARIANTS[variant] + '</span>';
+  const h = document.querySelector('.d-handle');
+  if (h) h.remove();
+  if (variant === 'D') {
+    const btn = document.createElement('button');
+    btn.className = 'd-handle'; btn.innerHTML = '›'; btn.title = 'Routine';
+    btn.onclick = openDrawer;
+    document.body.appendChild(btn);
+    wireWheel();
+  }
   tickClock();
 }
 
@@ -680,5 +880,5 @@ addEventListener('keydown', ev => {
 });
 
 render();
-setTimeout(() => toast('Tap ‹ › at the bottom to switch layouts'), 700);
+setTimeout(() => toast('Swipe from the left edge for the routine · ‹ › switches layout'), 700);
 </script>
