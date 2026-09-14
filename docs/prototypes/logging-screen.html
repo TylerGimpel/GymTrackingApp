@@ -238,6 +238,11 @@
   .d-slot .d-chips { display: flex; gap: 5px; }
   .d-slot .d-val { font-size: 19px; font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .d-slot .d-val small { color: var(--text-dim); font-size: .72em; font-weight: 550; }
+  .d-slot.focus .d-val small.unit {
+    text-decoration: underline; text-decoration-style: dotted;
+    text-underline-offset: 4px; cursor: pointer;
+  }
+  .a-step .grp b { cursor: pointer; }
   .d-slot .d-prev { font-size: 11.5px; color: var(--text-dim); }
   .d-slot.focus .d-val { font-size: 46px; font-weight: 730; letter-spacing: -0.03em; }
   .d-slot.focus .d-prev { font-size: 13px; }
@@ -391,6 +396,21 @@ if (!VARIANTS[variant]) variant = 'D';
 let restLeft = 0, restTimer = null, restLabel = '';
 
 // ---------------------------------------------------------------- helpers
+const KG_PER_LB = 0.45359237;
+// Canonical storage is kg (settled decision). Display unit is a remembered
+// property of the exercise - the two-lat-pulldown case: one machine in lb,
+// one in kg, in the same gym. Toggling is display-only conversion.
+function dispUnit(e) { return e.dispUnit || 'kg'; }
+function toDisp(kg, u) { return u === 'lb' ? Math.round(kg / KG_PER_LB / 2.5) * 2.5 : kg; }
+function fromDisp(v, u) { return u === 'lb' ? Math.round(v * KG_PER_LB * 4) / 4 : v; }
+function stepFor(u) { return u === 'lb' ? 5 : 2.5; }
+function toggleUnit() {
+  const e = ex();
+  e.dispUnit = dispUnit(e) === 'kg' ? 'lb' : 'kg';
+  toast('Display unit for ' + e.name + ' is now ' + dispUnit(e) + ' - stored in kg either way');
+  render();
+}
+
 const ex = () => session.exercises[session.ei];
 const st = () => ex().sets[session.si];
 const isCardio = e => e.type === 'distance_time';
@@ -613,11 +633,11 @@ function renderA() {
       </div>
       <div class="a-step">
         <div>
-          <div class="cap">Weight</div>
+          <div class="cap">Weight · tap to type</div>
           <div class="grp"><button onclick="adj('w',-2.5)">−</button><b>${s.w}</b><button onclick="adj('w',2.5)">+</button></div>
         </div>
         <div>
-          <div class="cap">Reps</div>
+          <div class="cap">Reps · tap to type</div>
           <div class="grp"><button onclick="adj('r',-1)">−</button><b>${s.r}</b><button onclick="adj('r',1)">+</button></div>
         </div>
       </div>
@@ -731,7 +751,7 @@ function renderD() {
               <span class="chip ${x.type}">${x.type}</span>
               ${x.drops ? '<span class="chip drop">drop</span>' : ''}
             </div>
-            <div class="d-val">${x.w}<small> kg</small> × ${x.r}</div>
+            <div class="d-val">${toDisp(x.w, dispUnit(e))}<small class="unit" onclick="event.stopPropagation();toggleUnit()"> ${dispUnit(e)}</small> × ${x.r}</div>
             <div class="d-prev">${x.prev ? 'was ' + x.prev : 'no previous set'}</div>
           </div>`).join('')}
         <div class="d-pad"></div>
@@ -740,12 +760,12 @@ function renderD() {
         <div class="d-hintline" id="dHint"></div>
         <div class="a-step" style="margin-top:0">
           <div>
-            <div class="cap">Weight</div>
-            <div class="grp"><button onclick="adjD('w',-2.5)">−</button><b id="dW">—</b><button onclick="adjD('w',2.5)">+</button></div>
+            <div class="cap">Weight · tap to type</div>
+            <div class="grp"><button onclick="adjD('w',-1)">−</button><b id="dW" onclick="typeIn('w')">—</b><button onclick="adjD('w',1)">+</button></div>
           </div>
           <div>
-            <div class="cap">Reps</div>
-            <div class="grp"><button onclick="adjD('r',-1)">−</button><b id="dR">—</b><button onclick="adjD('r',1)">+</button></div>
+            <div class="cap">Reps · tap to type</div>
+            <div class="grp"><button onclick="adjD('r',-1)">−</button><b id="dR" onclick="typeIn('r')">—</b><button onclick="adjD('r',1)">+</button></div>
           </div>
         </div>
         <button class="a-log" id="dLog" onclick="logSet()">Log set</button>
@@ -786,10 +806,10 @@ function wireWheel() {
 }
 
 function syncCtrl() {
-  const s = st(), e = ex();
+  const s = st(), e = ex(), u = dispUnit(e);
   const W = document.getElementById('dW'), R = document.getElementById('dR');
   if (!W) return;
-  W.textContent = s.w; R.textContent = s.r;
+  W.textContent = toDisp(s.w, u) + ' ' + u; R.textContent = s.r;
   document.getElementById('dHint').innerHTML = modeHint(e, s);
   const btn = document.getElementById('dLog');
   btn.textContent = s.done ? 'Logged ✓ — log again' : 'Log set';
@@ -799,12 +819,45 @@ function syncCtrl() {
     `Set <b>${c.n}</b> of ${c.all} · working <b>${c.workN}</b> of ${c.workTotal}`;
 }
 
-function adjD(f, d) {
-  const s = st();
-  if (f === 'w') s.w = Math.max(0, Math.round((s.w + d) * 4) / 4); else s.r = Math.max(0, s.r + d);
-  const slot = document.querySelector(`.d-slot[data-i="${session.si}"] .d-val`);
-  if (slot) slot.innerHTML = `${s.w}<small> kg</small> × ${s.r}`;
-  syncCtrl();
+function adjD(f, dir) {
+  const s = st(), e = ex(), u = dispUnit(e);
+  if (f === 'w') {
+    const next = Math.max(0, toDisp(s.w, u) + dir * stepFor(u));
+    s.w = fromDisp(next, u);
+  } else {
+    s.r = Math.max(0, s.r + dir);
+  }
+  paintSlot(); syncCtrl();
+}
+
+// Tap a value to type it, rather than stepping there one increment at a time.
+// Matters most in calibrating mode, where overriding is the expected path.
+function typeIn(f) {
+  const s = st(), e = ex(), u = dispUnit(e);
+  const host = document.getElementById(f === 'w' ? 'dW' : 'dR');
+  if (host.querySelector('input')) return;
+  const cur = f === 'w' ? toDisp(s.w, u) : s.r;
+  host.innerHTML = `<input type="number" inputmode="decimal" value="${cur}"
+      style="width:66px;font:inherit;font-size:15px;font-weight:inherit;text-align:center;
+             background:var(--bg);color:var(--text);border:1px solid var(--accent);
+             border-radius:7px;padding:3px 2px">`;
+  const inp = host.querySelector('input');
+  inp.focus(); inp.select();
+  const commit = () => {
+    const v = Number(inp.value);
+    if (!Number.isNaN(v) && v >= 0) {
+      if (f === 'w') s.w = fromDisp(v, u); else s.r = Math.round(v);
+    }
+    paintSlot(); syncCtrl();
+  };
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } });
+}
+
+function paintSlot() {
+  const s = st(), e = ex(), u = dispUnit(e);
+  const el = document.querySelector(`.d-slot[data-i="${session.si}"] .d-val`);
+  if (el) el.innerHTML = `${toDisp(s.w, u)}<small class="unit" onclick="event.stopPropagation();toggleUnit()"> ${u}</small> × ${s.r}`;
 }
 
 // ---- left drawer: the routine overview, swiped or tapped out
