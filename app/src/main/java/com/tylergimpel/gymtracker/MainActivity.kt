@@ -44,7 +44,7 @@ private fun GymTracker(viewModel: SessionViewModel = viewModel()) {
         BackHandler { pickingExercise = false }
         ExerciseBankScreen(
             onSelect = { exercise ->
-                viewModel.select(exercise.id, exercise.name)
+                viewModel.select(exercise)
                 pickingExercise = false
             },
         )

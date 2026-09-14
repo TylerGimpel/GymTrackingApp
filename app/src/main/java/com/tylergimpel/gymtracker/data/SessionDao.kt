@@ -21,9 +21,6 @@ interface SessionDao {
     @Query("SELECT * FROM session WHERE id = :sessionId")
     fun observeContent(sessionId: Long): Flow<SessionWithContent?>
 
-    @Query("SELECT * FROM session ORDER BY date DESC, started_at DESC")
-    fun observeAll(): Flow<List<SessionEntity>>
-
     @Insert
     suspend fun insert(session: SessionEntity): Long
 
@@ -46,7 +43,7 @@ interface SessionDao {
         ORDER BY order_index DESC LIMIT 1
         """,
     )
-    suspend fun latestEntryFor(sessionId: Long, exerciseId: String): SessionExerciseEntity?
+    suspend fun latestSessionExerciseFor(sessionId: Long, exerciseId: String): SessionExerciseEntity?
 
     @Query("SELECT COALESCE(MAX(order_index), 0) FROM session_exercise WHERE session_id = :sessionId")
     suspend fun highestExerciseOrder(sessionId: Long): Int

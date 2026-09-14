@@ -75,7 +75,7 @@ class SessionPersistenceTest {
         repository.finishSession(session.id)
 
         assertNull(repository.observeActiveSession().first())
-        assertEquals(1, database.sessionDao().observeAll().first().size)
+        assertEquals(1, countOf("session"))
     }
 
     @Test
@@ -169,10 +169,11 @@ class SessionPersistenceTest {
         val session = repository.observeActiveSession().first()!!
         repository.finishSession(session.id)
 
-        val finished = database.sessionDao().observeAll().first().single()
+        val finished = database.sessionDao().session(session.id)!!
         assertEquals(LocalDate.of(2026, 9, 14), finished.date)
         // Both sets belong to that one session rather than to a second one opened after midnight.
-        assertEquals(1, database.sessionDao().observeAll().first().size)
+        assertEquals(1, countOf("session"))
+        assertEquals(2, countOf("set_entry"))
     }
 
     @Test
@@ -196,6 +197,21 @@ class SessionPersistenceTest {
 
         assertEquals("shoulder felt off", currentSession().exercises.single().sets.single().note)
         assertEquals("short on time", database.sessionDao().session(session.id)!!.note)
+    }
+
+    @Test
+    fun aSessionLeftUnfinishedDoesNotSwallowALaterDaysTraining() = runBlocking {
+        clock.moveTo(at("2026-09-14T18:00"))
+        repository.logSet(BENCH, SetDraft("60", "5"))
+
+        // Nobody pressed Finish on Monday. Thursday is not a continuation of it.
+        clock.moveTo(at("2026-09-17T07:00"))
+        repository.logSet(BENCH, SetDraft("65", "5"))
+
+        assertEquals(2, countOf("session"))
+        val current = repository.observeActiveSession().first()!!
+        assertEquals(LocalDate.of(2026, 9, 17), current.date)
+        assertEquals(1, currentSession().exercises.single().sets.size)
     }
 
     private suspend fun currentSession(): LoggedSession {

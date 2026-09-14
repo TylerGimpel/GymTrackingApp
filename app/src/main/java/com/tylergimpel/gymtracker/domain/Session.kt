@@ -27,12 +27,36 @@ data class Session(
 ) {
     val isActive: Boolean get() = finishedAt == null
 
+    /**
+     * Whether a set logged at [now] belongs to this session.
+     *
+     * A session stays open across midnight, because a lifter who started at 23:40 is still in the
+     * same session at 00:20. It does not stay open forever: an unfinished session from Tuesday must
+     * not swallow Thursday's first set and file it under Tuesday, which is what makes the date on a
+     * session trustworthy at all. The cutoff is the hour a training day is treated as ending.
+     */
+    fun accepts(now: Instant, zone: ZoneId): Boolean {
+        if (!isActive) return false
+        val local = now.atZone(zone)
+        return when (local.toLocalDate()) {
+            date -> true
+            date.plusDays(1) -> local.hour < TRAINING_DAY_ENDS_AT_HOUR
+            else -> false
+        }
+    }
+
     fun finish(at: Instant): Session = copy(finishedAt = at)
 
     /** The same session, refiled on [date]. When it was trained is untouched. */
     fun on(date: LocalDate): Session = copy(date = date)
 
     companion object {
+        /**
+         * The hour a training day is treated as ending, so that a session running late still
+         * belongs to the day it started on rather than opening a second one at midnight.
+         */
+        const val TRAINING_DAY_ENDS_AT_HOUR = 4
+
         /** A new, active session, taking the local date of the moment it began. */
         fun start(at: Instant, zone: ZoneId, id: Long = 0, note: String? = null) = Session(
             id = id,

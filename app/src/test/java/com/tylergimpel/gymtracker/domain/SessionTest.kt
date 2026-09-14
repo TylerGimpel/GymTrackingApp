@@ -62,6 +62,44 @@ class SessionTest {
         assertEquals(session.finishedAt, corrected.finishedAt)
     }
 
+    @Test
+    fun `a set logged later the same day joins the open session`() {
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+
+        assertTrue(session.accepts(at("2026-09-14T19:45"), zone))
+    }
+
+    @Test
+    fun `a set logged just after midnight still joins the session that was running`() {
+        val session = Session.start(at("2026-09-14T23:40"), zone)
+
+        assertTrue(session.accepts(at("2026-09-15T00:20"), zone))
+    }
+
+    @Test
+    fun `a session left unfinished does not swallow a later day's first set`() {
+        val tuesday = Session.start(at("2026-09-14T18:30"), zone)
+
+        // Nobody pressed Finish on Tuesday. Thursday's first set is not Tuesday's training, and
+        // filing it under Tuesday's date would put work in the log on a day it never happened.
+        assertFalse(tuesday.accepts(at("2026-09-17T07:00"), zone))
+    }
+
+    @Test
+    fun `an unfinished session stops accepting sets once the training day is over`() {
+        val session = Session.start(at("2026-09-14T23:40"), zone)
+
+        assertFalse(session.accepts(at("2026-09-15T05:00"), zone))
+    }
+
+    @Test
+    fun `a finished session accepts nothing further`() {
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+            .finish(at("2026-09-14T19:45"))
+
+        assertFalse(session.accepts(at("2026-09-14T20:00"), zone))
+    }
+
     private fun at(localDateTime: String): Instant =
         LocalDateTime.parse(localDateTime).atZone(zone).toInstant()
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.data.LoggedSession
 import com.tylergimpel.gymtracker.data.SessionRepository
+import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggedSet
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
@@ -70,16 +71,13 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
-    fun select(id: String, name: String) {
-        selected.value = SelectedExercise(id, name)
+    fun select(exercise: Exercise) {
+        selected.value = SelectedExercise(exercise.id, exercise.name)
         draft.value = SetDraft()
     }
 
-    fun editWeight(text: String) = draft.update { it.copy(weightText = text) }
-
-    fun editReps(text: String) = draft.update { it.copy(repsText = text) }
-
-    fun editNote(text: String) = draft.update { it.copy(note = text.takeIf(String::isNotBlank)) }
+    /** The screen edits a whole draft rather than one field at a time. */
+    fun changeDraft(draft: SetDraft) { this.draft.value = draft }
 
     fun logSet() {
         val exercise = selected.value ?: return
@@ -104,12 +102,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    fun editEditingWeight(text: String) = editing.update { it?.copy(draft = it.draft.copy(weightText = text)) }
-
-    fun editEditingReps(text: String) = editing.update { it?.copy(draft = it.draft.copy(repsText = text)) }
-
-    fun editEditingNote(text: String) =
-        editing.update { it?.copy(draft = it.draft.copy(note = text.takeIf(String::isNotBlank))) }
+    fun changeEditingDraft(draft: SetDraft) = editing.update { it?.copy(draft = draft) }
 
     fun cancelEditing() { editing.value = null }
 

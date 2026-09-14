@@ -55,13 +55,14 @@ class SessionRepository(
         val reps = draft.reps ?: return null
 
         return database.withTransaction {
-            val session = sessions.activeSession() ?: openSession()
-            val entry = sessions.latestEntryFor(session.id, exerciseId) ?: openEntry(session.id, exerciseId)
-            val existing = sessions.setsFor(entry.id).map(SetEntryEntity::toDomain)
+            val session = currentSession()
+            val performed = sessions.latestSessionExerciseFor(session.id, exerciseId)
+                ?: openSessionExercise(session.id, exerciseId)
+            val existing = sessions.setsFor(performed.id).map(SetEntryEntity::toDomain)
 
             sessions.insert(
                 SetEntryEntity(
-                    sessionExerciseId = entry.id,
+                    sessionExerciseId = performed.id,
                     setIndex = SessionExercise.nextSetIndex(existing),
                     weightKg = weight.value,
                     reps = reps,
@@ -100,18 +101,31 @@ class SessionRepository(
         sessions.update(session.toDomain().on(date).toEntity())
     }
 
+    /**
+     * The session this set belongs to.
+     *
+     * An open session is reused only while it still accepts sets. One left unfinished is not
+     * reopened days later: it stays unfinished, which is what actually happened, and the new
+     * session becomes the current one.
+     */
+    private suspend fun currentSession(): SessionEntity {
+        val now = clock.instant()
+        val open = sessions.activeSession()
+        return open?.takeIf { it.toDomain().accepts(now, zone) } ?: openSession()
+    }
+
     private suspend fun openSession(): SessionEntity {
         val started: Instant = clock.instant()
         val session = Session.start(started, zone).toEntity()
         return session.copy(id = sessions.insert(session))
     }
 
-    private suspend fun openEntry(sessionId: Long, exerciseId: String): SessionExerciseEntity {
-        val entry = SessionExerciseEntity(
+    private suspend fun openSessionExercise(sessionId: Long, exerciseId: String): SessionExerciseEntity {
+        val performed = SessionExerciseEntity(
             sessionId = sessionId,
             exerciseId = exerciseId,
             orderIndex = sessions.highestExerciseOrder(sessionId) + 1,
         )
-        return entry.copy(id = sessions.insert(entry))
+        return performed.copy(id = sessions.insert(performed))
     }
 }

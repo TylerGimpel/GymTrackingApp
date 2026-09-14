@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * The statements below are copied verbatim from Room's exported schema for version 2. They have to
  * be: an installed copy migrated with DDL that differs from what Room expects — even by a default
  * or an index — fails the identity check on the next open, and that is a crash rather than a
- * compile error. `ExerciseBankMigrationTest` re-checks them against the exported schema.
+ * compile error. `GymDatabaseMigrationTest` re-checks them against the exported schema.
  */
 internal val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {

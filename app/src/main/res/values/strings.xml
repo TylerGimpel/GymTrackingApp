@@ -2,4 +2,21 @@
 <resources>
     <string name="app_name">Gym Tracker</string>
     <string name="exercise_bank_title">Exercise bank</string>
+
+    <string name="session_title">Session</string>
+    <string name="session_finish">Finish</string>
+    <string name="session_pick_exercise">Pick an exercise</string>
+    <string name="session_change_exercise">Change exercise</string>
+    <string name="session_empty">No session yet. Pick an exercise to start logging.</string>
+    <string name="session_empty_selected">Log your first set and the session starts.</string>
+    <string name="session_log_set">Log set</string>
+    <string name="session_edit_set">Edit set</string>
+    <string name="session_save">Save</string>
+    <string name="session_delete">Delete</string>
+    <string name="session_note">Session note</string>
+
+    <string name="set_weight_kg">kg</string>
+    <string name="set_reps">Reps</string>
+    <string name="set_note">Set note</string>
+    <string name="set_summary">%1$s kg × %2$d</string>
 </resources>

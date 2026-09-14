@@ -23,14 +23,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.LoggedSet
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.SetDraft
 
 /**
  * The plain logging screen: pick an exercise, enter a weight and reps, see what was logged.
@@ -39,7 +45,6 @@ import com.tylergimpel.gymtracker.domain.SessionExercise
  * belongs to the training-loop spec and needs a recommendation to render. This is the functional
  * path underneath it.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(
     onPickExercise: () -> Unit,
@@ -47,12 +52,42 @@ fun SessionScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    SessionScreen(
+        state = state,
+        onPickExercise = onPickExercise,
+        onDraftChange = viewModel::changeDraft,
+        onLogSet = viewModel::logSet,
+        onEditSet = viewModel::startEditing,
+        onEditingDraftChange = viewModel::changeEditingDraft,
+        onSaveEditing = viewModel::saveEditing,
+        onDeleteEditing = viewModel::deleteEditing,
+        onCancelEditing = viewModel::cancelEditing,
+        onSessionNoteChange = viewModel::noteSession,
+        onFinish = viewModel::finishSession,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SessionScreen(
+    state: SessionUiState,
+    onPickExercise: () -> Unit = {},
+    onDraftChange: (SetDraft) -> Unit = {},
+    onLogSet: () -> Unit = {},
+    onEditSet: (LoggedSet) -> Unit = {},
+    onEditingDraftChange: (SetDraft) -> Unit = {},
+    onSaveEditing: () -> Unit = {},
+    onDeleteEditing: () -> Unit = {},
+    onCancelEditing: () -> Unit = {},
+    onSessionNoteChange: (String) -> Unit = {},
+    onFinish: () -> Unit = {},
+) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("Session")
+                        Text(stringResource(R.string.session_title))
                         state.session?.let {
                             Text(
                                 text = it.date.toString(),
@@ -64,7 +99,7 @@ fun SessionScreen(
                 },
                 actions = {
                     if (state.session != null) {
-                        TextButton(onClick = viewModel::finishSession) { Text("Finish") }
+                        TextButton(onClick = onFinish) { Text(stringResource(R.string.session_finish)) }
                     }
                 },
             )
@@ -72,7 +107,17 @@ fun SessionScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onPickExercise,
-                text = { Text(if (state.selected == null) "Pick an exercise" else "Change exercise") },
+                text = {
+                    Text(
+                        stringResource(
+                            if (state.selected == null) {
+                                R.string.session_pick_exercise
+                            } else {
+                                R.string.session_change_exercise
+                            },
+                        ),
+                    )
+                },
                 icon = {},
             )
         },
@@ -83,11 +128,7 @@ fun SessionScreen(
         ) {
             state.selected?.let { selected ->
                 item {
-                    SetEntry(
-                        exerciseName = selected.name,
-                        state = state,
-                        viewModel = viewModel,
-                    )
+                    SetEntryControls(selected.name, state.draft, onDraftChange, onLogSet)
                     HorizontalDivider()
                 }
             }
@@ -97,38 +138,27 @@ fun SessionScreen(
             }
 
             items(state.exercises, key = SessionExercise::id) { exercise ->
-                LoggedExercise(exercise, viewModel::startEditing)
+                LoggedExercise(exercise, onEditSet)
                 HorizontalDivider()
             }
 
             state.session?.let { session ->
-                item {
-                    OutlinedTextField(
-                        value = session.note.orEmpty(),
-                        onValueChange = viewModel::noteSession,
-                        label = { Text("Session note") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                    )
-                }
+                item { SessionNote(session.id, session.note, onSessionNoteChange) }
             }
         }
     }
 
     state.editing?.let { editing ->
-        EditSetDialog(editing, viewModel)
+        EditSetDialog(editing, onEditingDraftChange, onSaveEditing, onDeleteEditing, onCancelEditing)
     }
 }
 
 @Composable
 private fun EmptySession(hasSelection: Boolean) {
     Text(
-        text = if (hasSelection) {
-            "Log your first set and the session starts."
-        } else {
-            "No session yet. Pick an exercise to start logging."
-        },
+        text = stringResource(
+            if (hasSelection) R.string.session_empty_selected else R.string.session_empty,
+        ),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(16.dp),
@@ -136,48 +166,57 @@ private fun EmptySession(hasSelection: Boolean) {
 }
 
 @Composable
-private fun SetEntry(
+private fun SetEntryControls(
     exerciseName: String,
-    state: SessionUiState,
-    viewModel: SessionViewModel,
+    draft: SetDraft,
+    onDraftChange: (SetDraft) -> Unit,
+    onLogSet: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(exerciseName, style = MaterialTheme.typography.titleMedium)
+        SetDraftFields(draft, onDraftChange)
+        Button(
+            onClick = onLogSet,
+            enabled = draft.isLoggable,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.session_log_set))
+        }
+    }
+}
+
+/** The weight, reps and note fields, shared by the entry controls and the edit dialog. */
+@Composable
+private fun SetDraftFields(draft: SetDraft, onChange: (SetDraft) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
-                value = state.draft.weightText,
-                onValueChange = viewModel::editWeight,
-                label = { Text("kg") },
+                value = draft.weightText,
+                onValueChange = { onChange(draft.copy(weightText = it)) },
+                label = { Text(stringResource(R.string.set_weight_kg)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.weight(1f),
             )
             OutlinedTextField(
-                value = state.draft.repsText,
-                onValueChange = viewModel::editReps,
-                label = { Text("Reps") },
+                value = draft.repsText,
+                onValueChange = { onChange(draft.copy(repsText = it)) },
+                label = { Text(stringResource(R.string.set_reps)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
             )
         }
         OutlinedTextField(
-            value = state.draft.note.orEmpty(),
-            onValueChange = viewModel::editNote,
-            label = { Text("Set note") },
+            value = draft.note.orEmpty(),
+            onValueChange = { onChange(draft.copy(note = it.takeIf(String::isNotBlank))) },
+            label = { Text(stringResource(R.string.set_note)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Button(
-            onClick = viewModel::logSet,
-            enabled = state.draft.isLoggable,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Log set")
-        }
     }
 }
 
@@ -185,7 +224,7 @@ private fun SetEntry(
 private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> Unit) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         Text(exercise.exerciseName, style = MaterialTheme.typography.titleMedium)
-        exercise.sets.forEach { set ->
+        exercise.sets.forEachIndexed { position, set ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -193,10 +232,11 @@ private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> 
                     .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // The set index is shown rather than the row's position, so a gap left by a
-                // deletion is visible instead of being silently closed up.
+                // Numbered at render rather than by the stored set index, per ADR 0003: the index
+                // is identity and tolerates gaps, while the number a lifter reads should just count
+                // the sets in front of them.
                 Text(
-                    text = set.setIndex.toString(),
+                    text = (position + 1).toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -213,44 +253,53 @@ private fun LoggedExercise(exercise: SessionExercise, onEditSet: (LoggedSet) -> 
     }
 }
 
+/**
+ * The session note.
+ *
+ * The field owns its own text and writes through, rather than rendering what has come back from the
+ * database: a value that arrives an asynchronous write later drops and reorders characters as fast
+ * as they are typed.
+ */
 @Composable
-private fun EditSetDialog(editing: EditingSet, viewModel: SessionViewModel) {
-    AlertDialog(
-        onDismissRequest = viewModel::cancelEditing,
-        title = { Text("Edit set") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = editing.draft.weightText,
-                    onValueChange = viewModel::editEditingWeight,
-                    label = { Text("kg") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                )
-                OutlinedTextField(
-                    value = editing.draft.repsText,
-                    onValueChange = viewModel::editEditingReps,
-                    label = { Text("Reps") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-                OutlinedTextField(
-                    value = editing.draft.note.orEmpty(),
-                    onValueChange = viewModel::editEditingNote,
-                    label = { Text("Set note") },
-                    singleLine = true,
-                )
-            }
+private fun SessionNote(sessionId: Long, stored: String?, onChange: (String) -> Unit) {
+    var text by rememberSaveable(sessionId) { mutableStateOf(stored.orEmpty()) }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            onChange(it)
         },
+        label = { Text(stringResource(R.string.session_note)) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+    )
+}
+
+@Composable
+private fun EditSetDialog(
+    editing: EditingSet,
+    onChange: (SetDraft) -> Unit,
+    onSave: () -> Unit,
+    onDelete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.session_edit_set)) },
+        text = { SetDraftFields(editing.draft, onChange) },
         confirmButton = {
-            TextButton(onClick = viewModel::saveEditing, enabled = editing.draft.isLoggable) {
-                Text("Save")
+            TextButton(onClick = onSave, enabled = editing.draft.isLoggable) {
+                Text(stringResource(R.string.session_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = viewModel::deleteEditing) { Text("Delete") }
+            TextButton(onClick = onDelete) { Text(stringResource(R.string.session_delete)) }
         },
     )
 }
 
-private fun LoggedSet.summary(): String = "${weight.asText()} kg × $reps"
+@Composable
+private fun LoggedSet.summary(): String =
+    stringResource(R.string.set_summary, weight.asText(), reps)
