@@ -26,6 +26,23 @@ The expected number of sessions per week for a routine, seeded by the user at se
 **Split**:
 The shape of a routine's rotation — full body, upper/lower, push/pull/legs. A property of how a routine was built, not a synonym for the routine itself.
 
+### Exercises
+
+**Exercise**:
+One movement that can be logged, such as "Barbell Bench Press". The unit that progression is tracked against — history follows the exercise, not the routine it appeared in.
+
+**Exercise bank**:
+The full set of exercises available in the app: those shipped preloaded, plus any the user has added.
+
+**Logging type**:
+What a set of a given exercise records — one of `weight_reps`, `bodyweight_reps`, `assisted`, `time`, `distance_time`. Determines which inputs the logging screen shows.
+
+**Progression model**:
+How an exercise's recommendation advances over time, including `none` for exercises that are recorded but never prescribed.
+
+**Unilateral**:
+An exercise trained one side at a time. Logged as a single entry by default, expandable to per-side.
+
 ### Recording
 
 **Session**:
