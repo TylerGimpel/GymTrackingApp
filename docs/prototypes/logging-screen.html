@@ -836,14 +836,30 @@ function jumpFromDrawer(i) {
   closeDrawer(); render();
 }
 
-// edge swipe to open
-let touchX0 = null;
-addEventListener('touchstart', ev => { touchX0 = ev.touches[0].clientX; }, { passive: true });
+// Opening the drawer by gesture.
+//
+// A swipe from the extreme left edge does NOT work reliably: on Android 10+
+// gesture navigation that region is the system Back gesture, and in a browser
+// it is swallowed before the page sees it. Apps can only carve out narrow
+// exclusion rects and Google discourages it. So the edge swipe cannot be the
+// affordance the drawer depends on - the tap handle is primary.
+//
+// What does work: a horizontal swipe anywhere. The wheel scrolls vertically,
+// so a mostly-horizontal drag is unambiguous and never touches the OS zone.
+let tX0 = null, tY0 = null;
+addEventListener('touchstart', ev => {
+  tX0 = ev.touches[0].clientX; tY0 = ev.touches[0].clientY;
+}, { passive: true });
 addEventListener('touchend', ev => {
-  if (touchX0 === null || variant !== 'D') return;
-  const dx = ev.changedTouches[0].clientX - touchX0;
-  if (touchX0 < 28 && dx > 45) openDrawer();
-  touchX0 = null;
+  if (tX0 === null || variant !== 'D') return;
+  const dx = ev.changedTouches[0].clientX - tX0;
+  const dy = ev.changedTouches[0].clientY - tY0;
+  const drawerOpen = document.getElementById('drawer').classList.contains('on');
+  if (Math.abs(dx) > 60 && Math.abs(dy) < 45) {
+    if (dx > 0 && !drawerOpen) openDrawer();
+    if (dx < 0 && drawerOpen) closeDrawer();
+  }
+  tX0 = tY0 = null;
 }, { passive: true });
 
 function render() {
@@ -856,7 +872,7 @@ function render() {
   if (h) h.remove();
   if (variant === 'D') {
     const btn = document.createElement('button');
-    btn.className = 'd-handle'; btn.innerHTML = '›'; btn.title = 'Routine';
+    btn.className = 'd-handle'; btn.innerHTML = '≡'; btn.title = 'Routine';
     btn.onclick = openDrawer;
     document.body.appendChild(btn);
     wireWheel();
@@ -880,5 +896,5 @@ addEventListener('keydown', ev => {
 });
 
 render();
-setTimeout(() => toast('Swipe from the left edge for the routine · ‹ › switches layout'), 700);
+setTimeout(() => toast('Tap ≡ or swipe right for the routine · ‹ › switches layout'), 700);
 </script>
