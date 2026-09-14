@@ -52,13 +52,13 @@ class SessionRepository(
      * Records a set against [exerciseId], opening a session and an entry for the exercise if this
      * is the first set of either.
      *
-     * Returns null if the draft does not yet read as a weight and a rep count.
+     * Returns false if the draft does not yet read as a weight and a rep count.
      */
-    suspend fun logSet(exerciseId: String, draft: SetDraft): Long? {
-        val weight = draft.weight ?: return null
-        val reps = draft.reps ?: return null
+    suspend fun logSet(exerciseId: String, draft: SetDraft): Boolean {
+        val weight = draft.weight ?: return false
+        val reps = draft.reps ?: return false
 
-        return database.withTransaction {
+        database.withTransaction {
             val session = currentSession()
             val performed = sessions.latestSessionExerciseFor(session.id, exerciseId)
                 ?: openSessionExercise(session.id, exerciseId)
@@ -74,6 +74,7 @@ class SessionRepository(
                 ),
             )
         }
+        return true
     }
 
     /**
@@ -83,10 +84,7 @@ class SessionRepository(
      * exercise to per-side is tracking an imbalance, not doubling their training.
      */
     suspend fun logPerSideSet(exerciseId: String, left: SetDraft, right: SetDraft): Boolean {
-        val leftWeight = left.weight ?: return false
-        val leftReps = left.reps ?: return false
-        val rightWeight = right.weight ?: return false
-        val rightReps = right.reps ?: return false
+        if (!left.isLoggable || !right.isLoggable) return false
 
         database.withTransaction {
             val session = currentSession()
@@ -94,18 +92,17 @@ class SessionRepository(
                 ?: openSessionExercise(session.id, exerciseId)
             val setIndex = nextSetIndexFor(performed.id)
 
-            listOf(
-                Side.LEFT to (leftWeight to leftReps),
-                Side.RIGHT to (rightWeight to rightReps),
-            ).forEach { (side, effort) ->
+            // The type comes from the left draft for both rows: a type belongs to the set, and the
+            // controls only offer one chooser for that reason.
+            listOf(Side.LEFT to left, Side.RIGHT to right).forEach { (side, entered) ->
                 sessions.insert(
                     SetEntryEntity(
                         sessionExerciseId = performed.id,
                         setIndex = setIndex,
                         type = left.type.stored,
-                        weightKg = effort.first.value,
-                        reps = effort.second,
-                        note = if (side == Side.LEFT) left.note else right.note,
+                        weightKg = requireNotNull(entered.weight).value,
+                        reps = requireNotNull(entered.reps),
+                        note = entered.note,
                         side = side.stored,
                     ),
                 )
@@ -133,20 +130,24 @@ class SessionRepository(
     suspend fun deleteSet(sessionExerciseId: Long, setIndex: Int) =
         sessions.deleteSetAt(sessionExerciseId, setIndex)
 
-    /** Corrects one set, leaving its index and every other set alone. */
-    suspend fun editSet(setId: Long, draft: SetDraft): Boolean {
+    /**
+     * Corrects one effort, leaving its index and every other set alone.
+     *
+     * The weight, reps and note belong to the effort, so only that row changes. The type belongs to
+     * the set, so every row of it is retyped together — otherwise the two sides of a per-side set
+     * could disagree about whether the set counts at all.
+     */
+    suspend fun editSet(effortId: Long, draft: SetDraft): Boolean {
         val weight = draft.weight ?: return false
         val reps = draft.reps ?: return false
-        val existing = sessions.setEntry(setId) ?: return false
+        val existing = sessions.setEntry(effortId) ?: return false
 
-        sessions.update(
-            existing.copy(
-                weightKg = weight.value,
-                reps = reps,
-                note = draft.note,
-                type = draft.type.stored,
-            ),
-        )
+        database.withTransaction {
+            sessions.update(
+                existing.copy(weightKg = weight.value, reps = reps, note = draft.note),
+            )
+            sessions.retypeSet(existing.sessionExerciseId, existing.setIndex, draft.type.stored)
+        }
         return true
     }
 

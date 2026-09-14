@@ -30,7 +30,12 @@ import java.time.Clock
 import java.time.ZoneId
 
 /** The exercise the entry controls are currently pointed at. */
-data class SelectedExercise(val id: String, val name: String)
+data class SelectedExercise(
+    val id: String,
+    val name: String,
+    /** Whether this exercise is trained one side at a time, and so can be expanded to per-side. */
+    val unilateral: Boolean,
+)
 
 /** The effort being corrected, if one is open for editing. */
 data class EditingEffort(
@@ -118,8 +123,19 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
+    /**
+     * Points the controls at an exercise.
+     *
+     * Per-side entry collapses on the way: it is a property of the exercise being trained, and
+     * carrying it across to the next one would silently write two rows for a barbell bench press.
+     */
     fun select(exercise: Exercise) = screen.update {
-        it.copy(selected = SelectedExercise(exercise.id, exercise.name), draft = SetDraft())
+        it.copy(
+            selected = SelectedExercise(exercise.id, exercise.name, exercise.unilateral),
+            draft = SetDraft(),
+            perSide = false,
+            rightDraft = SetDraft(),
+        )
     }
 
     fun changeDraft(draft: SetDraft) = screen.update { it.copy(draft = draft) }
@@ -138,7 +154,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             val recorded = if (current.perSide) {
                 repository.logPerSideSet(exercise.id, current.draft, current.rightDraft)
             } else {
-                repository.logSet(exercise.id, current.draft) != null
+                repository.logSet(exercise.id, current.draft)
             }
             if (!recorded) return@launch
             // Keep the numbers: the next set is usually the same load, and retyping them every time

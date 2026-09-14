@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.ui.session
 import androidx.annotation.StringRes
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.Side
 
 /**
  * How a set type is written for a lifter.
@@ -18,4 +19,12 @@ internal val SetType.label: Int
         SetType.CALIBRATION -> R.string.set_type_calibration
         SetType.BACKOFF -> R.string.set_type_backoff
         SetType.AMRAP -> R.string.set_type_amrap
+    }
+
+/** How a side is written for a lifter, kept apart from the stored value for the same reason. */
+@get:StringRes
+internal val Side.label: Int
+    get() = when (this) {
+        Side.LEFT -> R.string.set_side_left
+        Side.RIGHT -> R.string.set_side_right
     }

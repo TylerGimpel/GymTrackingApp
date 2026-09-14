@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -176,6 +177,11 @@ class VolumeTest {
             mapOf("chest" to 1.0, "shoulders" to 0.5, "triceps" to 0.5),
             volumeByMuscle(performed(bench, perSide)),
         )
+        // Different weights per side is the valid, expected shape: tracking an imbalance is the
+        // only reason to expand a set at all.
+        assertEquals(listOf(22.5, 20.0), perSide.efforts.map { it.weight.value })
+        assertEquals(listOf(Side.LEFT, Side.RIGHT), perSide.efforts.map { it.side })
+        assertTrue(perSide.isPerSide)
     }
 
     private fun exercise(id: String, primary: List<String>, secondary: List<String>) = Exercise(

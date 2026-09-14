@@ -359,6 +359,34 @@ class SessionPersistenceTest {
         assertEquals(0, countOf("set_entry"))
     }
 
+    @Test
+    fun retypingOneSideOfAPerSideSetRetypesTheWholeSet() = runBlocking {
+        repository.logPerSideSet(BENCH, SetDraft("22.5", "10"), SetDraft("20", "10"))
+        val set = currentSession().exercises.single().sets.single()
+        val right = set.efforts.last()
+
+        repository.editSet(right.id, SetDraft("20", "10", type = SetType.WARMUP))
+
+        // A type belongs to the set. Leaving one row working and the other a warm-up would make
+        // whether it counts depend on which row happened to be read first.
+        val retyped = currentSession().exercises.single().sets.single()
+        assertEquals(SetType.WARMUP, retyped.type)
+        assertEquals(0.0, volumeByMuscle(currentSession().exercises)["chest"] ?: 0.0, 0.0)
+    }
+
+    @Test
+    fun correctingOneSideLeavesTheOtherSideAlone() = runBlocking {
+        repository.logPerSideSet(BENCH, SetDraft("22.5", "10"), SetDraft("20", "10"))
+        val set = currentSession().exercises.single().sets.single()
+
+        repository.editSet(set.efforts.last().id, SetDraft("21", "9"))
+
+        val corrected = currentSession().exercises.single().sets.single()
+        assertEquals(listOf(22.5, 21.0), corrected.efforts.map { it.weight.value })
+        assertEquals(listOf(10, 9), corrected.efforts.map { it.reps })
+        assertEquals(listOf(Side.LEFT, Side.RIGHT), corrected.efforts.map { it.side })
+    }
+
     private suspend fun sessionExerciseId(): Long =
         currentSession().exercises.single().id
 

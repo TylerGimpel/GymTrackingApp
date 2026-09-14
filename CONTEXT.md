@@ -80,7 +80,10 @@ Substituting one exercise for another for a single session, because the equipmen
 A standing exclusion of an exercise from everything the app suggests. Global, reversible, and never affects logged history.
 
 **Set**:
-One unit of effort against an exercise, identified by its position within that exercise in a session. A set is one set regardless of how many rows record it — a drop set and a per-side set are each still one set.
+One unit of work against an exercise, identified by its position within that exercise in a session. A set is one set regardless of how many rows record it — a drop set and a per-side set are each still one set.
+
+**Effort**:
+One weight-and-reps within a set, and the row that stores it. A set has one, or one per side when a unilateral exercise is expanded. What progression reads is the first effort, never a drop.
 
 **Set type**:
 What a set is for — one of `warmup`, `working`, `calibration`, `backoff`, `amrap`. Determines whether the set counts toward training volume.

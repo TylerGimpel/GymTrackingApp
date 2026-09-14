@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -45,7 +46,6 @@ import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
-import com.tylergimpel.gymtracker.domain.Side
 
 /**
  * The plain logging screen: pick an exercise, enter a weight and reps, see what was logged.
@@ -162,8 +162,10 @@ fun SessionScreen(
             state.selected?.let { selected ->
                 item {
                     SetEntryControls(
-                        exerciseName = selected.name,
-                        state = state,
+                        exercise = selected,
+                        draft = state.draft,
+                        rightDraft = state.rightDraft,
+                        perSide = state.perSide,
                         onDraftChange = onDraftChange,
                         onRightDraftChange = onRightDraftChange,
                         onTogglePerSide = onTogglePerSide,
@@ -243,45 +245,51 @@ private fun EmptySession(hasSelection: Boolean) {
 
 @Composable
 private fun SetEntryControls(
-    exerciseName: String,
-    state: SessionUiState,
+    exercise: SelectedExercise,
+    draft: SetDraft,
+    rightDraft: SetDraft,
+    perSide: Boolean,
     onDraftChange: (SetDraft) -> Unit,
     onRightDraftChange: (SetDraft) -> Unit,
     onTogglePerSide: () -> Unit,
     onLogSet: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(exerciseName, style = MaterialTheme.typography.titleMedium)
+        Text(exercise.name, style = MaterialTheme.typography.titleMedium)
 
-        if (state.perSide) {
+        if (perSide) {
             Text(
                 text = stringResource(R.string.set_side_left),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        SetDraftFields(state.draft, onDraftChange)
+        SetDraftFields(draft, onDraftChange)
 
         // A single entry by default; expanding is for tracking an imbalance, and the two sides carry
         // their own weights because that is the only reason to bother.
-        if (state.perSide) {
+        if (perSide) {
             Text(
                 text = stringResource(R.string.set_side_right),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SetDraftFields(state.rightDraft, onRightDraftChange, showType = false)
+            SetDraftFields(rightDraft, onRightDraftChange, showType = false)
         }
 
-        FilterChip(
-            selected = state.perSide,
-            onClick = onTogglePerSide,
-            label = { Text(stringResource(R.string.set_per_side)) },
-        )
+        // Offered only where it means something. An exercise trained one side at a time is the one
+        // a lifter expands to track an imbalance; a barbell bench press has no sides to separate.
+        if (exercise.unilateral) {
+            FilterChip(
+                selected = perSide,
+                onClick = onTogglePerSide,
+                label = { Text(stringResource(R.string.set_per_side)) },
+            )
+        }
 
         Button(
             onClick = onLogSet,
-            enabled = state.draft.isLoggable && (!state.perSide || state.rightDraft.isLoggable),
+            enabled = draft.isLoggable && (!perSide || rightDraft.isLoggable),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.session_log_set))
@@ -411,6 +419,9 @@ private fun LoggedSetRows(
                     text = if (index == 0) number.toString() else "",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // A fixed width so the second side of a per-side set lines up under the first
+                    // rather than sliding left into the space the number would have taken.
+                    modifier = Modifier.width(20.dp),
                 )
                 effort.side?.let {
                     Text(
@@ -574,9 +585,3 @@ private fun WhichDayDialog(
 @Composable
 private fun Effort.summary(): String =
     stringResource(R.string.set_summary, weight.asText(), reps)
-
-private val Side.label: Int
-    get() = when (this) {
-        Side.LEFT -> R.string.set_side_left
-        Side.RIGHT -> R.string.set_side_right
-    }

@@ -65,13 +65,23 @@ interface SessionDao {
     suspend fun update(setEntry: SetEntryEntity)
 
     /**
-     * Removes one set and nothing else. No renumbering: the index it held stays empty, because
-     * shifting the sets around it can corrupt one the lifter is editing at that moment.
+     * Retypes every row of one set.
+     *
+     * A type belongs to the set, not to the row: leaving one side of a per-side set as working and
+     * the other as a warm-up would make whether it counts depend on which row is read first.
      */
-    @Query("DELETE FROM set_entry WHERE id = :setId")
-    suspend fun deleteSet(setId: Long)
+    @Query(
+        """
+        UPDATE set_entry SET type = :type
+        WHERE session_exercise_id = :sessionExerciseId AND set_index = :setIndex
+        """,
+    )
+    suspend fun retypeSet(sessionExerciseId: Long, setIndex: Int, type: String)
 
-    /** Removes every row of one set, which is what deleting a per-side set means. */
+    /**
+     * Removes every row of one set. No renumbering: the index it held stays empty, because shifting
+     * the sets around it can corrupt one the lifter is editing at that moment.
+     */
     @Query("DELETE FROM set_entry WHERE session_exercise_id = :sessionExerciseId AND set_index = :setIndex")
     suspend fun deleteSetAt(sessionExerciseId: Long, setIndex: Int)
 
