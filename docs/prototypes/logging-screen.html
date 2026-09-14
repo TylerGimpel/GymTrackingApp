@@ -585,7 +585,7 @@ function header(e) {
       <div style="min-width:0">
         <div class="exname">${e.name}</div>
         <div class="row" style="gap:6px;margin-top:6px">
-          <span class="modebadge ${e.mode}"><span class="dot"></span>${e.mode}</span>
+          <span class="modebadge ${e.mode}"><span class="dot"></span>${e.mode === 'calibrating' ? 'finding your weight' : 'from your history'}</span>
           ${e.group ? '<span class="chip">superset</span>' : ''}
         </div>
       </div>
@@ -595,10 +595,12 @@ function header(e) {
 
 function modeHint(e, s) {
   if (e.mode === 'calibrating')
-    return `<div class="hint" style="color:var(--calib)">Finding your weight — stop when it gets hard. Being wrong here is expected.</div>`;
+    return `<div class="hint" style="color:var(--calib)">Ramp up and stop when it gets hard. Being wrong here is expected.</div>`;
   if (s && s.r >= 15)
     return `<div class="hint effort">Take this close to failure — high reps only work hard.</div>`;
-  return s && s.prev ? `<div class="hint">Last time: ${s.prev}</div>` : `<div class="hint">No previous set</div>`;
+  return s && s.prev
+    ? `<div class="hint">Last time: ${s.prev} · this weight comes from your logged sets</div>`
+    : `<div class="hint">No previous set for this position</div>`;
 }
 
 function cardioPanel(e) {
