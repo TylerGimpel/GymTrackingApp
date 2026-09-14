@@ -58,11 +58,19 @@ room {
 exerciseBank {
     schemaDirectory.set(roomSchemaDirectory)
     databaseClass.set("com.tylergimpel.gymtracker.data.GymDatabase")
-    databaseVersion.set(1)
+    databaseVersion.set(2)
     assetPath.set("databases/gym-bank.db")
 }
 
 dependencies {
+    constraints {
+        // room-migration, which room-testing pulls in for MigrationTestHelper, needs
+        // kotlinx-serialization 1.8.1. AGP resolves the androidTest classpath consistently with the
+        // app's, so pinning it here lifts both; leaving them apart throws AbstractMethodError from
+        // inside the serializer at runtime rather than failing to resolve.
+        implementation(libs.kotlinx.serialization.core)
+    }
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -84,4 +92,5 @@ dependencies {
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.room.testing)
 }

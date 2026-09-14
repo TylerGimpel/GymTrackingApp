@@ -15,17 +15,24 @@ import androidx.room.TypeConverters
  * Room's own exported schema rather than from hand-written DDL.
  */
 @Database(
-    entities = [ExerciseEntity::class],
+    entities = [
+        ExerciseEntity::class,
+        SessionEntity::class,
+        SessionExerciseEntity::class,
+        SetEntryEntity::class,
+    ],
     version = GymDatabase.VERSION,
     exportSchema = true,
 )
-@TypeConverters(StringListConverter::class)
+@TypeConverters(StringListConverter::class, TimeConverters::class)
 abstract class GymDatabase : RoomDatabase() {
 
     abstract fun exerciseDao(): ExerciseDao
 
+    abstract fun sessionDao(): SessionDao
+
     companion object {
-        const val VERSION = 1
+        const val VERSION = 2
 
         /** Path inside assets, written there at build time by `generate<Variant>ExerciseBank`. */
         const val ASSET_PATH = "databases/gym-bank.db"
@@ -43,6 +50,7 @@ abstract class GymDatabase : RoomDatabase() {
         fun build(context: Context): GymDatabase =
             Room.databaseBuilder(context, GymDatabase::class.java, FILE_NAME)
                 .createFromAsset(ASSET_PATH)
+                .addMigrations(*MIGRATIONS)
                 .build()
     }
 }

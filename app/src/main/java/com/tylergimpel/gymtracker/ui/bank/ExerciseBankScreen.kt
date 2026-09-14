@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.bank
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,14 +29,17 @@ import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.ui.theme.GymTrackerTheme
 
 @Composable
-fun ExerciseBankScreen(viewModel: ExerciseBankViewModel = viewModel()) {
+fun ExerciseBankScreen(
+    onSelect: (Exercise) -> Unit,
+    viewModel: ExerciseBankViewModel = viewModel(),
+) {
     val exercises by viewModel.exercises.collectAsStateWithLifecycle()
-    ExerciseBankScreen(exercises)
+    ExerciseBankScreen(exercises, onSelect)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExerciseBankScreen(exercises: List<Exercise>) {
+fun ExerciseBankScreen(exercises: List<Exercise>, onSelect: (Exercise) -> Unit = {}) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -59,7 +63,7 @@ fun ExerciseBankScreen(exercises: List<Exercise>) {
             contentPadding = insets,
         ) {
             items(exercises, key = Exercise::id) { exercise ->
-                ExerciseRow(exercise)
+                ExerciseRow(exercise, Modifier.clickable { onSelect(exercise) })
                 HorizontalDivider()
             }
         }

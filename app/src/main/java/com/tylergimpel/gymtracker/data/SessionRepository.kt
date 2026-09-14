@@ -1,0 +1,117 @@
+package com.tylergimpel.gymtracker.data
+
+import androidx.room.withTransaction
+import com.tylergimpel.gymtracker.domain.Session
+import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.SetDraft
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+
+/** A session and everything logged in it, ready to show. */
+data class LoggedSession(
+    val session: Session,
+    val exercises: List<SessionExercise>,
+)
+
+/**
+ * Records what was actually lifted.
+ *
+ * The session is implicit: logging a set when nothing is open starts one. That is what lets a
+ * lifter open the app in the gym and train without setting anything up first — there is no routine
+ * to pick and nothing to start.
+ */
+class SessionRepository(
+    private val database: GymDatabase,
+    private val sessions: SessionDao,
+    private val clock: Clock,
+    private val zone: ZoneId,
+) {
+    fun observeActiveSession(): Flow<Session?> =
+        sessions.observeActiveSession().map { it?.toDomain() }
+
+    fun observeSession(sessionId: Long): Flow<LoggedSession?> =
+        sessions.observeContent(sessionId).map { content ->
+            content?.let {
+                LoggedSession(
+                    session = it.session.toDomain(),
+                    exercises = it.exercises.map(SessionExerciseWithSets::toDomain)
+                        .sortedBy(SessionExercise::orderIndex),
+                )
+            }
+        }
+
+    /**
+     * Records a set against [exerciseId], opening a session and an entry for the exercise if this
+     * is the first set of either.
+     *
+     * Returns null if the draft does not yet read as a weight and a rep count.
+     */
+    suspend fun logSet(exerciseId: String, draft: SetDraft): Long? {
+        val weight = draft.weight ?: return null
+        val reps = draft.reps ?: return null
+
+        return database.withTransaction {
+            val session = sessions.activeSession() ?: openSession()
+            val entry = sessions.latestEntryFor(session.id, exerciseId) ?: openEntry(session.id, exerciseId)
+            val existing = sessions.setsFor(entry.id).map(SetEntryEntity::toDomain)
+
+            sessions.insert(
+                SetEntryEntity(
+                    sessionExerciseId = entry.id,
+                    setIndex = SessionExercise.nextSetIndex(existing),
+                    weightKg = weight.value,
+                    reps = reps,
+                    note = draft.note,
+                ),
+            )
+        }
+    }
+
+    /** Corrects one set, leaving its index and every other set alone. */
+    suspend fun editSet(setId: Long, draft: SetDraft): Boolean {
+        val weight = draft.weight ?: return false
+        val reps = draft.reps ?: return false
+        val existing = sessions.setEntry(setId) ?: return false
+
+        sessions.update(
+            existing.copy(weightKg = weight.value, reps = reps, note = draft.note),
+        )
+        return true
+    }
+
+    suspend fun deleteSet(setId: Long) = sessions.deleteSet(setId)
+
+    suspend fun finishSession(sessionId: Long) {
+        val session = sessions.session(sessionId) ?: return
+        sessions.update(session.toDomain().finish(clock.instant()).toEntity())
+    }
+
+    suspend fun noteSession(sessionId: Long, note: String?) {
+        val session = sessions.session(sessionId) ?: return
+        sessions.update(session.copy(note = note?.takeIf(String::isNotBlank)))
+    }
+
+    suspend fun dateSession(sessionId: Long, date: LocalDate) {
+        val session = sessions.session(sessionId) ?: return
+        sessions.update(session.toDomain().on(date).toEntity())
+    }
+
+    private suspend fun openSession(): SessionEntity {
+        val started: Instant = clock.instant()
+        val session = Session.start(started, zone).toEntity()
+        return session.copy(id = sessions.insert(session))
+    }
+
+    private suspend fun openEntry(sessionId: Long, exerciseId: String): SessionExerciseEntity {
+        val entry = SessionExerciseEntity(
+            sessionId = sessionId,
+            exerciseId = exerciseId,
+            orderIndex = sessions.highestExerciseOrder(sessionId) + 1,
+        )
+        return entry.copy(id = sessions.insert(entry))
+    }
+}
