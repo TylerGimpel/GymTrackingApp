@@ -253,7 +253,8 @@
     border-top: 1px solid var(--line); margin: 0 -14px -14px; padding: 12px 14px 14px;
     border-radius: 0 0 var(--radius) var(--radius);
   }
-  .d-hintline { text-align: center; margin-bottom: 10px; min-height: 17px; }
+  .d-hintline { text-align: center; }
+  .d-hintline:not(:empty) { margin-bottom: 10px; }
 
   .drawer {
     position: fixed; top: 0; bottom: 0; left: max(0px, calc(50% - 240px)); z-index: 50; width: 82%; max-width: 330px;
@@ -584,10 +585,10 @@ function header(e) {
     <div class="row" style="margin-bottom:8px">
       <div style="min-width:0">
         <div class="exname">${e.name}</div>
-        <div class="row" style="gap:6px;margin-top:6px">
-          <span class="modebadge ${e.mode}"><span class="dot"></span>${e.mode === 'calibrating' ? 'finding your weight' : 'from your history'}</span>
+        ${(e.mode === 'calibrating' || e.group) ? `<div class="row" style="gap:6px;margin-top:6px">
+          ${e.mode === 'calibrating' ? '<span class="modebadge calibrating"><span class="dot"></span>calibrating</span>' : ''}
           ${e.group ? '<span class="chip">superset</span>' : ''}
-        </div>
+        </div>` : ''}
       </div>
       <button class="iconbtn" style="margin-left:auto" onclick="swapSheet()" title="Swap">⇄</button>
     </div>`;
@@ -595,12 +596,10 @@ function header(e) {
 
 function modeHint(e, s) {
   if (e.mode === 'calibrating')
-    return `<div class="hint" style="color:var(--calib)">Ramp up and stop when it gets hard. Being wrong here is expected.</div>`;
+    return `<div class="hint" style="color:var(--calib)">Calibrating — stop when it gets hard. Being wrong here is expected.</div>`;
   if (s && s.r >= 15)
     return `<div class="hint effort">Take this close to failure — high reps only work hard.</div>`;
-  return s && s.prev
-    ? `<div class="hint">Last time: ${s.prev} · this weight comes from your logged sets</div>`
-    : `<div class="hint">No previous set for this position</div>`;
+  return '';
 }
 
 function cardioPanel(e) {
@@ -634,11 +633,11 @@ function renderA() {
       </div>
       <div class="a-step">
         <div>
-          <div class="cap">Weight · tap to type</div>
+          <div class="cap">Weight</div>
           <div class="grp"><button onclick="adj('w',-2.5)">−</button><b>${s.w}</b><button onclick="adj('w',2.5)">+</button></div>
         </div>
         <div>
-          <div class="cap">Reps · tap to type</div>
+          <div class="cap">Reps</div>
           <div class="grp"><button onclick="adj('r',-1)">−</button><b>${s.r}</b><button onclick="adj('r',1)">+</button></div>
         </div>
       </div>
@@ -761,11 +760,11 @@ function renderD() {
         <div class="d-hintline" id="dHint"></div>
         <div class="a-step" style="margin-top:0">
           <div>
-            <div class="cap">Weight · tap to type</div>
+            <div class="cap">Weight</div>
             <div class="grp"><button onclick="adjD('w',-1)">−</button><b id="dW" onclick="typeIn('w')">—</b><button onclick="adjD('w',1)">+</button></div>
           </div>
           <div>
-            <div class="cap">Reps · tap to type</div>
+            <div class="cap">Reps</div>
             <div class="grp"><button onclick="adjD('r',-1)">−</button><b id="dR" onclick="typeIn('r')">—</b><button onclick="adjD('r',1)">+</button></div>
           </div>
         </div>
