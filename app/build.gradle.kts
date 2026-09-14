@@ -1,3 +1,5 @@
+import gymtracker.buildlogic.CheckRoomSchemasFrozenTask
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -15,6 +17,7 @@ plugins {
  * crash rather than a compile error.
  */
 val roomSchemaDirectory = layout.projectDirectory.dir("schemas")
+val roomDatabaseVersion = 4
 
 android {
     namespace = "com.tylergimpel.gymtracker"
@@ -55,10 +58,23 @@ room {
     schemaDirectory(roomSchemaDirectory.asFile.absolutePath)
 }
 
+/**
+ * Room rewrites the exported schema for whatever version it is compiling, so an entity change
+ * without a version bump silently rewrites the record of a version already in the wild. This is
+ * what notices.
+ */
+val checkRoomSchemasFrozen = tasks.register<CheckRoomSchemasFrozenTask>("checkRoomSchemasFrozen") {
+    schemaDirectory.set(roomSchemaDirectory)
+    currentVersion.set(roomDatabaseVersion)
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+}
+
+tasks.named("check") { dependsOn(checkRoomSchemasFrozen) }
+
 exerciseBank {
     schemaDirectory.set(roomSchemaDirectory)
     databaseClass.set("com.tylergimpel.gymtracker.data.GymDatabase")
-    databaseVersion.set(4)
+    databaseVersion.set(roomDatabaseVersion)
     assetPath.set("databases/gym-bank.db")
 }
 
