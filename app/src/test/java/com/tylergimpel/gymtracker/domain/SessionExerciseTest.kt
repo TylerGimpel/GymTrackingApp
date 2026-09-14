@@ -30,10 +30,10 @@ class SessionExerciseTest {
 
         val remaining = exercise.withoutSet(2).sets
 
-        assertEquals(listOf(1, 3, 4, 5), remaining.map(LoggedSet::setIndex))
+        assertEquals(listOf(1, 3, 4, 5), remaining.map(PerformedSet::setIndex))
         // Weights are seeded from the set index, so renumbering would show up as a set carrying
         // someone else's weight rather than merely as a different index.
-        assertEquals(listOf(61.0, 63.0, 64.0, 65.0), remaining.map { it.weight.value })
+        assertEquals(listOf(61.0, 63.0, 64.0, 65.0), remaining.map { it.leadingEffort.weight.value })
     }
 
     @Test
@@ -69,13 +69,18 @@ class SessionExerciseTest {
         ),
         orderIndex = 1,
         sets = setIndices.map { index ->
-            LoggedSet(
-                id = index.toLong(),
+            PerformedSet(
                 setIndex = index,
                 type = SetType.WORKING,
-                weight = Kilograms(60.0 + index),
-                reps = 5,
-                note = null,
+                efforts = listOf(
+                    Effort(
+                        id = index.toLong(),
+                        side = null,
+                        weight = Kilograms(60.0 + index),
+                        reps = 5,
+                        note = null,
+                    ),
+                ),
             )
         },
     )

@@ -1,11 +1,13 @@
 package com.tylergimpel.gymtracker.data
 
 import androidx.room.withTransaction
+import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.domain.Side
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Clock
@@ -60,20 +62,76 @@ class SessionRepository(
             val session = currentSession()
             val performed = sessions.latestSessionExerciseFor(session.id, exerciseId)
                 ?: openSessionExercise(session.id, exerciseId)
-            val existing = sessions.setsFor(performed.id).map(SetEntryEntity::toDomain)
-
             sessions.insert(
                 SetEntryEntity(
                     sessionExerciseId = performed.id,
-                    setIndex = SessionExercise.nextSetIndex(existing),
+                    setIndex = nextSetIndexFor(performed.id),
                     type = draft.type.stored,
                     weightKg = weight.value,
                     reps = reps,
                     note = draft.note,
+                    side = null,
                 ),
             )
         }
     }
+
+    /**
+     * Records one set as two rows, one per side.
+     *
+     * Both rows take the same set index, because this is one set: a lifter expanding a unilateral
+     * exercise to per-side is tracking an imbalance, not doubling their training.
+     */
+    suspend fun logPerSideSet(exerciseId: String, left: SetDraft, right: SetDraft): Boolean {
+        val leftWeight = left.weight ?: return false
+        val leftReps = left.reps ?: return false
+        val rightWeight = right.weight ?: return false
+        val rightReps = right.reps ?: return false
+
+        database.withTransaction {
+            val session = currentSession()
+            val performed = sessions.latestSessionExerciseFor(session.id, exerciseId)
+                ?: openSessionExercise(session.id, exerciseId)
+            val setIndex = nextSetIndexFor(performed.id)
+
+            listOf(
+                Side.LEFT to (leftWeight to leftReps),
+                Side.RIGHT to (rightWeight to rightReps),
+            ).forEach { (side, effort) ->
+                sessions.insert(
+                    SetEntryEntity(
+                        sessionExerciseId = performed.id,
+                        setIndex = setIndex,
+                        type = left.type.stored,
+                        weightKg = effort.first.value,
+                        reps = effort.second,
+                        note = if (side == Side.LEFT) left.note else right.note,
+                        side = side.stored,
+                    ),
+                )
+            }
+        }
+        return true
+    }
+
+    /** Continues an effort at a reduced weight, with no rest. Never a set of its own. */
+    suspend fun addDrop(effortId: Long, weight: Kilograms, reps: Int): Long =
+        database.withTransaction {
+            sessions.insert(
+                DropSegmentEntity(
+                    setEntryId = effortId,
+                    orderIndex = sessions.highestDropOrder(effortId) + 1,
+                    weightKg = weight.value,
+                    reps = reps,
+                ),
+            )
+        }
+
+    suspend fun deleteDrop(dropId: Long) = sessions.deleteDrop(dropId)
+
+    /** Removes a whole set, both its rows if it has two, and every drop hanging off them. */
+    suspend fun deleteSet(sessionExerciseId: Long, setIndex: Int) =
+        sessions.deleteSetAt(sessionExerciseId, setIndex)
 
     /** Corrects one set, leaving its index and every other set alone. */
     suspend fun editSet(setId: Long, draft: SetDraft): Boolean {
@@ -91,8 +149,6 @@ class SessionRepository(
         )
         return true
     }
-
-    suspend fun deleteSet(setId: Long) = sessions.deleteSet(setId)
 
     /**
      * Closes the session, recording the routine day it realised as copied names if it realised one.
@@ -137,6 +193,9 @@ class SessionRepository(
         val session = Session.start(started, zone).toEntity()
         return session.copy(id = sessions.insert(session))
     }
+
+    private suspend fun nextSetIndexFor(sessionExerciseId: Long): Int =
+        SessionExercise.nextSetIndex(sessions.setsFor(sessionExerciseId).toPerformedSets())
 
     private suspend fun openSessionExercise(sessionId: Long, exerciseId: String): SessionExerciseEntity {
         val performed = SessionExerciseEntity(

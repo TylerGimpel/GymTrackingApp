@@ -138,8 +138,54 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToPerSideRowsAndDropsLeavingExistingSetsAsSingleEntries() {
+        helper.createDatabase(FOURTH_DATABASE, 4).use { version4 ->
+            version4.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source) VALUES " +
+                    "('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', 'compound', " +
+                    "'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream')",
+            )
+            version4.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            version4.execSQL(
+                "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            version4.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps, note) " +
+                    "VALUES (1, 1, 'working', 60.0, 5, NULL)",
+            )
+        }
+
+        val version5 = helper.runMigrationsAndValidate(FOURTH_DATABASE, 5, true, MIGRATION_4_5)
+
+        version5.use { db ->
+            // Everything already logged was a single entry, and stays one: no side, nothing to
+            // reinterpret.
+            db.query("SELECT side, weight_kg FROM set_entry").use {
+                it.moveToFirst()
+                assertTrue(it.isNull(0))
+                assertEquals(60.0, it.getDouble(1), 0.0)
+            }
+            // And drops are now recordable against it.
+            db.execSQL(
+                "INSERT INTO drop_segment (set_entry_id, order_index, weight_kg, reps) " +
+                    "VALUES (1, 1, 50.0, 4)",
+            )
+            db.query("SELECT COUNT(*) FROM drop_segment").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
+        const val FOURTH_DATABASE = "gym-migration-test-4.db"
         const val SECOND_DATABASE = "gym-migration-test-2.db"
         const val THIRD_DATABASE = "gym-migration-test-3.db"
     }

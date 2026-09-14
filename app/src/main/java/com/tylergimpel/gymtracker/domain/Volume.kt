@@ -18,18 +18,15 @@ const val INDIRECT_CONTRIBUTION = 0.5
  * The generator's working data rather than something to show a lifter (ADR 0008): it is the input
  * to a decision the app makes, not a dashboard.
  *
- * Counts **distinct set indices**, not rows. One set may be recorded by more than one row — a
- * per-side set writes one per side — and counting rows instead would report it as two, blowing
- * through the per-session cap while the app believed the lifter was undertrained (ADR 0003).
+ * Counting sets is counting the sets, because a set is one object however many rows recorded it:
+ * a drop set carries its drops and a per-side set holds two efforts, and neither is two sets. That
+ * is the whole reason identity is positional rather than per-row (ADR 0003).
  */
 fun volumeByMuscle(performed: List<SessionExercise>): Map<String, Double> {
     val volume = mutableMapOf<String, Double>()
 
     performed.forEach { sessionExercise ->
-        val counted = sessionExercise.sets
-            .filter { it.type.countsTowardVolume }
-            .distinctBy(LoggedSet::setIndex)
-            .size
+        val counted = sessionExercise.sets.count { it.type.countsTowardVolume }
         if (counted == 0) return@forEach
 
         val primary = sessionExercise.exercise.primaryMuscles.toSet()

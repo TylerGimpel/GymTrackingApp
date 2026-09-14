@@ -9,11 +9,12 @@ import com.tylergimpel.gymtracker.data.LoggedSession
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.SessionRepository
+import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
-import com.tylergimpel.gymtracker.domain.LoggedSet
+import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
-import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.SetDraft
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,15 +32,44 @@ import java.time.ZoneId
 /** The exercise the entry controls are currently pointed at. */
 data class SelectedExercise(val id: String, val name: String)
 
-/** The set being corrected, if a set is open for editing. */
-data class EditingSet(val setId: Long, val draft: SetDraft)
+/** The effort being corrected, if one is open for editing. */
+data class EditingEffort(
+    val effortId: Long,
+    val sessionExerciseId: Long,
+    val setIndex: Int,
+    val draft: SetDraft,
+)
+
+/** The effort a drop is being added to, if one is open. */
+data class AddingDrop(val effortId: Long, val draft: SetDraft)
+
+/**
+ * Everything on this screen that is not read from the database.
+ *
+ * Held as one object rather than as a flow each, because `combine` runs out of typed overloads at
+ * five and the alternative is packing values into pairs to smuggle them past it.
+ */
+private data class ScreenState(
+    val selected: SelectedExercise? = null,
+    val draft: SetDraft = SetDraft(),
+    val perSide: Boolean = false,
+    val rightDraft: SetDraft = SetDraft(),
+    val editing: EditingEffort? = null,
+    val addingDrop: AddingDrop? = null,
+    val finishing: Boolean = false,
+)
 
 data class SessionUiState(
     val session: Session? = null,
     val exercises: List<SessionExercise> = emptyList(),
     val selected: SelectedExercise? = null,
     val draft: SetDraft = SetDraft(),
-    val editing: EditingSet? = null,
+    /** Whether the entry controls are expanded to record each side separately. */
+    val perSide: Boolean = false,
+    /** The right-side draft, used only while [perSide] is set. */
+    val rightDraft: SetDraft = SetDraft(),
+    val editing: EditingEffort? = null,
+    val addingDrop: AddingDrop? = null,
     /** The routine and where it has got to, so the screen can say what comes next. */
     val routine: RoutineProgress? = null,
     /** Set while the screen is asking which routine day the finishing session realised. */
@@ -63,10 +93,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         clock = Clock.systemDefaultZone(),
     )
 
-    private val selected = MutableStateFlow<SelectedExercise?>(null)
-    private val draft = MutableStateFlow(SetDraft())
-    private val editing = MutableStateFlow<EditingSet?>(null)
-    private val finishing = MutableStateFlow(false)
+    private val screen = MutableStateFlow(ScreenState())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val logged: StateFlow<LoggedSession?> = repository.observeActiveSession()
@@ -75,73 +102,109 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
-    val state: StateFlow<SessionUiState> = combine(
-        logged,
-        selected,
-        draft,
-        editing,
-        combine(routines.observeProgress(), finishing) { routine, finishing -> routine to finishing },
-    ) { logged, selected, draft, editing, routineState ->
-        val (routine, finishing) = routineState
-        SessionUiState(
-            session = logged?.session,
-            exercises = logged?.exercises.orEmpty(),
-            selected = selected,
-            draft = draft,
-            editing = editing,
-            routine = routine,
-            finishing = finishing,
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
+    val state: StateFlow<SessionUiState> =
+        combine(logged, routines.observeProgress(), screen) { logged, routine, screen ->
+            SessionUiState(
+                session = logged?.session,
+                exercises = logged?.exercises.orEmpty(),
+                selected = screen.selected,
+                draft = screen.draft,
+                perSide = screen.perSide,
+                rightDraft = screen.rightDraft,
+                editing = screen.editing,
+                addingDrop = screen.addingDrop,
+                routine = routine,
+                finishing = screen.finishing,
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
-    fun select(exercise: Exercise) {
-        selected.value = SelectedExercise(exercise.id, exercise.name)
-        draft.value = SetDraft()
+    fun select(exercise: Exercise) = screen.update {
+        it.copy(selected = SelectedExercise(exercise.id, exercise.name), draft = SetDraft())
     }
 
-    /** The screen edits a whole draft rather than one field at a time. */
-    fun changeDraft(draft: SetDraft) { this.draft.value = draft }
+    fun changeDraft(draft: SetDraft) = screen.update { it.copy(draft = draft) }
+
+    fun changeRightDraft(draft: SetDraft) = screen.update { it.copy(rightDraft = draft) }
+
+    /** Expands the controls to record each side separately, or collapses them back to one entry. */
+    fun togglePerSide() = screen.update {
+        it.copy(perSide = !it.perSide, rightDraft = it.draft.copy(note = null))
+    }
 
     fun logSet() {
-        val exercise = selected.value ?: return
-        val entered = draft.value
+        val current = screen.value
+        val exercise = current.selected ?: return
         viewModelScope.launch {
-            if (repository.logSet(exercise.id, entered) != null) {
-                // Keep the weight: the next set is usually the same load, and retyping it every
-                // time is the single most repeated action in a session.
-                draft.value = SetDraft(weightText = entered.weightText, repsText = entered.repsText)
+            val recorded = if (current.perSide) {
+                repository.logPerSideSet(exercise.id, current.draft, current.rightDraft)
+            } else {
+                repository.logSet(exercise.id, current.draft) != null
+            }
+            if (!recorded) return@launch
+            // Keep the numbers: the next set is usually the same load, and retyping them every time
+            // is the single most repeated action in a session.
+            screen.update {
+                it.copy(
+                    draft = it.draft.copy(note = null),
+                    rightDraft = it.rightDraft.copy(note = null),
+                )
             }
         }
     }
 
-    fun startEditing(set: LoggedSet) {
-        editing.value = EditingSet(
-            setId = set.id,
-            draft = SetDraft(
-                weightText = set.weight.asText(),
-                repsText = set.reps.toString(),
-                note = set.note,
+    fun startEditing(sessionExerciseId: Long, set: PerformedSet, effort: Effort) = screen.update {
+        it.copy(
+            editing = EditingEffort(
+                effortId = effort.id,
+                sessionExerciseId = sessionExerciseId,
+                setIndex = set.setIndex,
+                draft = SetDraft(
+                    weightText = effort.weight.asText(),
+                    repsText = effort.reps.toString(),
+                    note = effort.note,
+                    type = set.type,
+                ),
             ),
         )
     }
 
-    fun changeEditingDraft(draft: SetDraft) = editing.update { it?.copy(draft = draft) }
+    fun changeEditingDraft(draft: SetDraft) =
+        screen.update { it.copy(editing = it.editing?.copy(draft = draft)) }
 
-    fun cancelEditing() { editing.value = null }
+    fun cancelEditing() = screen.update { it.copy(editing = null) }
 
     fun saveEditing() {
-        val open = editing.value ?: return
+        val open = screen.value.editing ?: return
         viewModelScope.launch {
-            repository.editSet(open.setId, open.draft)
-            editing.value = null
+            repository.editSet(open.effortId, open.draft)
+            screen.update { it.copy(editing = null) }
         }
     }
 
+    /** Deletes the whole set, both rows if it has two: half a per-side set is not a set. */
     fun deleteEditing() {
-        val open = editing.value ?: return
+        val open = screen.value.editing ?: return
         viewModelScope.launch {
-            repository.deleteSet(open.setId)
-            editing.value = null
+            repository.deleteSet(open.sessionExerciseId, open.setIndex)
+            screen.update { it.copy(editing = null) }
+        }
+    }
+
+    fun startAddingDrop(effort: Effort) =
+        screen.update { it.copy(addingDrop = AddingDrop(effort.id, SetDraft())) }
+
+    fun changeDropDraft(draft: SetDraft) =
+        screen.update { it.copy(addingDrop = it.addingDrop?.copy(draft = draft)) }
+
+    fun cancelAddingDrop() = screen.update { it.copy(addingDrop = null) }
+
+    fun saveDrop() {
+        val open = screen.value.addingDrop ?: return
+        val weight = open.draft.weight ?: return
+        val reps = open.draft.reps ?: return
+        viewModelScope.launch {
+            repository.addDrop(open.effortId, weight, reps)
+            screen.update { it.copy(addingDrop = null) }
         }
     }
 
@@ -152,10 +215,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     /** Opens the question of which routine day this session realised, or just finishes it. */
     fun startFinishing() {
-        if (state.value.routine?.routine?.days.orEmpty().isEmpty()) finishSession(null) else finishing.value = true
+        if (state.value.routine?.routine?.days.orEmpty().isEmpty()) {
+            finishSession(null)
+        } else {
+            screen.update { it.copy(finishing = true) }
+        }
     }
 
-    fun cancelFinishing() { finishing.value = false }
+    fun cancelFinishing() = screen.update { it.copy(finishing = false) }
 
     /**
      * Closes the session, and records [day] as trained if one was named.
@@ -173,9 +240,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     routines.recordCompletion(routine.id, day, session.id)
                 }
             }
-            finishing.value = false
-            selected.value = null
-            draft.value = SetDraft()
+            screen.update {
+                it.copy(finishing = false, selected = null, draft = SetDraft(), perSide = false)
+            }
         }
     }
 

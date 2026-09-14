@@ -4,9 +4,11 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.tylergimpel.gymtracker.domain.LoggedSet
+import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.volumeByMuscle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -89,15 +91,15 @@ class SessionPersistenceTest {
         val logged = currentSession()
 
         assertEquals(listOf("Barbell Bench Press - Medium Grip", "Barbell Squat"), logged.exercises.map { it.exercise.name })
-        assertEquals(listOf(1, 2), logged.exercises[0].sets.map(LoggedSet::setIndex))
-        assertEquals(listOf(1), logged.exercises[1].sets.map(LoggedSet::setIndex))
+        assertEquals(listOf(1, 2), logged.exercises[0].sets.map(PerformedSet::setIndex))
+        assertEquals(listOf(1), logged.exercises[1].sets.map(PerformedSet::setIndex))
     }
 
     @Test
     fun weightIsStoredAsTheKilogramsItWasEnteredIn() = runBlocking {
         repository.logSet(BENCH, SetDraft("62.5", "5"))
 
-        assertEquals(62.5, currentSession().exercises.single().sets.single().weight.value, 0.0)
+        assertEquals(62.5, currentSession().exercises.single().sets.single().leadingEffort.weight.value, 0.0)
     }
 
     @Test
@@ -105,22 +107,22 @@ class SessionPersistenceTest {
         repeat(3) { repository.logSet(BENCH, SetDraft("${60 + it}", "5")) }
         val middle = currentSession().exercises.single().sets.single { it.setIndex == 2 }
 
-        repository.deleteSet(middle.id)
+        repository.deleteSet(sessionExerciseId(), middle.setIndex)
 
         val remaining = currentSession().exercises.single().sets
-        assertEquals(listOf(1, 3), remaining.map(LoggedSet::setIndex))
-        assertEquals(listOf(60.0, 62.0), remaining.map { it.weight.value })
+        assertEquals(listOf(1, 3), remaining.map(PerformedSet::setIndex))
+        assertEquals(listOf(60.0, 62.0), remaining.map { it.leadingEffort.weight.value })
     }
 
     @Test
     fun theGapSurvivesAndTheNextSetLandsAboveIt() = runBlocking {
         repeat(3) { repository.logSet(BENCH, SetDraft("60", "5")) }
         val middle = currentSession().exercises.single().sets.single { it.setIndex == 2 }
-        repository.deleteSet(middle.id)
+        repository.deleteSet(sessionExerciseId(), middle.setIndex)
 
         repository.logSet(BENCH, SetDraft("65", "5"))
 
-        assertEquals(listOf(1, 3, 4), currentSession().exercises.single().sets.map(LoggedSet::setIndex))
+        assertEquals(listOf(1, 3, 4), currentSession().exercises.single().sets.map(PerformedSet::setIndex))
     }
 
     @Test
@@ -128,14 +130,14 @@ class SessionPersistenceTest {
         repeat(3) { repository.logSet(BENCH, SetDraft("${60 + it}", "5")) }
         val middle = currentSession().exercises.single().sets.single { it.setIndex == 2 }
 
-        repository.editSet(middle.id, SetDraft("70", "3", note = "felt heavy"))
+        repository.editSet(middle.leadingEffort.id, SetDraft("70", "3", note = "felt heavy"))
 
         val sets = currentSession().exercises.single().sets
-        assertEquals(listOf(60.0, 70.0, 62.0), sets.map { it.weight.value })
-        assertEquals(listOf(5, 3, 5), sets.map(LoggedSet::reps))
-        assertEquals("felt heavy", sets[1].note)
+        assertEquals(listOf(60.0, 70.0, 62.0), sets.map { it.leadingEffort.weight.value })
+        assertEquals(listOf(5, 3, 5), sets.map { it.leadingEffort.reps })
+        assertEquals("felt heavy", sets[1].leadingEffort.note)
         // The edited set keeps its position: editing is not a delete and re-add.
-        assertEquals(listOf(1, 2, 3), sets.map(LoggedSet::setIndex))
+        assertEquals(listOf(1, 2, 3), sets.map(PerformedSet::setIndex))
     }
 
     @Test
@@ -197,7 +199,7 @@ class SessionPersistenceTest {
 
         repository.noteSession(session.id, "short on time")
 
-        assertEquals("shoulder felt off", currentSession().exercises.single().sets.single().note)
+        assertEquals("shoulder felt off", currentSession().exercises.single().sets.single().leadingEffort.note)
         assertEquals("short on time", database.sessionDao().session(session.id)!!.note)
     }
 
@@ -225,7 +227,7 @@ class SessionPersistenceTest {
         val sets = currentSession().exercises.single().sets
         assertEquals(
             listOf(SetType.WARMUP, SetType.WORKING, SetType.BACKOFF),
-            sets.map(LoggedSet::type),
+            sets.map(PerformedSet::type),
         )
     }
 
@@ -241,7 +243,7 @@ class SessionPersistenceTest {
         repository.logSet(BENCH, SetDraft("40", "10", type = SetType.WORKING))
         val logged = currentSession().exercises.single().sets.single()
 
-        repository.editSet(logged.id, SetDraft("40", "10", type = SetType.WARMUP))
+        repository.editSet(logged.leadingEffort.id, SetDraft("40", "10", type = SetType.WARMUP))
 
         val corrected = currentSession().exercises.single().sets.single()
         assertEquals(SetType.WARMUP, corrected.type)
@@ -260,6 +262,105 @@ class SessionPersistenceTest {
         assertEquals(1.0, volume["shoulders"]!!, 0.0)
         assertEquals(1.0, volume["triceps"]!!, 0.0)
     }
+
+    @Test
+    fun aPerSideSetIsTwoRowsSharingOneSetIndex() = runBlocking {
+        repository.logPerSideSet(
+            BENCH,
+            SetDraft("22.5", "10"),
+            SetDraft("20", "10"),
+        )
+
+        // Two rows in storage...
+        assertEquals(2, countOf("set_entry"))
+        // ...and one set coming back, because a set is one set however many rows record it.
+        val set = currentSession().exercises.single().sets.single()
+        assertEquals(1, set.setIndex)
+        assertEquals(listOf(Side.LEFT, Side.RIGHT), set.efforts.map { it.side })
+        // Weights may differ, which is the only reason to expand a set to per-side at all.
+        assertEquals(listOf(22.5, 20.0), set.efforts.map { it.weight.value })
+    }
+
+    @Test
+    fun aPerSideSetCountsOnceTowardVolume() = runBlocking {
+        repository.logPerSideSet(BENCH, SetDraft("22.5", "10"), SetDraft("20", "10"))
+
+        assertEquals(1.0, volumeByMuscle(currentSession().exercises).getValue("chest"), 0.0)
+    }
+
+    @Test
+    fun theNextSetAfterAPerSideSetTakesTheFollowingIndex() = runBlocking {
+        repository.logPerSideSet(BENCH, SetDraft("22.5", "10"), SetDraft("20", "10"))
+
+        repository.logSet(BENCH, SetDraft("45", "8"))
+
+        // Two rows then one, but the indices read 1 and 2 — not 1, 1, 3.
+        assertEquals(listOf(1, 2), currentSession().exercises.single().sets.map(PerformedSet::setIndex))
+    }
+
+    @Test
+    fun dropsComeBackInTheOrderTheyWerePerformed() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "8"))
+        val effort = currentSession().exercises.single().sets.single().leadingEffort
+
+        repository.addDrop(effort.id, Kilograms(50.0), 4)
+        repository.addDrop(effort.id, Kilograms(40.0), 3)
+
+        val drops = currentSession().exercises.single().sets.single().leadingEffort.drops
+        assertEquals(listOf(1, 2), drops.map { it.orderIndex })
+        assertEquals(listOf(50.0, 40.0), drops.map { it.weight.value })
+        assertEquals(listOf(4, 3), drops.map { it.reps })
+    }
+
+    @Test
+    fun aDropSetCountsOnceHoweverManyDropsItHas() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "8"))
+        val effort = currentSession().exercises.single().sets.single().leadingEffort
+        repository.addDrop(effort.id, Kilograms(50.0), 4)
+        repository.addDrop(effort.id, Kilograms(40.0), 3)
+
+        assertEquals(1.0, volumeByMuscle(currentSession().exercises).getValue("chest"), 0.0)
+        // The drops are stored, and still contribute nothing of their own.
+        assertEquals(2, countOf("drop_segment"))
+    }
+
+    @Test
+    fun progressionReadsTheFirstEffortRatherThanTheDrops() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "8"))
+        val effort = currentSession().exercises.single().sets.single().leadingEffort
+        repository.addDrop(effort.id, Kilograms(40.0), 3)
+
+        // The fatigued drop must never be what an estimated one-rep max is built from.
+        val leading = currentSession().exercises.single().sets.single().leadingEffort
+        assertEquals(60.0, leading.weight.value, 0.0)
+        assertEquals(8, leading.reps)
+    }
+
+    @Test
+    fun deletingASetTakesItsDropsWithIt() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "8"))
+        val set = currentSession().exercises.single().sets.single()
+        repository.addDrop(set.leadingEffort.id, Kilograms(50.0), 4)
+
+        repository.deleteSet(sessionExerciseId(), set.setIndex)
+
+        assertEquals(0, countOf("set_entry"))
+        assertEquals(0, countOf("drop_segment"))
+    }
+
+    @Test
+    fun deletingAPerSideSetRemovesBothOfItsRows() = runBlocking {
+        repository.logPerSideSet(BENCH, SetDraft("22.5", "10"), SetDraft("20", "10"))
+        val set = currentSession().exercises.single().sets.single()
+
+        repository.deleteSet(sessionExerciseId(), set.setIndex)
+
+        // Half a per-side set is not a set.
+        assertEquals(0, countOf("set_entry"))
+    }
+
+    private suspend fun sessionExerciseId(): Long =
+        currentSession().exercises.single().id
 
     private suspend fun currentSession(): LoggedSession {
         val active = repository.observeActiveSession().first()!!

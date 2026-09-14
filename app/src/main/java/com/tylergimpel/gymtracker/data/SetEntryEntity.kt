@@ -5,8 +5,6 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.tylergimpel.gymtracker.domain.Kilograms
-import com.tylergimpel.gymtracker.domain.LoggedSet
 import com.tylergimpel.gymtracker.domain.SetType
 
 /**
@@ -60,6 +58,15 @@ data class SetEntryEntity(
 
     @ColumnInfo(name = "note")
     val note: String?,
+
+    /**
+     * Which side this row records, or null when the set was logged as a single entry.
+     *
+     * Two rows sharing one `set_index` and discriminated by side are still one set. Nothing counts
+     * rows, so adding the second one cannot inflate a volume figure.
+     */
+    @ColumnInfo(name = "side")
+    val side: String?,
 ) {
     companion object {
         /**
@@ -74,11 +81,3 @@ data class SetEntryEntity(
     }
 }
 
-fun SetEntryEntity.toDomain() = LoggedSet(
-    id = id,
-    setIndex = setIndex,
-    type = SetType.fromStored(type),
-    weight = Kilograms(weightKg),
-    reps = reps,
-    note = note,
-)

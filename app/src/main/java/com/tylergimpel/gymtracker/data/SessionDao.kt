@@ -51,8 +51,9 @@ interface SessionDao {
     @Insert
     suspend fun insert(sessionExercise: SessionExerciseEntity): Long
 
+    @Transaction
     @Query("SELECT * FROM set_entry WHERE session_exercise_id = :sessionExerciseId ORDER BY set_index")
-    suspend fun setsFor(sessionExerciseId: Long): List<SetEntryEntity>
+    suspend fun setsFor(sessionExerciseId: Long): List<SetEntryWithDrops>
 
     @Query("SELECT * FROM set_entry WHERE id = :setId")
     suspend fun setEntry(setId: Long): SetEntryEntity?
@@ -69,4 +70,17 @@ interface SessionDao {
      */
     @Query("DELETE FROM set_entry WHERE id = :setId")
     suspend fun deleteSet(setId: Long)
+
+    /** Removes every row of one set, which is what deleting a per-side set means. */
+    @Query("DELETE FROM set_entry WHERE session_exercise_id = :sessionExerciseId AND set_index = :setIndex")
+    suspend fun deleteSetAt(sessionExerciseId: Long, setIndex: Int)
+
+    @Query("SELECT COALESCE(MAX(order_index), 0) FROM drop_segment WHERE set_entry_id = :setEntryId")
+    suspend fun highestDropOrder(setEntryId: Long): Int
+
+    @Insert
+    suspend fun insert(drop: DropSegmentEntity): Long
+
+    @Query("DELETE FROM drop_segment WHERE id = :dropId")
+    suspend fun deleteDrop(dropId: Long)
 }

@@ -1,0 +1,69 @@
+package com.tylergimpel.gymtracker.domain
+
+/** Which side of the body an effort was performed on. */
+enum class Side(val stored: String) {
+    LEFT("left"),
+    RIGHT("right"),
+    ;
+
+    companion object {
+        private val BY_STORED = entries.associateBy(Side::stored)
+
+        fun fromStored(value: String?): Side? = value?.let {
+            requireNotNull(BY_STORED[it]) { "Unknown side `$it`" }
+        }
+    }
+}
+
+/**
+ * A continuation of the same set at reduced weight with no rest.
+ *
+ * Belongs to the effort it continues and is never a set of its own. Deliberately kept out of the
+ * effort's own weight and reps: those are what progression reads, and the fatigued later drops must
+ * not feed an estimated one-rep max (ADR 0003).
+ */
+data class Drop(
+    val id: Long,
+    /** Where this drop falls in the sequence, from 1. */
+    val orderIndex: Int,
+    val weight: Kilograms,
+    val reps: Int,
+)
+
+/**
+ * One effort within a set — a weight, some reps, and the row that stores them.
+ *
+ * [side] is null for a set logged as a single entry, which is how every set is logged by default.
+ * A unilateral exercise can be expanded to per-side, and then a set has two efforts whose weights
+ * may differ, because tracking an imbalance is the reason to expand it at all.
+ */
+data class Effort(
+    val id: Long,
+    val side: Side?,
+    val weight: Kilograms,
+    val reps: Int,
+    val note: String?,
+    /** The drops continuing this effort, in the order they were performed. */
+    val drops: List<Drop> = emptyList(),
+)
+
+/**
+ * One unit of effort against an exercise, identified by its position within that exercise.
+ *
+ * **One set, however many rows record it.** A drop set carries child rows and a per-side set is
+ * written as two, and neither is more than one set — so counting sets here is counting this list,
+ * with nothing for a caller to remember and nothing to filter (ADR 0003).
+ */
+data class PerformedSet(
+    val setIndex: Int,
+    val type: SetType,
+    /** One effort, or one per side. Never empty. */
+    val efforts: List<Effort>,
+) {
+    /** What progression reads: the first effort, before any drop. */
+    val leadingEffort: Effort get() = efforts.first()
+
+    val isPerSide: Boolean get() = efforts.size > 1
+
+    val hasDrops: Boolean get() = efforts.any { it.drops.isNotEmpty() }
+}

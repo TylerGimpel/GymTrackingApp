@@ -105,4 +105,25 @@ internal val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
-internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+/**
+ * Version 5 lets one set be recorded by more than one row.
+ *
+ * `side` is nullable, so every set already logged stays exactly what it was: a single entry, with
+ * no side, unchanged. The drops table is new and empty — nothing before this could have had any.
+ */
+internal val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `drop_segment` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `set_entry_id` INTEGER NOT NULL, `order_index` INTEGER NOT NULL, `weight_kg` REAL NOT NULL, `reps` INTEGER NOT NULL, FOREIGN KEY(`set_entry_id`) REFERENCES `set_entry`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_drop_segment_set_entry_id` ON `drop_segment` (`set_entry_id`)",
+        )
+        db.execSQL(
+            "ALTER TABLE `set_entry` ADD COLUMN `side` TEXT",
+        )
+    }
+}
+
+internal val MIGRATIONS: Array<Migration> =
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

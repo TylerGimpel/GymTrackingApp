@@ -13,7 +13,7 @@ data class SessionExercise(
     val exercise: Exercise,
     /** Where this exercise sits among the others in the session. Unrelated to any set's index. */
     val orderIndex: Int,
-    val sets: List<LoggedSet>,
+    val sets: List<PerformedSet>,
 ) {
     /**
      * The index the next set logged against this exercise will take.
@@ -35,7 +35,7 @@ data class SessionExercise(
          * The index the next set logged after [sets] will take. Lives here rather than in a query
          * so that the rule about gaps has exactly one implementation.
          */
-        fun nextSetIndex(sets: List<LoggedSet>): Int =
-            (sets.maxOfOrNull(LoggedSet::setIndex) ?: 0) + 1
+        fun nextSetIndex(sets: List<PerformedSet>): Int =
+            (sets.maxOfOrNull(PerformedSet::setIndex) ?: 0) + 1
     }
 }

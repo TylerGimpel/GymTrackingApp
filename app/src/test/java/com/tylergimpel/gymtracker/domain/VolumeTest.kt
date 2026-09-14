@@ -67,19 +67,6 @@ class VolumeTest {
     }
 
     @Test
-    fun `a set recorded by two rows is still one set`() {
-        // Two rows sharing one set index — what a per-side set will look like. Counting rows here
-        // instead of positions is what would report a drop set as three (ADR 0003).
-        val logged = performed(
-            bench,
-            set(1, SetType.WORKING, id = 10),
-            set(1, SetType.WORKING, id = 11),
-        )
-
-        assertEquals(mapOf("chest" to 1.0, "shoulders" to 0.5, "triceps" to 0.5), volumeByMuscle(logged))
-    }
-
-    @Test
     fun `volume from different exercises adds up per muscle`() {
         val flye = exercise("Dumbbell_Flye", primary = listOf("chest"), secondary = listOf("shoulders"))
         val logged = performed(bench, working(1), working(2)) +
@@ -107,8 +94,8 @@ class VolumeTest {
         // load may override what the lifter said it was.
         val logged = performed(
             bench,
-            set(1, SetType.WORKING).copy(weight = Kilograms(60.0)),
-            set(2, SetType.WARMUP).copy(weight = Kilograms(100.0)),
+            set(1, SetType.WORKING).copy(efforts = listOf(effort(weight = 60.0))),
+            set(2, SetType.WARMUP).copy(efforts = listOf(effort(weight = 100.0))),
         )
 
         assertEquals(mapOf("chest" to 1.0, "shoulders" to 0.5, "triceps" to 0.5), volumeByMuscle(logged))
@@ -158,6 +145,39 @@ class VolumeTest {
         assertEquals(mapOf("lats" to 1.0, "biceps" to 0.5), volumeByMuscle(performed(odd, working(1))))
     }
 
+    @Test
+    fun `a drop set is one set, however many drops it carries`() {
+        // A drop belongs to the set it continues and is never a set of its own. Counting them would
+        // report three sets of work for one, and the per-session cap would mean nothing.
+        val dropSet = working(1).copy(
+            efforts = listOf(
+                effort(weight = 60.0, reps = 8).copy(
+                    drops = listOf(drop(1, 50.0, 4), drop(2, 40.0, 3)),
+                ),
+            ),
+        )
+
+        assertEquals(
+            mapOf("chest" to 1.0, "shoulders" to 0.5, "triceps" to 0.5),
+            volumeByMuscle(performed(bench, dropSet)),
+        )
+    }
+
+    @Test
+    fun `a per-side set is one set, not one per side`() {
+        val perSide = working(1).copy(
+            efforts = listOf(
+                effort(side = Side.LEFT, weight = 22.5, reps = 10),
+                effort(side = Side.RIGHT, weight = 20.0, reps = 10),
+            ),
+        )
+
+        assertEquals(
+            mapOf("chest" to 1.0, "shoulders" to 0.5, "triceps" to 0.5),
+            volumeByMuscle(performed(bench, perSide)),
+        )
+    }
+
     private fun exercise(id: String, primary: List<String>, secondary: List<String>) = Exercise(
         id = id,
         name = id.replace('_', ' '),
@@ -172,18 +192,25 @@ class VolumeTest {
         unilateral = false,
     )
 
-    private fun performed(exercise: Exercise, vararg sets: LoggedSet) = listOf(
+    private fun performed(exercise: Exercise, vararg sets: PerformedSet) = listOf(
         SessionExercise(id = 1, exercise = exercise, orderIndex = 1, sets = sets.toList()),
     )
 
     private fun working(setIndex: Int) = set(setIndex, SetType.WORKING)
 
-    private fun set(setIndex: Int, type: SetType, id: Long = setIndex.toLong()) = LoggedSet(
-        id = id,
+    private fun set(setIndex: Int, type: SetType, id: Long = setIndex.toLong()) = PerformedSet(
         setIndex = setIndex,
         type = type,
-        weight = Kilograms(60.0),
-        reps = 5,
-        note = null,
+        efforts = listOf(effort(id = id)),
     )
+
+    private fun effort(
+        id: Long = 1,
+        side: Side? = null,
+        weight: Double = 60.0,
+        reps: Int = 5,
+    ) = Effort(id = id, side = side, weight = Kilograms(weight), reps = reps, note = null)
+
+    private fun drop(orderIndex: Int, weight: Double, reps: Int) =
+        Drop(id = orderIndex.toLong(), orderIndex = orderIndex, weight = Kilograms(weight), reps = reps)
 }

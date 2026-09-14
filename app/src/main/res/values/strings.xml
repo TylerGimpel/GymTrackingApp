@@ -24,6 +24,12 @@
     <string name="set_type_calibration">calibration</string>
     <string name="set_type_backoff">back-off</string>
     <string name="set_type_amrap">amrap</string>
+    <string name="set_per_side">Log each side</string>
+    <string name="set_side_left">left</string>
+    <string name="set_side_right">right</string>
+    <string name="set_add_drop">+ drop</string>
+    <string name="set_drop">Add a drop</string>
+    <string name="set_drop_summary">drop %1$d: %2$s kg × %3$d</string>
     <string name="set_summary">%1$s kg × %2$d</string>
 
     <string name="routine_title">Routine</string>
