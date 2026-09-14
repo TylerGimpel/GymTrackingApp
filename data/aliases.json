@@ -1,0 +1,428 @@
+{
+  "ab machine": [
+    "Ab Crunch Machine"
+  ],
+  "arnold press": [
+    "Arnold Dumbbell Press"
+  ],
+  "assault bike": [
+    "Fan Bike"
+  ],
+  "assisted pull up": [
+    "Band Assisted Pull-Up"
+  ],
+  "back squat": [
+    "Barbell Squat"
+  ],
+  "bb bench": [
+    "Barbell Bench Press - Medium Grip"
+  ],
+  "bb lunge": [
+    "Barbell Lunge"
+  ],
+  "bb row": [
+    "Bent Over Barbell Row"
+  ],
+  "bb shrug": [
+    "Barbell Shrug"
+  ],
+  "bb squat": [
+    "Barbell Squat"
+  ],
+  "bench": [
+    "Barbell Bench Press - Medium Grip",
+    "Bench Press - Powerlifting"
+  ],
+  "bent over row": [
+    "Bent Over Barbell Row"
+  ],
+  "bicep curl": [
+    "Dumbbell Bicep Curl",
+    "Barbell Curl"
+  ],
+  "biceps curl": [
+    "Dumbbell Bicep Curl",
+    "Barbell Curl"
+  ],
+  "box squat": [
+    "Box Squat"
+  ],
+  "bss": [
+    "Bulgarian Split Squat"
+  ],
+  "bulgarian split squat": [
+    "Bulgarian Split Squat"
+  ],
+  "cable crunch": [
+    "Cable Crunch"
+  ],
+  "cable fly": [
+    "Cable Crossover",
+    "Flat Bench Cable Flyes"
+  ],
+  "cable row": [
+    "Seated Cable Rows"
+  ],
+  "calf raise": [
+    "Standing Calf Raises",
+    "Seated Calf Raise"
+  ],
+  "cgbp": [
+    "Close-Grip Barbell Bench Press"
+  ],
+  "chest fly machine": [
+    "Butterfly"
+  ],
+  "chest press": [
+    "Machine Bench Press",
+    "Leverage Chest Press",
+    "Cable Chest Press"
+  ],
+  "chin up": [
+    "Chin-Up"
+  ],
+  "chinup": [
+    "Chin-Up"
+  ],
+  "clean and jerk": [
+    "Clean and Jerk"
+  ],
+  "close grip bench": [
+    "Close-Grip Barbell Bench Press"
+  ],
+  "close grip pulldown": [
+    "Close-Grip Front Lat Pulldown"
+  ],
+  "concentration curl": [
+    "Concentration Curls"
+  ],
+  "crunch": [
+    "Crunches"
+  ],
+  "db bench": [
+    "Dumbbell Bench Press"
+  ],
+  "db curl": [
+    "Dumbbell Bicep Curl"
+  ],
+  "db fly": [
+    "Dumbbell Flyes"
+  ],
+  "db lunge": [
+    "Dumbbell Lunges"
+  ],
+  "db row": [
+    "One-Arm Dumbbell Row"
+  ],
+  "db shoulder press": [
+    "Dumbbell Shoulder Press"
+  ],
+  "db shrug": [
+    "Dumbbell Shrug"
+  ],
+  "deadlift": [
+    "Barbell Deadlift"
+  ],
+  "decline bench": [
+    "Decline Barbell Bench Press"
+  ],
+  "deficit deadlift": [
+    "Deficit Deadlift"
+  ],
+  "dl": [
+    "Barbell Deadlift"
+  ],
+  "ez bar curl": [
+    "EZ-Bar Curl"
+  ],
+  "ez curl": [
+    "EZ-Bar Curl"
+  ],
+  "face pull": [
+    "Face Pull"
+  ],
+  "fan bike": [
+    "Fan Bike"
+  ],
+  "farmer's walk": [
+    "Farmer's Walk"
+  ],
+  "farmers walk": [
+    "Farmer's Walk"
+  ],
+  "flat bench": [
+    "Barbell Bench Press - Medium Grip"
+  ],
+  "front raise": [
+    "Front Dumbbell Raise",
+    "Front Cable Raise"
+  ],
+  "front squat": [
+    "Front Barbell Squat",
+    "Front Squat (Clean Grip)"
+  ],
+  "glute bridge": [
+    "Barbell Glute Bridge"
+  ],
+  "goblet squat": [
+    "Goblet Squat"
+  ],
+  "good morning": [
+    "Good Morning"
+  ],
+  "hack squat": [
+    "Hack Squat",
+    "Barbell Hack Squat"
+  ],
+  "hammer curl": [
+    "Hammer Curls"
+  ],
+  "hang clean": [
+    "Hang Clean"
+  ],
+  "hex bar deadlift": [
+    "Trap Bar Deadlift"
+  ],
+  "hip abductor": [
+    "Thigh Abductor"
+  ],
+  "hip adductor": [
+    "Thigh Adductor"
+  ],
+  "hip thrust": [
+    "Barbell Hip Thrust"
+  ],
+  "incline bench": [
+    "Barbell Incline Bench Press - Medium Grip"
+  ],
+  "inverted row": [
+    "Inverted Row"
+  ],
+  "jm press": [
+    "JM Press"
+  ],
+  "kb clean": [
+    "One-Arm Kettlebell Clean",
+    "Two-Arm Kettlebell Clean"
+  ],
+  "kb swing": [
+    "Kettlebell Swing"
+  ],
+  "kettlebell swing": [
+    "Kettlebell Swing"
+  ],
+  "landmine press": [
+    "Landmine Press"
+  ],
+  "lat pulldown": [
+    "Wide-Grip Lat Pulldown",
+    "Close-Grip Front Lat Pulldown"
+  ],
+  "lateral raise": [
+    "Side Lateral Raise"
+  ],
+  "leg curl": [
+    "Lying Leg Curls",
+    "Seated Leg Curl"
+  ],
+  "leg extension": [
+    "Leg Extensions"
+  ],
+  "leg press": [
+    "Leg Press"
+  ],
+  "leg raise": [
+    "Hanging Leg Raise"
+  ],
+  "lunge": [
+    "Barbell Lunge",
+    "Dumbbell Lunges"
+  ],
+  "lying tricep extension": [
+    "Lying Triceps Press"
+  ],
+  "military press": [
+    "Standing Military Press",
+    "Seated Barbell Military Press"
+  ],
+  "muscle up": [
+    "Muscle Up"
+  ],
+  "ohp": [
+    "Standing Military Press",
+    "Barbell Shoulder Press"
+  ],
+  "one arm row": [
+    "One-Arm Dumbbell Row"
+  ],
+  "overhead press": [
+    "Standing Military Press",
+    "Barbell Shoulder Press"
+  ],
+  "overhead squat": [
+    "Overhead Squat"
+  ],
+  "pec deck": [
+    "Butterfly"
+  ],
+  "pec fly": [
+    "Butterfly"
+  ],
+  "pendlay row": [
+    "Pendlay Row"
+  ],
+  "power clean": [
+    "Power Clean"
+  ],
+  "preacher curl": [
+    "Preacher Curl"
+  ],
+  "press up": [
+    "Pushups"
+  ],
+  "press-ups": [
+    "Pushups"
+  ],
+  "pull up": [
+    "Pullups"
+  ],
+  "pullup": [
+    "Pullups"
+  ],
+  "push press": [
+    "Push Press"
+  ],
+  "push up": [
+    "Pushups"
+  ],
+  "push-ups": [
+    "Pushups"
+  ],
+  "pushup": [
+    "Pushups"
+  ],
+  "rack pull": [
+    "Rack Pulls"
+  ],
+  "rdl": [
+    "Romanian Deadlift"
+  ],
+  "reverse curl": [
+    "Reverse Barbell Curl"
+  ],
+  "romanian deadlift": [
+    "Romanian Deadlift"
+  ],
+  "romanian dl": [
+    "Romanian Deadlift"
+  ],
+  "rope pushdown": [
+    "Triceps Pushdown - Rope Attachment"
+  ],
+  "russian twist": [
+    "Russian Twist"
+  ],
+  "seated row": [
+    "Seated Cable Rows"
+  ],
+  "shoulder press": [
+    "Barbell Shoulder Press",
+    "Dumbbell Shoulder Press",
+    "Standing Military Press"
+  ],
+  "shrug": [
+    "Barbell Shrug",
+    "Dumbbell Shrug"
+  ],
+  "side raise": [
+    "Side Lateral Raise"
+  ],
+  "sit up": [
+    "Sit-Up"
+  ],
+  "situp": [
+    "Sit-Up"
+  ],
+  "ski erg": [
+    "Ski Erg"
+  ],
+  "skull crusher": [
+    "EZ-Bar Skullcrusher",
+    "Lying Triceps Press"
+  ],
+  "skullcrusher": [
+    "EZ-Bar Skullcrusher",
+    "Lying Triceps Press"
+  ],
+  "sldl": [
+    "Stiff-Legged Barbell Deadlift"
+  ],
+  "smith bench": [
+    "Smith Machine Bench Press"
+  ],
+  "smith squat": [
+    "Smith Machine Squat"
+  ],
+  "snatch": [
+    "Snatch"
+  ],
+  "spider curl": [
+    "Spider Curl"
+  ],
+  "split squat": [
+    "Split Squats",
+    "Split Squat with Dumbbells"
+  ],
+  "squat": [
+    "Barbell Squat",
+    "Barbell Full Squat"
+  ],
+  "step up": [
+    "Barbell Step Ups",
+    "Dumbbell Step Ups"
+  ],
+  "step ups": [
+    "Barbell Step Ups",
+    "Dumbbell Step Ups"
+  ],
+  "stiff leg deadlift": [
+    "Stiff-Legged Barbell Deadlift"
+  ],
+  "sumo deadlift": [
+    "Sumo Deadlift"
+  ],
+  "sumo squat": [
+    "Sumo Squat"
+  ],
+  "t-bar row": [
+    "Lying T-Bar Row",
+    "T-Bar Row with Handle"
+  ],
+  "trap bar deadlift": [
+    "Trap Bar Deadlift"
+  ],
+  "tricep pushdown": [
+    "Triceps Pushdown"
+  ],
+  "upright row": [
+    "Upright Barbell Row"
+  ],
+  "v bar pulldown": [
+    "V-Bar Pulldown"
+  ],
+  "weighted pull up": [
+    "Weighted Pull Ups"
+  ],
+  "wide grip bench": [
+    "Wide-Grip Barbell Bench Press"
+  ],
+  "wide grip pulldown": [
+    "Wide-Grip Lat Pulldown"
+  ],
+  "zercher squat": [
+    "Zercher Squats"
+  ],
+  "zottman curl": [
+    "Zottman Curl"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "_comment": "Patches applied to existing free-exercise-db cardio rows at build time. The dataset tags every cardio machine as the generic 'machine', which cannot drive the gym equipment checklist - a user who has a rower but no treadmill is indistinguishable. These patches assign the six cardio equipment values and the logging type. Row IDs are from the upstream dataset and are stable.",
+  "patches": {
+    "Bicycling": {
+      "equipment": "outdoor",
+      "loggingType": "distance_time"
+    },
+    "Bicycling_Stationary": {
+      "equipment": "stationary bike",
+      "loggingType": "distance_time"
+    },
+    "Recumbent_Bike": {
+      "equipment": "stationary bike",
+      "loggingType": "distance_time"
+    },
+    "Elliptical_Trainer": {
+      "equipment": "elliptical",
+      "loggingType": "distance_time"
+    },
+    "Jogging_Treadmill": {
+      "equipment": "treadmill",
+      "loggingType": "distance_time"
+    },
+    "Running_Treadmill": {
+      "equipment": "treadmill",
+      "loggingType": "distance_time"
+    },
+    "Walking_Treadmill": {
+      "equipment": "treadmill",
+      "loggingType": "distance_time"
+    },
+    "Rowing_Stationary": {
+      "equipment": "rower",
+      "loggingType": "distance_time"
+    },
+    "Stairmaster": {
+      "equipment": "stair climber",
+      "loggingType": "distance_time"
+    },
+    "Step_Mill": {
+      "equipment": "stair climber",
+      "loggingType": "distance_time"
+    },
+    "Trail_Running_Walking": {
+      "equipment": "outdoor",
+      "loggingType": "distance_time"
+    },
+    "Skating": {
+      "equipment": "outdoor",
+      "loggingType": "distance_time"
+    },
+    "Prowler_Sprint": {
+      "equipment": "other",
+      "loggingType": "distance_time"
+    },
+    "Rope_Jumping": {
+      "equipment": "other",
+      "loggingType": "time"
+    }
+  }
+}

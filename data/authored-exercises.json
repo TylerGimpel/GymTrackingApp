@@ -1,0 +1,384 @@
+[
+  {
+    "id": "Ski_Erg",
+    "name": "Ski Erg",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "abdominals",
+      "shoulders"
+    ],
+    "equipment": "other",
+    "mechanic": "compound",
+    "force": "pull",
+    "category": "cardio",
+    "level": "beginner",
+    "loggingType": "distance_time",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Swimming",
+    "name": "Swimming",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "shoulders",
+      "chest",
+      "quadriceps",
+      "glutes"
+    ],
+    "equipment": "other",
+    "mechanic": "compound",
+    "force": "pull",
+    "category": "cardio",
+    "level": "beginner",
+    "loggingType": "distance_time",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Fan_Bike",
+    "name": "Fan Bike",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "shoulders",
+      "lats",
+      "hamstrings"
+    ],
+    "equipment": "stationary bike",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "cardio",
+    "level": "beginner",
+    "loggingType": "distance_time",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Landmine_Press",
+    "name": "Landmine Press",
+    "primaryMuscles": [
+      "shoulders"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "chest",
+      "abdominals"
+    ],
+    "equipment": "barbell",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "intermediate",
+    "loggingType": "weight_reps",
+    "unilateral": true,
+    "authored": true
+  },
+  {
+    "id": "Pendlay_Row",
+    "name": "Pendlay Row",
+    "primaryMuscles": [
+      "middle back"
+    ],
+    "secondaryMuscles": [
+      "lats",
+      "biceps",
+      "lower back"
+    ],
+    "equipment": "barbell",
+    "mechanic": "compound",
+    "force": "pull",
+    "category": "strength",
+    "level": "intermediate",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Cable_Hip_Abduction",
+    "name": "Cable Hip Abduction",
+    "primaryMuscles": [
+      "abductors"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "cable",
+    "mechanic": "isolation",
+    "force": "pull",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": true,
+    "authored": true
+  },
+  {
+    "id": "Bulgarian_Split_Squat",
+    "name": "Bulgarian Split Squat",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "equipment": "dumbbell",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "intermediate",
+    "loggingType": "weight_reps",
+    "unilateral": true,
+    "authored": true
+  },
+  {
+    "id": "Sumo_Squat",
+    "name": "Sumo Squat",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "adductors",
+      "hamstrings"
+    ],
+    "equipment": "dumbbell",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Kettlebell_Swing",
+    "name": "Kettlebell Swing",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "lower back",
+      "shoulders",
+      "abdominals"
+    ],
+    "equipment": "kettlebells",
+    "mechanic": "compound",
+    "force": "pull",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Assisted_Dip_Machine",
+    "name": "Assisted Dip Machine",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "shoulders"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "assisted",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Assisted_Pull_Up_Machine",
+    "name": "Assisted Pull-Up Machine",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "middle back"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "pull",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "assisted",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Belt_Squat_Machine",
+    "name": "Belt Squat Machine",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "intermediate",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Chest_Supported_Row_Machine",
+    "name": "Chest-Supported Row Machine",
+    "primaryMuscles": [
+      "middle back"
+    ],
+    "secondaryMuscles": [
+      "lats",
+      "biceps"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "pull",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Glute_Kickback_Machine",
+    "name": "Glute Kickback Machine",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "machine",
+    "mechanic": "isolation",
+    "force": "push",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": true,
+    "authored": true
+  },
+  {
+    "id": "Hip_Thrust_Machine",
+    "name": "Hip Thrust Machine",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "machine",
+    "mechanic": "isolation",
+    "force": "push",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Machine_Incline_Chest_Press",
+    "name": "Machine Incline Chest Press",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "shoulders",
+      "triceps"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Machine_Lateral_Raise",
+    "name": "Machine Lateral Raise",
+    "primaryMuscles": [
+      "shoulders"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "machine",
+    "mechanic": "isolation",
+    "force": "pull",
+    "category": "strength",
+    "level": "beginner",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Pendulum_Squat",
+    "name": "Pendulum Squat",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "intermediate",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Reverse_Hack_Squat",
+    "name": "Reverse Hack Squat",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "intermediate",
+    "loggingType": "weight_reps",
+    "unilateral": false,
+    "authored": true
+  },
+  {
+    "id": "Single_Leg_Leg_Press",
+    "name": "Single-Leg Leg Press",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "equipment": "machine",
+    "mechanic": "compound",
+    "force": "push",
+    "category": "strength",
+    "level": "intermediate",
+    "loggingType": "weight_reps",
+    "unilateral": true,
+    "authored": true
+  }
+]
