@@ -26,6 +26,15 @@ The expected number of sessions per week for a routine, seeded by the user at se
 **Split**:
 The shape of a routine's rotation — full body, upper/lower, push/pull/legs. A property of how a routine was built, not a synonym for the routine itself.
 
+**Direct set**:
+A set counted in full toward the muscle the exercise primarily targets.
+
+**Indirect set**:
+A set counted at half toward a muscle the exercise works secondarily. The halving is a convention, and the volume targets chosen for this project assume it.
+
+**Volume**:
+Sets per muscle, counted directly and indirectly, over a stated period. The quantity the generator schedules against and the per-session cap limits.
+
 ### Exercises
 
 **Exercise**:
