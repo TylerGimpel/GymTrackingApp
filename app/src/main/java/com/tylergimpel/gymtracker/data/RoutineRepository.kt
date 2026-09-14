@@ -15,7 +15,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Clock
 
-/** A routine together with where it has got to, and therefore what comes next. */
+/**
+ * A routine together with where it has got to, and therefore what comes next.
+ *
+ * "Progress" is not a glossary term — this is a read model pairing the two things the cursor is
+ * derived from, so that no caller can ask for one without the other and get a stale answer.
+ */
 data class RoutineProgress(
     val routine: Routine,
     val cycle: Cycle?,

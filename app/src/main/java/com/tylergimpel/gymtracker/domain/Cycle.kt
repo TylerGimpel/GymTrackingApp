@@ -1,6 +1,12 @@
 package com.tylergimpel.gymtracker.domain
 
-/** What became of a routine day within a cycle. */
+/**
+ * What became of a routine day within a cycle.
+ *
+ * Not yet in `CONTEXT.md`'s glossary as a term of its own, though both of its values are: it exists
+ * because the cursor asks one question of a day — has it been dealt with — and completion and skip
+ * are the two ways that can be true.
+ */
 enum class DayOutcome {
     /** Trained. A session realised it. */
     COMPLETED,
@@ -20,7 +26,12 @@ enum class DayOutcome {
  */
 data class Cycle(
     val id: Long,
-    /** Which pass through the routine this is, from 1. */
+    /**
+     * Which pass through the routine this is, from 1.
+     *
+     * Not in `CONTEXT.md`'s glossary. It orders cycles and nothing else — no rule reads it as a
+     * count of anything, and it is emphatically not a duration.
+     */
     val ordinal: Int,
     /** What has become of each routine day so far, keyed by routine day id. */
     val outcomes: Map<Long, DayOutcome>,

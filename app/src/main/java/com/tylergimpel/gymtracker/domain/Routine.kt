@@ -8,7 +8,15 @@ package com.tylergimpel.gymtracker.domain
  */
 enum class RoutineGoal { HYPERTROPHY, STRENGTH, ENDURANCE }
 
-/** The rep range a lifter prefers to work in, where the goal leaves room for a choice. */
+/**
+ * Which end of the goal's span a lifter prefers to train at, where the goal leaves room for a choice.
+ *
+ * Not a rep range: a range is held per exercise and is the thing double progression climbs. This is
+ * one of the inputs a range is seeded from, which is why it sits on the routine rather than the set.
+ *
+ * Not yet in `CONTEXT.md`'s glossary, and the three bands are placeholders — what each resolves to
+ * is the recommendation engine's to settle.
+ */
 enum class RepPreference { LOW, MODERATE, HIGH }
 
 /**

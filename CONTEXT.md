@@ -68,7 +68,7 @@ A routine position carrying cardio instead of resistance work. It takes its turn
 The list of exercises a session was supposed to contain, copied from its routine day when the session begins. What makes a skipped exercise visible rather than merely absent.
 
 **Revision**:
-A change to the active routine. Revising ends the current cycle and starts a new one; it can never affect logged history.
+A change to which days are in the active routine, or to their order. Revising ends the current cycle and starts a new one; it can never affect logged history. Renaming a day, or editing the routine's goal, cadence, equipment or rep preference, is not a revision and leaves the cycle alone â€” see `docs/adr/0006-routines-are-not-versioned.md`.
 
 **Pin**:
 Marking an exercise to be kept through a revision, so regeneration treats it as a fixed constraint and works around it. Concerns the shape of the routine, never the safety of its history.
