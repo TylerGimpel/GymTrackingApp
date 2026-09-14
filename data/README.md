@@ -4,15 +4,22 @@ Build-time input for the preloaded exercise bank. A build step merges these with
 
 Nothing here is loaded at runtime, and nothing here is fetched over a network.
 
-## The three files
+## The four files
 
 | File | What it is |
 |---|---|
+| `upstream-exercises.json` | **876 upstream rows**, structured fields only |
 | `authored-exercises.json` | **20 new exercises** the upstream dataset does not contain |
 | `cardio-retag.json` | **14 patches** to existing upstream cardio rows |
 | `aliases.json` | **133 search aliases** covering 160 alias→exercise pairs |
 
 Upstream is [`yuhonas/free-exercise-db`](https://github.com/yuhonas/free-exercise-db) — Unlicense, 876 rows. **Take its structured fields only.** Its `instructions` and `images` are excluded on provenance grounds and must not be reintroduced; see `docs/adr/0002-exercise-bank-source-and-omissions.md`.
+
+### Why upstream is vendored rather than downloaded
+
+`upstream-exercises.json` is a snapshot taken from `dist/exercises.json`, carrying `id`, `name`, `primaryMuscles`, `secondaryMuscles`, `equipment`, `mechanic`, `force`, `category` and `level` — and nothing else.
+
+Fetching it during the build would make the build need a network, make it non-reproducible, and leave the excluded prose and images arriving on every machine only to be dropped again. Stripping them once, here, means they are not in the repository to reintroduce. Refreshing the snapshot is a deliberate act with a reviewable diff, which is the right shape for data that ships inside the APK and cannot be corrected without a release.
 
 ## Why these exist
 
@@ -45,6 +52,8 @@ Any value outside these is invalid and the build should reject it.
 - **loggingType** — `weight_reps`, `bodyweight_reps`, `assisted`, `time`, `distance_time`
 
 ## Rules the build must enforce
+
+The shipped SQLite file is generated from **Room's own exported schema**, never hand-written DDL: a prepopulated file whose `room_master_table` identity hash disagrees with Room's is a runtime crash rather than a compile error. On top of that, the merge enforces:
 
 1. **No id or name may collide with upstream**, case-insensitively. This caught a real error during authoring — `Air Bike` was already taken by an unrelated ab exercise.
 2. **Every vocabulary value must be in the closed sets above.**

@@ -1,0 +1,254 @@
+package gymtracker.buildlogic
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * The build step is the only thing standing between a typo in the source data and a broken bank
+ * inside a shipped APK, so its rejections are tested as behaviour: given bad data, does the build
+ * stop, and does it say why.
+ */
+class ExerciseBankBuilderTest {
+
+    @Test
+    fun `merges upstream and authored rows`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = upstream(row(id = "Bench_Press", name = "Bench Press")),
+            authoredJson = authored(row(id = "Belt_Squat", name = "Belt Squat")),
+            cardioRetagJson = NO_PATCHES,
+        )
+
+        assertEquals(listOf("Belt Squat", "Bench Press"), bank.map { it.name })
+        assertEquals(ExerciseBankBuilder.SOURCE_UPSTREAM, bank.single { it.id == "Bench_Press" }.source)
+        assertEquals(ExerciseBankBuilder.SOURCE_AUTHORED, bank.single { it.id == "Belt_Squat" }.source)
+    }
+
+    @Test
+    fun `rejects a muscle outside the vocabulary`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(row(primaryMuscles = listOf("pecs"))),
+        )
+
+        assertTrue(problems.toString(), problems.single().contains("`pecs`"))
+    }
+
+    @Test
+    fun `rejects every other out-of-vocabulary value`() {
+        listOf(
+            "equipment" to "smith machine",
+            "mechanic" to "hybrid",
+            "force" to "twist",
+            "category" to "mobility",
+            "level" to "advanced",
+        ).forEach { (field, value) ->
+            val problems = problemsFrom(upstreamJson = upstream(row(extra = mapOf(field to value))))
+            assertTrue(
+                "expected `$field` = `$value` to be rejected, got $problems",
+                problems.any { it.contains("`$field`") && it.contains("`$value`") },
+            )
+        }
+    }
+
+    @Test
+    fun `rejects a logging type outside the vocabulary`() {
+        val problems = problemsFrom(
+            authoredJson = authored(row(extra = mapOf("loggingType" to "reps_only"))),
+        )
+
+        assertTrue(problems.toString(), problems.any { it.contains("`reps_only`") })
+    }
+
+    @Test
+    fun `rejects an authored id colliding with upstream regardless of case`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(row(id = "Air_Bike", name = "Air Bike")),
+            authoredJson = authored(row(id = "AIR_BIKE", name = "Fan Bike")),
+        )
+
+        assertTrue(problems.toString(), problems.single().contains("collides with upstream"))
+    }
+
+    @Test
+    fun `rejects an authored name colliding with upstream regardless of case`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(row(id = "Air_Bike", name = "Air Bike")),
+            authoredJson = authored(row(id = "Fan_Bike", name = "air bike")),
+        )
+
+        assertTrue(problems.toString(), problems.single().contains("collides with upstream"))
+    }
+
+    @Test
+    fun `rejects duplicates within the authored rows`() {
+        val problems = problemsFrom(
+            authoredJson = authored(
+                row(id = "Belt_Squat", name = "Belt Squat"),
+                row(id = "belt_squat", name = "Belt Squat"),
+            ),
+        )
+
+        assertEquals(problems.toString(), 2, problems.size)
+        assertTrue(problems.toString(), problems.all { it.contains("duplicate") })
+    }
+
+    @Test
+    fun `rejects instructions and images`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(row(extra = mapOf("instructions" to listOf("Lie on the bench.")))),
+            authoredJson = authored(row(id = "Belt_Squat", name = "Belt Squat", extra = mapOf("images" to listOf("a.jpg")))),
+        )
+
+        assertEquals(problems.toString(), 2, problems.size)
+        assertTrue(problems.toString(), problems.any { it.contains("`instructions`") })
+        assertTrue(problems.toString(), problems.any { it.contains("`images`") })
+    }
+
+    @Test
+    fun `rejects a cardio patch that names no upstream exercise`() {
+        val problems = problemsFrom(
+            cardioRetagJson = patches("""{"Ski_Erg": {"equipment": "rower"}}"""),
+        )
+
+        assertTrue(problems.toString(), problems.single().contains("`Ski_Erg`"))
+    }
+
+    @Test
+    fun `reports every problem at once`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(
+                row(id = "A", name = "A", primaryMuscles = listOf("pecs")),
+                row(id = "B", name = "B", extra = mapOf("level" to "advanced")),
+            ),
+        )
+
+        assertEquals(problems.toString(), 2, problems.size)
+    }
+
+    @Test
+    fun `applies cardio patches to upstream rows`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = upstream(
+                row(id = "Running_Treadmill", name = "Running, Treadmill", extra = mapOf("category" to "cardio", "equipment" to "machine")),
+            ),
+            authoredJson = "[]",
+            cardioRetagJson = patches(
+                """{"Running_Treadmill": {"equipment": "treadmill", "loggingType": "distance_time"}}""",
+            ),
+        )
+
+        val treadmill = bank.single()
+        assertEquals("treadmill", treadmill.equipment)
+        assertEquals("distance_time", treadmill.loggingType)
+    }
+
+    @Test
+    fun `authored rows keep their stated logging type rather than a derived one`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = "[]",
+            authoredJson = authored(
+                row(
+                    id = "Assisted_Pull_Up_Machine",
+                    name = "Assisted Pull-Up Machine",
+                    extra = mapOf("equipment" to "machine", "loggingType" to "assisted"),
+                ),
+            ),
+            cardioRetagJson = NO_PATCHES,
+        )
+
+        assertEquals("assisted", bank.single().loggingType)
+    }
+
+    @Test
+    fun `derives logging type from category and equipment`() {
+        val derive = ExerciseBankBuilder::deriveLoggingType
+
+        assertEquals("time", derive("stretching", "foam roll"))
+        assertEquals("time", derive("stretching", "body only"))
+        assertEquals("bodyweight_reps", derive("strength", "body only"))
+        assertEquals("bodyweight_reps", derive("plyometrics", null))
+        assertEquals("weight_reps", derive("strength", "barbell"))
+        assertEquals("weight_reps", derive("strongman", "other"))
+        assertEquals("distance_time", derive("cardio", "machine"))
+    }
+
+    @Test
+    fun `derives unilateral from explicit one-side wording only`() {
+        val derive = ExerciseBankBuilder::deriveUnilateral
+
+        assertTrue(derive("One-Arm Dumbbell Row"))
+        assertTrue(derive("Single-Leg Leg Press"))
+        assertTrue(derive("Kettlebell One-Legged Deadlift"))
+        assertFalse(derive("Alternate Heel Touchers"))
+        assertFalse(derive("Bulgarian Split Squat"))
+        assertFalse(derive("Barbell Bench Press"))
+    }
+
+    @Test
+    fun `an authored row may override a derived unilateral flag`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = "[]",
+            authoredJson = authored(
+                row(id = "Bulgarian_Split_Squat", name = "Bulgarian Split Squat", extra = mapOf("unilateral" to true)),
+            ),
+            cardioRetagJson = NO_PATCHES,
+        )
+
+        assertTrue(bank.single().unilateral)
+    }
+
+    // --- fixtures ----------------------------------------------------------------------------
+
+    private fun problemsFrom(
+        upstreamJson: String = "[]",
+        authoredJson: String = "[]",
+        cardioRetagJson: String = NO_PATCHES,
+    ): List<String> = try {
+        ExerciseBankBuilder.build(upstreamJson, authoredJson, cardioRetagJson)
+        emptyList()
+    } catch (e: ExerciseBankException) {
+        e.problems
+    }
+
+    private fun upstream(vararg rows: String) = rows.joinToString(", ", "[", "]")
+
+    private fun authored(vararg rows: String) = rows.joinToString(", ", "[", "]")
+
+    private fun patches(body: String) = """{"patches": $body}"""
+
+    private fun row(
+        id: String = "Bench_Press",
+        name: String = "Bench Press",
+        primaryMuscles: List<String> = listOf("chest"),
+        extra: Map<String, Any> = emptyMap(),
+    ): String {
+        val fields = linkedMapOf<String, Any>(
+            "id" to id,
+            "name" to name,
+            "primaryMuscles" to primaryMuscles,
+            "secondaryMuscles" to listOf("triceps"),
+            "equipment" to "barbell",
+            "mechanic" to "compound",
+            "force" to "push",
+            "category" to "strength",
+            "level" to "beginner",
+            "loggingType" to "weight_reps",
+        )
+        fields.putAll(extra)
+        return fields.entries.joinToString(", ", "{", "}") { (key, value) ->
+            "\"$key\": ${value.toJson()}"
+        }
+    }
+
+    private fun Any.toJson(): String = when (this) {
+        is String -> "\"$this\""
+        is Boolean -> toString()
+        is List<*> -> joinToString(", ", "[", "]") { it!!.toJson() }
+        else -> error("Unsupported fixture value: $this")
+    }
+
+    private companion object {
+        const val NO_PATCHES = """{"patches": {}}"""
+    }
+}

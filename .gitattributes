@@ -1,0 +1,6 @@
+# Normalise line endings in the repository so the Gradle wrapper script stays
+# runnable on machines that are not Windows.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.jar binary
