@@ -14,6 +14,27 @@ Three layouts were rejected to get here: a single big card with no context, a de
 
 **Auto-advance on log is what makes the wheel work.** Without it, scrolling to change sets would be more effort than tapping, and the whole shape would be wrong. The common path never involves scrolling at all.
 
+## The rep range sits above the number, not in place of it
+
+A working set is prescribed inside a **rep range** (`CONTEXT.md`), because that is what double progression asks for: hold the weight, climb from the bottom of the range to the top, then add weight and drop back to the bottom.
+
+**The big value stays one number.** A set is logged as a single rep count, so the headline has to read as what the next tap will record — a large `82.5 kg × 6 - 8` was tried and looked bad on a phone, and it makes the one thing you glance at from the rack the one thing you cannot act on.
+
+So the range is a **small dim line directly above the value**:
+
+```
+        WORKING
+      6 - 8 reps
+    82.5 kg × 6
+      was 80 × 8
+```
+
+It reads top to bottom as the band, the number to go and do, and what you did last time. Written with a **spaced hyphen** — `6 - 8`, never an en or em dash — which is what scans as a span at a glance rather than as punctuation.
+
+**The number recommended is the conservative one: last session's reps if the weight has not changed, otherwise the bottom of the range.** That is double progression stated as a default — same weight means beat last time, new weight means start at the bottom. Recommending the top instead would make the one-tap path claim an advance that may not have happened, and the spec is explicit that confidently wrong in the direction of too heavy is the one outcome that can hurt someone. Under-recording costs a session, and the two-consecutive-sessions hysteresis absorbs it.
+
+Warm-up and calibration sets get **no range line at all**. Neither is progressed, so neither has a top to reach, and a range on a warm-up would invite the lifter to chase it.
+
 ## Entering a result
 
 - Accepting the prescription is one tap on the log button.
@@ -32,9 +53,11 @@ Two exceptions, both carrying information available nowhere else:
 | Condition | Shows |
 |---|---|
 | Exercise is calibrating | A `calibrating` badge, and *"Calibrating — stop when it gets hard. Being wrong here is expected."* |
-| Prescribed set is 15+ reps | *"Take this close to failure — high reps only work hard."* |
+| The **top** of the prescribed rep range is 15+ | *"Take this close to failure — high reps only work hard."* |
 
 The second is not optional polish. Hypertrophy is load-independent above ~30% 1RM **only if effort is high**, so a high-rep prescription that does not convey the effort requirement is not the intervention the evidence supports.
+
+It keys off the **top** of the range rather than the bottom: a 12–15 set is asking the lifter to reach 15, and 15 is the rep count the effort requirement attaches to. Keying off the bottom would silence the line on exactly the ranges where a lighter load is being justified by high reps.
 
 An earlier draft labelled the normal state `prescribing`, then `from your history`. Both failed: the first was the data model's vocabulary leaking into the UI, the second was redundant. The lesson generalises — **the screen does not speak the model's language**. `prescribing` and `calibrating` are defined in `CONTEXT.md` for the code; only `calibrating` ever reaches the user, and only because a line underneath explains it.
 
