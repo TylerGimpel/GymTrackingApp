@@ -100,6 +100,49 @@ class SessionTest {
         assertFalse(session.accepts(at("2026-09-14T20:00"), zone))
     }
 
+    @Test
+    fun `a session filed on the day it was trained is not backdated`() {
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+
+        assertFalse(session.isBackdated(zone))
+    }
+
+    @Test
+    fun `a session refiled onto an earlier day is backdated`() {
+        // Trained on Saturday, remembered on Monday. What happened is Saturday's; what comes next
+        // is unaffected, which is the whole of the rule (ADR 0001).
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+
+        assertTrue(session.on(LocalDate.of(2026, 9, 12)).isBackdated(zone))
+    }
+
+    @Test
+    fun `a session that ran past midnight is not backdated`() {
+        // Its date is the day before it finished, which is the midnight rule doing its job rather
+        // than anyone refiling anything.
+        val session = Session.start(at("2026-09-14T23:40"), zone)
+            .finish(at("2026-09-15T00:20"))
+
+        assertFalse(session.isBackdated(zone))
+    }
+
+    @Test
+    fun `refiling a session back onto the day it started stops it being backdated`() {
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+            .on(LocalDate.of(2026, 9, 12))
+
+        assertFalse(session.on(LocalDate.of(2026, 9, 14)).isBackdated(zone))
+    }
+
+    @Test
+    fun `a session filed forward is backdated too, because it is still not today's training`() {
+        // Not a case anyone should reach, but the cursor asks one question — was this session
+        // trained on the day it claims — and a date in the future answers it the same way.
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+
+        assertTrue(session.on(LocalDate.of(2026, 9, 16)).isBackdated(zone))
+    }
+
     private fun at(localDateTime: String): Instant =
         LocalDateTime.parse(localDateTime).atZone(zone).toInstant()
 }

@@ -199,7 +199,8 @@ class SessionRepository(
         sessions.update(session.copy(note = note?.takeIf(String::isNotBlank)))
     }
 
-    suspend fun dateSession(sessionId: Long, date: LocalDate) {
+    /** Refiles the session onto [date]. When it was trained is untouched. */
+    suspend fun refile(sessionId: Long, date: LocalDate) {
         val session = sessions.session(sessionId) ?: return
         sessions.update(session.toDomain().on(date).toEntity())
     }

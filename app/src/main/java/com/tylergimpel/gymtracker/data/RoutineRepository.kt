@@ -7,6 +7,7 @@ import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.Session
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -32,12 +33,18 @@ data class RoutineProgress(
 /**
  * Holds the routine and the cycle state the cursor is derived from.
  *
- * Nothing here consults the date to decide what comes next. `started_at` on a cycle is recorded for
+ * **The cursor is derived without reference to any date.** `started_at` on a cycle is recorded for
  * history, and no query orders or filters by it — which is what makes a fortnight off free.
+ *
+ * One date is read, in one place: [recordCompletion] asks whether the session in front of it was
+ * trained on the day it claims, because a session logged after the fact must not advance a cycle.
+ * That decides whether an outcome is *recorded*; it never touches how the cursor is *derived* from
+ * the outcomes that are.
  */
 class RoutineRepository(
     private val database: GymDatabase,
     private val routines: RoutineDao,
+    private val sessions: SessionDao,
     private val clock: Clock,
 ) {
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -158,9 +165,23 @@ class RoutineRepository(
         routines.routine()?.let { routines.delete(it) }
     }
 
-    /** Records that [day] was trained, by the session that realised it. */
+    /**
+     * Records that [day] was trained, by the session that realised it.
+     *
+     * A backdated session records nothing at all — see [Session.isBackdated] for why the cursor
+     * refuses to move for one.
+     *
+     * The session is read here rather than passed in, so the date the rule judges is the one
+     * actually stored at the moment the outcome is written. A caller holding a copy taken before
+     * it refiled the session would otherwise get the opposite answer, silently.
+     *
+     * Asked once, as the session is finished. Correcting a date afterwards does not un-train the
+     * day: that session did realise it, and the cursor moved because the training happened.
+     */
     suspend fun recordCompletion(routineId: Long, day: RoutineDay, sessionId: Long) =
         database.withTransaction {
+            val session = sessions.session(sessionId)?.toDomain()
+            if (session == null || session.isBackdated(clock.zone)) return@withTransaction
             val cycle = currentCycle(routineId)
             routines.insert(
                 CycleCompletionEntity(

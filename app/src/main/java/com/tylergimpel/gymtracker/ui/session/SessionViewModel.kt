@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.LocalDate
 import java.time.ZoneId
 
 /** The effort being corrected, if one is open for editing. */
@@ -63,6 +64,8 @@ private data class ScreenState(
     val editing: EditingEffort? = null,
     val addingDrop: AddingDrop? = null,
     val finishing: Boolean = false,
+    val refiling: Boolean = false,
+    val skipping: RoutineDay? = null,
 )
 
 data class SessionUiState(
@@ -87,6 +90,10 @@ data class SessionUiState(
     val routine: RoutineProgress? = null,
     /** Set while the screen is asking which routine day the finishing session realised. */
     val finishing: Boolean = false,
+    /** Set while the screen is asking which day this session should be filed on. */
+    val refiling: Boolean = false,
+    /** The routine day the screen is asking about skipping, if it is asking. */
+    val skipping: RoutineDay? = null,
 )
 
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
@@ -105,6 +112,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     private val routines = RoutineRepository(
         database = database,
         routines = database.routineDao(),
+        sessions = database.sessionDao(),
         clock = Clock.systemDefaultZone(),
     )
 
@@ -131,6 +139,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 addingDrop = screen.addingDrop,
                 routine = routine,
                 finishing = screen.finishing,
+                refiling = screen.refiling,
+                skipping = screen.skipping,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
@@ -306,6 +316,53 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun noteSession(text: String) {
         val session = logged.value?.session ?: return
         viewModelScope.launch { repository.noteSession(session.id, text) }
+    }
+
+    /** Opens the question of skipping the day the cursor points at. */
+    fun startSkipping() {
+        val day = state.value.routine?.cursor ?: return
+        screen.update { it.copy(skipping = day) }
+    }
+
+    fun cancelSkipping() = screen.update { it.copy(skipping = null) }
+
+    /**
+     * Marks the day as dealt with, without a session.
+     *
+     * The escape hatch a derived cursor structurally requires: without it the only way past a day
+     * is to train it, and a lifter who is never going to do day 2 as written would have nowhere to
+     * go short of revising the routine (ADR 0001). Recorded apart from any session, so history
+     * never claims training that did not happen.
+     *
+     * Asked before it is written, because there is no unskipping it: the record is permanent for
+     * that cycle, and repeated skips of one day are meant to become a signal about the routine
+     * rather than a tally of mis-taps.
+     */
+    fun skipDay() {
+        val progress = state.value.routine ?: return
+        val day = screen.value.skipping ?: return
+        viewModelScope.launch {
+            routines.recordSkip(progress.routine.id, day)
+            screen.update { it.copy(skipping = null) }
+        }
+    }
+
+    fun startRefiling() = screen.update { it.copy(refiling = true) }
+
+    fun cancelRefiling() = screen.update { it.copy(refiling = false) }
+
+    /**
+     * Refiles the session onto [date] — the fix for training on Saturday and remembering on Monday.
+     *
+     * When it was trained is untouched, and so is the cursor: a session filed on a day other than
+     * the one it was trained on records no completion when it finishes.
+     */
+    fun refileOn(date: LocalDate) {
+        val session = logged.value?.session ?: return
+        viewModelScope.launch {
+            repository.refile(session.id, date)
+            screen.update { it.copy(refiling = false) }
+        }
     }
 
     /** Opens the question of which routine day this session realised, or just finishes it. */

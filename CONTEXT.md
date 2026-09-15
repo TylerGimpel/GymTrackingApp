@@ -68,6 +68,9 @@ _Avoid_: workout — ambiguous between the plan and the record, so it is not use
 **Skip**:
 Marking a routine day as dealt with without a session. Distinct from completion in history, because the user did not train.
 
+**Backdating**:
+Filing a session on a day other than the one it was trained on — training on Saturday and remembering on Monday. The session and its sets are real history, and the routine day it realised is recorded on it; what comes *next* is not its business, so a backdated session never advances a cycle. Asked once, as the session is finished: correcting a date afterwards does not un-train the day.
+
 **Cardio day**:
 A routine position carrying cardio instead of resistance work. It takes its turn in the cycle like any other routine day, but contributes no training volume and is excluded when translating volume targets.
 

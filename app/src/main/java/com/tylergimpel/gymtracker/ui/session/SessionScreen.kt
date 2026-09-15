@@ -15,6 +15,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -26,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +54,9 @@ import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asWeightText
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * The plain logging screen: pick an exercise, enter a weight and reps, see what was logged.
@@ -86,6 +92,12 @@ fun SessionScreen(
         onSaveDrop = viewModel::saveDrop,
         onCancelDrop = viewModel::cancelAddingDrop,
         onSessionNoteChange = viewModel::noteSession,
+        onSkipDay = viewModel::startSkipping,
+        onConfirmSkip = viewModel::skipDay,
+        onCancelSkip = viewModel::cancelSkipping,
+        onStartRefiling = viewModel::startRefiling,
+        onRefileOn = viewModel::refileOn,
+        onCancelRefiling = viewModel::cancelRefiling,
         onFinish = viewModel::startFinishing,
         onFinishAs = viewModel::finishSession,
         onCancelFinishing = viewModel::cancelFinishing,
@@ -114,6 +126,12 @@ fun SessionScreen(
     onSaveDrop: () -> Unit = {},
     onCancelDrop: () -> Unit = {},
     onSessionNoteChange: (String) -> Unit = {},
+    onSkipDay: () -> Unit = {},
+    onConfirmSkip: () -> Unit = {},
+    onCancelSkip: () -> Unit = {},
+    onStartRefiling: () -> Unit = {},
+    onRefileOn: (LocalDate) -> Unit = {},
+    onCancelRefiling: () -> Unit = {},
     onFinish: () -> Unit = {},
     onFinishAs: (RoutineDay?) -> Unit = {},
     onCancelFinishing: () -> Unit = {},
@@ -126,10 +144,22 @@ fun SessionScreen(
                     Column {
                         Text(stringResource(R.string.session_title))
                         state.session?.let {
+                            // Tappable, because a session logged the day after it happened is
+                            // ordinary and the date is the only thing about it that is wrong.
                             Text(
                                 text = it.date.toString(),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .clickable(
+                                        // A label, because the date alone says nothing about being
+                                        // tappable to anyone who cannot see where it sits.
+                                        onClickLabel = stringResource(R.string.session_refile),
+                                        onClick = onStartRefiling,
+                                    )
+                                    // Padding rather than a button: it keeps the top bar quiet
+                                    // while giving the target something to be hit with.
+                                    .padding(vertical = 4.dp),
                             )
                         }
                     }
@@ -166,7 +196,7 @@ fun SessionScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = insets,
         ) {
-            item { NextUp(state.routine) }
+            item { NextUp(state.routine, onSkipDay) }
 
             state.selected?.let { selected ->
                 item {
@@ -213,33 +243,112 @@ fun SessionScreen(
     if (state.finishing) {
         WhichDayDialog(state.routine, onFinishAs, onCancelFinishing)
     }
+
+    if (state.refiling) {
+        state.session?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
+    }
+
+    state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
 }
 
 /**
- * What comes next in the routine.
+ * What comes next in the routine, and the way past it.
  *
  * Derived from which days of the current cycle are still undone, never from the date — so this line
- * reads the same after a fortnight off as it did the evening before.
+ * reads the same after a fortnight off as it did the evening before. The skip beside it is the
+ * escape hatch a derived cursor requires, offered here because this is where a lifter reads which
+ * day they are declining.
  */
 @Composable
-private fun NextUp(progress: RoutineProgress?) {
+private fun NextUp(progress: RoutineProgress?, onSkipDay: () -> Unit) {
     val cursor = progress?.cursor
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text(
-            text = if (cursor == null) {
-                stringResource(R.string.session_no_routine)
-            } else {
-                stringResource(R.string.session_next_up, cursor.name)
-            },
-            style = MaterialTheme.typography.titleMedium,
-        )
-        progress?.cycle?.let {
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
             Text(
-                text = stringResource(R.string.session_cycle, it.ordinal),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = if (cursor == null) {
+                    stringResource(R.string.session_no_routine)
+                } else {
+                    stringResource(R.string.session_next_up, cursor.name)
+                },
+                style = MaterialTheme.typography.titleMedium,
             )
+            progress?.cycle?.let {
+                Text(
+                    text = stringResource(R.string.session_cycle, it.ordinal),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+
+        // The way past a day nobody is going to train as written. Offered beside the day itself,
+        // because that is the moment a lifter decides they are not doing it.
+        if (cursor != null) {
+            TextButton(onClick = onSkipDay) { Text(stringResource(R.string.session_skip_day)) }
+        }
+    }
+}
+
+/**
+ * Whether to deal with a day without training it.
+ *
+ * Asked rather than done, because nothing unskips a day: the record stands for that cycle, and the
+ * point of recording skips at all is that repeated ones say something about the routine.
+ */
+@Composable
+private fun SkipDayDialog(day: RoutineDay, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.session_skip_title, day.name)) },
+        text = { Text(stringResource(R.string.session_skip_explain)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.session_skip_day)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+/**
+ * Which day this session should be filed on.
+ *
+ * Material's picker speaks in UTC milliseconds, so both directions convert against UTC rather than
+ * the device's zone: mixing the two files a late evening session on the following day, which is the
+ * exact error the session's own midnight rule exists to avoid.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RefileSessionDialog(
+    date: LocalDate,
+    onRefileOn: (LocalDate) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val picker = rememberDatePickerState(
+        initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+    )
+
+    DatePickerDialog(
+        onDismissRequest = onCancel,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    picker.selectedDateMillis?.let {
+                        onRefileOn(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate())
+                    }
+                },
+                enabled = picker.selectedDateMillis != null,
+            ) {
+                Text(stringResource(R.string.session_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) } },
+    ) {
+        DatePicker(state = picker)
     }
 }
 

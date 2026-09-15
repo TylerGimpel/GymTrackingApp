@@ -51,6 +51,19 @@ data class Session(
         }
     }
 
+    /**
+     * Whether this session is filed on a day other than the one it was trained on.
+     *
+     * What "backdated" means to the cursor, and the only thing the cursor asks of a date: a session
+     * logged days after the fact is a record of what happened, not a statement about what comes
+     * next, so it never advances a cycle (ADR 0001). Importing years of history would otherwise
+     * fling the cursor somewhere arbitrary.
+     *
+     * A session that ran past midnight is not backdated — its date is the day it started, which is
+     * the midnight rule doing its job rather than anyone refiling anything.
+     */
+    fun isBackdated(zone: ZoneId): Boolean = date != startedAt.atZone(zone).toLocalDate()
+
     fun finish(at: Instant): Session = copy(finishedAt = at)
 
     /**

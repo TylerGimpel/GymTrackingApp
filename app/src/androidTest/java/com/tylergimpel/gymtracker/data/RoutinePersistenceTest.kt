@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -42,7 +43,12 @@ class RoutinePersistenceTest {
             .createFromAsset(GymDatabase.ASSET_PATH)
             .addMigrations(*MIGRATIONS)
             .build()
-        routines = RoutineRepository(database, database.routineDao(), clock)
+        routines = RoutineRepository(
+            database,
+            database.routineDao(),
+            database.sessionDao(),
+            clock,
+        )
         sessions = SessionRepository(database, database.sessionDao(), clock, zone)
     }
 
@@ -149,6 +155,71 @@ class RoutinePersistenceTest {
         assertEquals(2, second.cycle!!.ordinal)
         assertEquals(1, second.cycle!!.outcomes.size)
         assertEquals("Pull", second.cursor?.name)
+    }
+
+    @Test
+    fun aBackdatedSessionIsLoggedInFullAndLeavesTheCursorExactlyWhereItWas() = runBlocking {
+        val routine = pushPullLegs()
+        assertEquals("Push", routines.observeProgress().first()!!.cursor?.name)
+
+        // Trained on Saturday, remembered on Monday.
+        val sessionId = complete(routine.rotation.first(), on = LocalDate.of(2026, 9, 12))
+
+        // The training is in history in full, with the day it realised named on it...
+        assertEquals(1, countOf("session"))
+        assertEquals(1, countOf("set_entry"))
+        assertEquals("Push", database.sessionDao().session(sessionId)!!.routineDayName)
+        // ...and what comes next has not moved, because this session was not about that.
+        assertEquals(0, countOf("cycle_completion"))
+        assertEquals("Push", routines.observeProgress().first()!!.cursor?.name)
+    }
+
+    @Test
+    fun twoSessionsInOneCalendarDayEachAdvanceTheCursorThatTheyMatched() = runBlocking {
+        val routine = pushPullLegs()
+
+        complete(routine.rotation[0])
+        complete(routine.rotation[1])
+
+        // A morning and an evening session, both on one date, each dealing with the day it
+        // realised. Nothing here counts days of the week.
+        assertEquals(2, countOf("session"))
+        assertEquals(2, countOf("cycle_completion"))
+        assertEquals("Legs", routines.observeProgress().first()!!.cursor?.name)
+    }
+
+    @Test
+    fun aSecondSessionInOneDayAdvancesTheCursorOnlyIfItMatchedTheDayItPointedAt() = runBlocking {
+        val routine = pushPullLegs()
+
+        complete(routine.rotation[0])
+        // The rack was busy, so the evening session trained Legs rather than the Pull the cursor
+        // had moved to. Two sessions, two days dealt with, but the cursor advanced once: it is
+        // still holding Pull (ADR 0001).
+        complete(routine.rotation[2])
+
+        assertEquals(2, countOf("session"))
+        assertEquals(2, countOf("cycle_completion"))
+        assertEquals("Pull", routines.observeProgress().first()!!.cursor?.name)
+    }
+
+    @Test
+    fun aLongLayoffLeavesTheCursorWhereItWasWithNothingToCatchUpOn() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation.first())
+        assertEquals("Pull", routines.observeProgress().first()!!.cursor?.name)
+
+        // Six weeks later, read by a repository whose clock has moved on. No missed sessions, no
+        // catch-up, no new cycle: the cursor takes no date and so has nothing to notice.
+        val sixWeeksLater = RoutineRepository(
+            database,
+            database.routineDao(),
+            database.sessionDao(),
+            Clock.fixed(at("2026-10-26T18:00"), zone),
+        )
+
+        assertEquals("Pull", sixWeeksLater.observeProgress().first()!!.cursor?.name)
+        assertEquals(1, countOf("cycle"))
     }
 
     @Test
@@ -266,10 +337,16 @@ class RoutinePersistenceTest {
         routines.observeProgress().first()!!.routine
     }
 
-    /** Trains [day] with one real session, returning that session's id. */
-    private suspend fun complete(day: RoutineDay): Long {
+    /**
+     * Trains [day] with one real session, returning that session's id.
+     *
+     * [on] refiles it before it is finished, which is how a session trained on Saturday and logged
+     * on Monday reaches the cycle rules.
+     */
+    private suspend fun complete(day: RoutineDay, on: LocalDate? = null): Long {
         sessions.logSet(BENCH, SetDraft("60", "5"))
         val session = sessions.observeActiveSession().first()!!
+        on?.let { sessions.refile(session.id, it) }
         val routine = routines.observeProgress().first()!!.routine
         sessions.finishSession(session.id, routine, day)
         routines.recordCompletion(routine.id, day, session.id)

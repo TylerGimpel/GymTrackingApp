@@ -27,6 +27,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     private val repository = RoutineRepository(
         database = database,
         routines = database.routineDao(),
+        sessions = database.sessionDao(),
         clock = Clock.systemDefaultZone(),
     )
 

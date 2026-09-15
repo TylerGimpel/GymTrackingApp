@@ -189,7 +189,7 @@ class SessionPersistenceTest {
         repository.logSet(BENCH, SetDraft("60", "5"))
         val session = repository.observeActiveSession().first()!!
 
-        repository.dateSession(session.id, LocalDate.of(2026, 9, 12))
+        repository.refile(session.id, LocalDate.of(2026, 9, 12))
 
         val corrected = database.sessionDao().session(session.id)!!
         assertEquals(LocalDate.of(2026, 9, 12), corrected.date)
