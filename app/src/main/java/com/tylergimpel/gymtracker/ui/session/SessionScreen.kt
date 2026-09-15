@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.data.RoutineProgress
+import com.tylergimpel.gymtracker.domain.DistanceUnit
 import com.tylergimpel.gymtracker.domain.Drop
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
@@ -59,8 +60,9 @@ import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asTimeText
-import com.tylergimpel.gymtracker.domain.asWeightText
+import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.ui.DayPickerDialog
+import com.tylergimpel.gymtracker.ui.label
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
 import com.tylergimpel.gymtracker.ui.label
 import java.time.Instant
@@ -276,6 +278,7 @@ fun SessionScreen(
                 SessionPositionRows(
                     position = position,
                     isLast = index == state.positions.lastIndex,
+                    lifterUnit = state.lifterUnit,
                     onEditEffort = onEditEffort,
                     onAddDrop = onAddDrop,
                     onGroupWithNext = onGroupWithNext,
@@ -660,6 +663,17 @@ private fun SetDraftFields(
                     modifier = Modifier.weight(1f),
                 )
             }
+            if (draft.loggingType.recordsDistance) {
+                OutlinedTextField(
+                    value = draft.distanceText,
+                    onValueChange = { onChange(draft.copy(distanceText = it)) },
+                    // Labelled with the unit it is read in, as the weight field is.
+                    label = { Text(stringResource(draft.distanceUnit.label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+            }
             if (draft.loggingType.recordsDuration) {
                 OutlinedTextField(
                     value = draft.durationText,
@@ -715,10 +729,10 @@ private fun WeightControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(onClick = { onChange(draft.stepWeight(-1)) }) {
-                Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asWeightText()))
+                Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asAmountText()))
             }
             OutlinedButton(onClick = { onChange(draft.stepWeight(1)) }) {
-                Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asWeightText()))
+                Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asAmountText()))
             }
         }
 
@@ -806,6 +820,8 @@ private fun Unperformed(exercises: List<Exercise>) {
 private fun SessionPositionRows(
     position: SessionPosition,
     isLast: Boolean,
+    /** What the lifter reads in, which is what a distance among these rows is written in. */
+    lifterUnit: WeightUnit,
     onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit,
     onAddDrop: (WeightUnit, Effort) -> Unit,
     onGroupWithNext: (Long) -> Unit,
@@ -842,7 +858,7 @@ private fun SessionPositionRows(
         }
 
         position.exercises.forEach { performed ->
-            LoggedExercise(performed, onEditEffort, onAddDrop)
+            LoggedExercise(performed, lifterUnit, onEditEffort, onAddDrop)
         }
 
         // Offered on the last exercise of the position, because grouping reaches forward: this is
@@ -861,6 +877,7 @@ private fun SessionPositionRows(
 @Composable
 private fun LoggedExercise(
     performed: SessionExercise,
+    lifterUnit: WeightUnit,
     onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit,
     onAddDrop: (WeightUnit, Effort) -> Unit,
 ) {
@@ -882,6 +899,7 @@ private fun LoggedExercise(
                 set = set,
                 // The exercise's unit, unless this set was read off some other machine.
                 displayUnit = performed.displayUnitFor(set),
+                lifterUnit = lifterUnit,
                 onEditEffort = { effort -> onEditEffort(performed, set, effort) },
                 onAddDrop = onAddDrop,
             )
@@ -900,6 +918,7 @@ private fun LoggedSetRows(
     number: Int,
     set: PerformedSet,
     displayUnit: WeightUnit,
+    lifterUnit: WeightUnit,
     onEditEffort: (Effort) -> Unit,
     onAddDrop: (WeightUnit, Effort) -> Unit,
 ) {
@@ -928,7 +947,7 @@ private fun LoggedSetRows(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(effort.summary(displayUnit), style = MaterialTheme.typography.bodyLarge)
+                Text(effort.summary(displayUnit, lifterUnit), style = MaterialTheme.typography.bodyLarge)
                 if (index == 0 && set.type != SetType.WORKING) {
                     Text(
                         text = stringResource(set.type.label),
@@ -1097,13 +1116,27 @@ private fun WhichDayDialog(
 
 /** What one effort reads as: what it recorded, written the way the lifter entered it. */
 @Composable
-private fun Effort.summary(displayUnit: WeightUnit): String = when (val done = performance) {
-    is Performance.WeightAndReps -> stringResource(
-        R.string.set_summary,
-        done.weight.asTextIn(displayUnit),
-        stringResource(displayUnit.label),
-        done.reps,
-    )
+private fun Effort.summary(displayUnit: WeightUnit, lifterUnit: WeightUnit): String =
+    when (val done = performance) {
+        // A weight is read in the machine's unit and a distance in the lifter's own: the gym's lb
+        // lat pulldown carries its label whoever walks up to it, while five kilometres is five
+        // kilometres to somebody who thinks in kilograms.
+        is Performance.WeightAndReps -> stringResource(
+            R.string.set_summary,
+            done.weight.asTextIn(displayUnit),
+            stringResource(displayUnit.label),
+            done.reps,
+        )
 
-    is Performance.Timed -> done.duration.asTimeText()
-}
+        is Performance.Timed -> done.duration.asTimeText()
+
+        is Performance.DistanceAndTime -> {
+            val distanceUnit = DistanceUnit.alongside(lifterUnit)
+            stringResource(
+                R.string.set_distance_summary,
+                done.distance.asTextIn(distanceUnit),
+                stringResource(distanceUnit.label),
+                done.duration.asTimeText(),
+            )
+        }
+    }

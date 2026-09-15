@@ -11,8 +11,8 @@ import java.time.Duration
  * best, a graph. Separate types rather than a row of nullable weight, reps and duration, so that an
  * effort recording nothing at all cannot be built and nothing downstream has to check.
  *
- * The shapes the remaining logging types need — added weight, assistance, distance — arrive with
- * their own tickets and belong here beside these two.
+ * The shapes the remaining logging types need — added weight and assistance — arrive with their own
+ * ticket and belong here beside these three.
  */
 sealed interface Performance {
 
@@ -26,6 +26,14 @@ sealed interface Performance {
      * about an exercise it is not being performed on.
      */
     data class Timed(val duration: Duration) : Performance
+
+    /**
+     * One effort that covered ground — a treadmill, a rower, a run.
+     *
+     * Both halves together, because either alone is not the effort: five kilometres says nothing
+     * about how hard it was and twenty-eight minutes says nothing about how far it went.
+     */
+    data class DistanceAndTime(val distance: Metres, val duration: Duration) : Performance
 }
 
 /**
@@ -37,8 +45,28 @@ sealed interface Performance {
  * A reader that must handle every shape should match on the type instead, and be told by the
  * compiler when a new one arrives.
  */
-val Performance.weightOrNull: Kilograms? get() = (this as? Performance.WeightAndReps)?.weight
+val Performance.weightOrNull: Kilograms?
+    get() = when (this) {
+        is Performance.WeightAndReps -> weight
+        is Performance.Timed, is Performance.DistanceAndTime -> null
+    }
 
-val Performance.repsOrNull: Int? get() = (this as? Performance.WeightAndReps)?.reps
+val Performance.repsOrNull: Int?
+    get() = when (this) {
+        is Performance.WeightAndReps -> reps
+        is Performance.Timed, is Performance.DistanceAndTime -> null
+    }
 
-val Performance.durationOrNull: Duration? get() = (this as? Performance.Timed)?.duration
+/** How long this took, off either shape that is measured in time. */
+val Performance.durationOrNull: Duration?
+    get() = when (this) {
+        is Performance.Timed -> duration
+        is Performance.DistanceAndTime -> duration
+        is Performance.WeightAndReps -> null
+    }
+
+val Performance.distanceOrNull: Metres?
+    get() = when (this) {
+        is Performance.DistanceAndTime -> distance
+        is Performance.WeightAndReps, is Performance.Timed -> null
+    }

@@ -558,6 +558,56 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToSetsThatRecordHowFarTheyWentWithNothingAlreadyLoggedClaimingADistance() {
+        helper.createDatabase(THIRTEENTH_DATABASE, 13).use { version13 ->
+            version13.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source, " +
+                    "tombstoned) VALUES ('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', " +
+                    "'compound', 'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream', 0)",
+            )
+            version13.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            version13.execSQL(
+                "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            version13.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps) " +
+                    "VALUES (1, 1, 'working', 60.0, 5)",
+            )
+        }
+
+        val version14 = helper.runMigrationsAndValidate(THIRTEENTH_DATABASE, 14, true, MIGRATION_13_14)
+
+        version14.use { db ->
+            // The lift is untouched and covered no ground, which is the truth about every set
+            // logged when there was nowhere to record a distance.
+            db.query("SELECT weight_kg, reps, distance_m FROM set_entry").use {
+                it.moveToFirst()
+                assertEquals(60.0, it.getDouble(0), 0.0)
+                assertEquals(5, it.getInt(1))
+                assertTrue(it.isNull(2))
+            }
+            // And a run can now be written: how far, how long, and no weight at all.
+            db.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, duration_seconds, " +
+                    "distance_m) VALUES (1, 2, 'working', 1680, 5000.0)",
+            )
+            db.query(
+                "SELECT distance_m, duration_seconds, weight_kg FROM set_entry WHERE set_index = 2",
+            ).use {
+                it.moveToFirst()
+                assertEquals(5000.0, it.getDouble(0), 0.0)
+                assertEquals(1680, it.getInt(1))
+                assertTrue(it.isNull(2))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -571,5 +621,6 @@ class GymDatabaseMigrationTest {
         const val TENTH_DATABASE = "gym-migration-test-10.db"
         const val ELEVENTH_DATABASE = "gym-migration-test-11.db"
         const val TWELFTH_DATABASE = "gym-migration-test-12.db"
+        const val THIRTEENTH_DATABASE = "gym-migration-test-13.db"
     }
 }

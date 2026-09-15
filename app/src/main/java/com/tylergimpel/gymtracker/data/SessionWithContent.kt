@@ -4,6 +4,7 @@ import androidx.room.Embedded
 import androidx.room.Relation
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.Metres
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionExercise
@@ -120,7 +121,10 @@ private fun SetEntryWithDrops.toEffort() = Effort(
  * of arriving somewhere further away as a weight of zero.
  */
 private fun SetEntryEntity.toPerformance(): Performance = when {
+    durationSeconds != null && distanceM != null ->
+        Performance.DistanceAndTime(Metres(distanceM), Duration.ofSeconds(durationSeconds.toLong()))
+
     durationSeconds != null -> Performance.Timed(Duration.ofSeconds(durationSeconds.toLong()))
     weightKg != null && reps != null -> Performance.WeightAndReps(Kilograms(weightKg), reps)
-    else -> error("Set entry $id records neither a weight and reps nor a duration")
+    else -> error("Set entry $id records no shape at all: no duration, and no weight and reps")
 }

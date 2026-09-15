@@ -17,6 +17,7 @@ enum class LoggingType(
     val recordsWeight: Boolean,
     val recordsReps: Boolean,
     val recordsDuration: Boolean,
+    val recordsDistance: Boolean = false,
 ) {
     WEIGHT_REPS("weight_reps", recordsWeight = true, recordsReps = true, recordsDuration = false),
 
@@ -28,10 +29,13 @@ enum class LoggingType(
 
     TIME("time", recordsWeight = false, recordsReps = false, recordsDuration = true),
 
-    // Deliberately unchanged until distance arrives with its own ticket. Recording the time half
-    // alone would write rows indistinguishable from a hold, and the ticket that adds distance would
-    // have no way to tell a thirty-minute run from a thirty-minute plank after the fact.
-    DISTANCE_TIME("distance_time", recordsWeight = true, recordsReps = true, recordsDuration = false),
+    DISTANCE_TIME(
+        "distance_time",
+        recordsWeight = false,
+        recordsReps = false,
+        recordsDuration = true,
+        recordsDistance = true,
+    ),
     ;
 
     companion object {

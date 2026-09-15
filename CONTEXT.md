@@ -69,6 +69,8 @@ _Avoid_: unit on its own as a name for it, which reads as something the weight i
 **Preferred unit**:
 The unit this lifter reads weights in — theirs rather than any machine's, and the one thing on this list that is about the person. Seeded from the device's locale, settled the moment they tap kg or lb, and from then on theirs: a phone that changes locale does not re-read their history in a unit they did not ask for. Everything reads in it until something more specific says otherwise — an exercise with a **Display unit** of its own, or a single set overriding that.
 
+It answers for distance too. A lifter reading pounds runs in miles, so nothing stores a distance unit anywhere: kilometres travel with kilograms and miles with pounds, and the two cannot fall out of step because there is only one of them.
+
 **Stack number**:
 What a machine's selector plate is labelled with. Treated as its own gym-local scale and converted against nothing: pulley ratios differ between manufacturers and are not labelled, so 60 on one machine is not 60 on another and no arithmetic can make it so.
 
@@ -113,7 +115,9 @@ One unit of work against an exercise, identified by its position within that exe
 What was done in one go within a set, and the row that stores it. A set has one, or one per side when a unilateral exercise is expanded. What progression reads is the first effort, never a drop.
 
 **Performance**:
-What an effort amounted to — whatever its exercise's **Logging type** records. A weight and a rep count for a bench press; a length of time for a hold. Held as one of a closed set of shapes rather than as a weight, a rep count and a duration that may each be missing, so that an effort recording nothing cannot exist and no reader has to decide what a weight of zero meant. A **Drop** is a continuation at reduced weight, so an effort with no weight has none.
+What an effort amounted to — whatever its exercise's **Logging type** records. A weight and a rep count for a bench press; a length of time for a hold; how far and how long for a treadmill. Held as one of a closed set of shapes rather than as a weight, a rep count, a duration and a distance that may each be missing, so that an effort recording nothing cannot exist and no reader has to decide what a weight of zero meant. A **Drop** is a continuation at reduced weight, so an effort with no weight has none.
+
+A distance is stored in canonical metres for the reason a weight is stored in kilograms: a treadmill labelled in miles and a track measured in kilometres are the same running, and storing whichever the machine showed would put a step change in the history the week a lifter changed gyms.
 
 **Set type**:
 What a set is for — one of `warmup`, `working`, `calibration`, `backoff`, `amrap`. Determines whether the set counts toward training volume.

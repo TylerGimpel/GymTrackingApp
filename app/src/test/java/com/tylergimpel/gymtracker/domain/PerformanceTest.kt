@@ -44,6 +44,30 @@ class PerformanceTest {
     }
 
     @Test
+    fun `a distance-and-time effort is how far and how long, and no weight at all`() {
+        val performance = Performance.DistanceAndTime(Metres(5000.0), Duration.ofMinutes(28))
+
+        assertEquals(5000.0, performance.distance.value, 0.0)
+        assertEquals(Duration.ofMinutes(28), performance.duration)
+        assertNull(performance.weightOrNull)
+        assertNull(performance.repsOrNull)
+    }
+
+    @Test
+    fun `a duration is read off either shape that records one`() {
+        // What a rest timer and a history screen ask for, without caring which of the two it is.
+        assertEquals(
+            Duration.ofSeconds(90),
+            Performance.Timed(Duration.ofSeconds(90)).durationOrNull,
+        )
+        assertEquals(
+            Duration.ofMinutes(28),
+            Performance.DistanceAndTime(Metres(5000.0), Duration.ofMinutes(28)).durationOrNull,
+        )
+        assertNull(Performance.WeightAndReps(Kilograms(60.0), 5).durationOrNull)
+    }
+
+    @Test
     fun `a logging type says what it records, so no screen has to decide for it`() {
         assertTrue(LoggingType.WEIGHT_REPS.recordsWeight)
         assertTrue(LoggingType.WEIGHT_REPS.recordsReps)
@@ -67,15 +91,23 @@ class PerformanceTest {
     }
 
     @Test
+    fun `a distance-and-time exercise records how far and how long, and nothing else`() {
+        assertTrue(LoggingType.DISTANCE_TIME.recordsDistance)
+        assertTrue(LoggingType.DISTANCE_TIME.recordsDuration)
+        assertFalse(LoggingType.DISTANCE_TIME.recordsWeight)
+        assertFalse(LoggingType.DISTANCE_TIME.recordsReps)
+        // A hold is timed and goes nowhere.
+        assertFalse(LoggingType.TIME.recordsDistance)
+    }
+
+    @Test
     fun `the types whose own shape has not arrived yet still record a weight and reps`() {
-        // Added weight, assistance and distance each arrive with their own ticket. Until then these
-        // record what they always have, so nothing a lifter has already logged changes meaning and
-        // no half-shape is written that a later ticket cannot tell apart from a hold.
-        listOf(LoggingType.BODYWEIGHT_REPS, LoggingType.ASSISTED, LoggingType.DISTANCE_TIME)
-            .forEach { type ->
-                assertTrue("$type", type.recordsWeight && type.recordsReps)
-                assertFalse("$type", type.recordsDuration)
-            }
+        // Added weight and assistance arrive with their own ticket. Until then these record what
+        // they always have, so nothing a lifter has already logged changes meaning.
+        listOf(LoggingType.BODYWEIGHT_REPS, LoggingType.ASSISTED).forEach { type ->
+            assertTrue("$type", type.recordsWeight && type.recordsReps)
+            assertFalse("$type", type.recordsDuration)
+        }
     }
 
     @Test

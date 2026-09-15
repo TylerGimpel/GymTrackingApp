@@ -358,6 +358,20 @@ internal val MIGRATION_12_13 = object : Migration(12, 13) {
     }
 }
 
+/**
+ * Version 14 lets a set record how far it went.
+ *
+ * A plain column rather than a rebuild: `distance_m` is nullable, so every set already logged
+ * answers "no distance", which is the truth about all of them — nothing before this could record
+ * one. What a lifter reads a distance in is not stored, here or anywhere: it follows the unit their
+ * weights are read in, so there is nothing to migrate and nothing that can fall out of step.
+ */
+internal val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `distance_m` REAL")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -371,6 +385,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_10_11,
     MIGRATION_11_12,
     MIGRATION_12_13,
+    MIGRATION_13_14,
 )
 
 /**

@@ -10,9 +10,12 @@ import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.SessionRepository
 import com.tylergimpel.gymtracker.data.profileRepository
+import com.tylergimpel.gymtracker.domain.DistanceUnit
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggedSession
+import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -22,6 +25,7 @@ import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
+import com.tylergimpel.gymtracker.domain.distanceOrNull
 import com.tylergimpel.gymtracker.domain.durationOrNull
 import com.tylergimpel.gymtracker.domain.repsOrNull
 import com.tylergimpel.gymtracker.domain.weightOrNull
@@ -97,6 +101,13 @@ private data class ScreenState(
 )
 
 data class SessionUiState(
+    /**
+     * What this lifter reads in — their **Preferred unit**, not any machine's label.
+     *
+     * On the state rather than fetched where it is needed, because a distance and a weight shown
+     * side by side must be read in one system: kilometres with kilograms, miles with pounds.
+     */
+    val lifterUnit: WeightUnit = WeightUnit.DEFAULT,
     val session: Session? = null,
     val exercises: List<SessionExercise> = emptyList(),
     /**
@@ -184,19 +195,24 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             repository.observeLastFinished(),
             routines.observeProgress(),
             screen,
-        ) { logged, lastFinished, routine, screen ->
+            profile.observeDisplayUnit(),
+        ) { logged, lastFinished, routine, screen, lifterUnit ->
             SessionUiState(
+                lifterUnit = lifterUnit,
                 session = logged?.session,
                 unperformed = logged?.unperformed.orEmpty(),
                 lastFinished = lastFinished,
                 exercises = logged?.exercises.orEmpty(),
                 positions = logged?.positions.orEmpty(),
                 selected = screen.selected,
-                draft = screen.draft,
+                // The lifter's own unit is applied on the way out rather than copied into the draft
+                // when it is made, so a distance field cannot be left reading in the unit they had
+                // before they changed it.
+                draft = screen.draft.copy(lifterUnit = lifterUnit),
                 perSide = screen.perSide,
                 overridingDisplayUnit = screen.overridingDisplayUnit,
-                rightDraft = screen.rightDraft,
-                editing = screen.editing,
+                rightDraft = screen.rightDraft.copy(lifterUnit = lifterUnit),
+                editing = screen.editing?.let { it.copy(draft = it.draft.copy(lifterUnit = lifterUnit)) },
                 addingDrop = screen.addingDrop,
                 routine = routine,
                 finishing = screen.finishing,
@@ -295,7 +311,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun logSet() {
-        val current = screen.value
+        val current = state.value
         val exercise = current.selected ?: return
         viewModelScope.launch {
             val recorded = if (current.perSide) {
@@ -322,18 +338,25 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     fun startEditing(performed: SessionExercise, set: PerformedSet, effort: Effort) = screen.update {
         val displayUnit = performed.displayUnitFor(set)
+        val lifterUnit = state.value.lifterUnit
         it.copy(
             editing = EditingEffort(
                 effortId = effort.id,
                 sessionExerciseId = performed.id,
                 setIndex = set.setIndex,
                 draft = SetDraft(
-                    loggingType = performed.exercise.loggingType,
+                    // What the row recorded rather than what its exercise records today: an
+                    // exercise retagged since it was logged would otherwise open its old sets with
+                    // every field blank and no way to correct them in place.
+                    loggingType = effort.performance.correctedAs(performed.exercise.loggingType),
                     // Seeded in the unit the set is shown in, so opening one for correction does
                     // not change the number the lifter was reading a moment ago.
                     weightText = effort.performance.weightOrNull?.asTextIn(displayUnit).orEmpty(),
                     repsText = effort.performance.repsOrNull?.toString().orEmpty(),
                     durationText = effort.performance.durationOrNull?.seconds?.toString().orEmpty(),
+                    distanceText = effort.performance.distanceOrNull
+                        ?.asTextIn(DistanceUnit.alongside(lifterUnit)).orEmpty(),
+                    lifterUnit = lifterUnit,
                     note = effort.note,
                     type = set.type,
                     displayUnit = displayUnit,
@@ -349,7 +372,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun cancelEditing() = screen.update { it.copy(editing = null) }
 
     fun saveEditing() {
-        val open = screen.value.editing ?: return
+        val open = state.value.editing ?: return
         viewModelScope.launch {
             repository.editSet(open.effortId, open.draft, open.exerciseUnit)
             screen.update { it.copy(editing = null) }
@@ -376,7 +399,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun cancelAddingDrop() = screen.update { it.copy(addingDrop = null) }
 
     fun saveDrop() {
-        val open = screen.value.addingDrop ?: return
+        val open = state.value.addingDrop ?: return
         val weight = open.draft.weight ?: return
         val reps = open.draft.reps ?: return
         viewModelScope.launch {
@@ -550,6 +573,20 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
         }
+    }
+
+    /**
+     * The logging type whose fields can restate this performance.
+     *
+     * [recorded] is preferred where it already matches, so that correcting a pull-up stays a
+     * pull-up rather than becoming a plain weight-and-reps set.
+     */
+    private fun Performance.correctedAs(recorded: LoggingType): LoggingType = when (this) {
+        is Performance.WeightAndReps ->
+            recorded.takeIf { it.recordsWeight && it.recordsReps } ?: LoggingType.WEIGHT_REPS
+
+        is Performance.Timed -> LoggingType.TIME
+        is Performance.DistanceAndTime -> LoggingType.DISTANCE_TIME
     }
 
     private companion object {

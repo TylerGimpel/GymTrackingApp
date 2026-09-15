@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.Metres
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionPosition
@@ -754,6 +755,100 @@ class SessionPersistenceTest {
         assertEquals(listOf<Int?>(null), storedDurations())
     }
 
+    @Test
+    fun aDistanceAndTimeSetRecordsHowFarAndHowLong() = runBlocking {
+        repository.logSet(
+            TREADMILL,
+            SetDraft(durationText = "1680", distanceText = "5", loggingType = LoggingType.DISTANCE_TIME),
+        )
+
+        val effort = currentSession().exercises.single().sets.single().leadingEffort
+        assertEquals(
+            Performance.DistanceAndTime(Metres(5000.0), Duration.ofMinutes(28)),
+            effort.performance,
+        )
+        // A run is not a lift: there is no weight here and no rep count.
+        assertNull(effort.performance.weightOrNull)
+        assertNull(effort.performance.repsOrNull)
+    }
+
+    @Test
+    fun aDistanceIsStoredInMetresWhateverItWasReadIn() = runBlocking {
+        // Entered by a lifter reading pounds, so the field was miles. What is stored is the ground
+        // covered, which is the same ground whichever machine reported it.
+        repository.logSet(
+            TREADMILL,
+            SetDraft(
+                durationText = "1680",
+                distanceText = "3.1",
+                lifterUnit = WeightUnit.POUNDS,
+                loggingType = LoggingType.DISTANCE_TIME,
+            ),
+        )
+
+        assertEquals(4988.97, storedDistances().single()!!, 0.01)
+    }
+
+    @Test
+    fun aDistanceAndTimeSetIsOneSetTowardVolumeLikeAnyOther() = runBlocking {
+        repository.logSet(
+            TREADMILL,
+            SetDraft(durationText = "1680", distanceText = "5", loggingType = LoggingType.DISTANCE_TIME),
+        )
+
+        assertEquals(1, currentSession().exercises.single().sets.size)
+    }
+
+    @Test
+    fun aDistanceAndTimeSetIsCorrectedAndDeletedLikeAnyOther() = runBlocking {
+        repository.logSet(
+            TREADMILL,
+            SetDraft(durationText = "1680", distanceText = "5", loggingType = LoggingType.DISTANCE_TIME),
+        )
+        val logged = currentSession().exercises.single()
+
+        repository.editSet(
+            logged.sets.single().leadingEffort.id,
+            SetDraft(durationText = "1800", distanceText = "5.5", loggingType = LoggingType.DISTANCE_TIME),
+        )
+
+        assertEquals(
+            Performance.DistanceAndTime(Metres(5500.0), Duration.ofMinutes(30)),
+            currentSession().exercises.single().sets.single().leadingEffort.performance,
+        )
+
+        repository.deleteSet(logged.id, logged.sets.single().setIndex)
+        assertEquals(emptyList<PerformedSet>(), currentSession().exercises.single().sets)
+    }
+
+    @Test
+    fun correctingARunToAHoldLeavesNoDistanceBehind() = runBlocking {
+        repository.logSet(
+            TREADMILL,
+            SetDraft(durationText = "1680", distanceText = "5", loggingType = LoggingType.DISTANCE_TIME),
+        )
+        val effortId = currentSession().exercises.single().sets.single().leadingEffort.id
+
+        repository.editSet(effortId, SetDraft(durationText = "60", loggingType = LoggingType.TIME))
+
+        assertEquals(
+            Performance.Timed(Duration.ofSeconds(60)),
+            currentSession().exercises.single().sets.single().leadingEffort.performance,
+        )
+        assertEquals(listOf<Double?>(null), storedDistances())
+    }
+
+    private fun storedDistances(): List<Double?> =
+        database.openHelper.readableDatabase
+            .query("SELECT distance_m FROM set_entry ORDER BY id")
+            .use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(if (cursor.isNull(0)) null else cursor.getDouble(0))
+                    }
+                }
+            }
+
     private fun storedDurations(): List<Int?> =
         database.openHelper.readableDatabase
             .query("SELECT duration_seconds FROM set_entry ORDER BY id")
@@ -805,6 +900,7 @@ class SessionPersistenceTest {
         const val TEST_DATABASE = "session-persistence-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val HAMSTRING_STRETCH = "90_90_Hamstring"
+        const val TREADMILL = "Jogging_Treadmill"
         const val SQUAT = "Barbell_Squat"
         const val CURL = "Barbell_Curl"
         const val ROW = "Seated_Cable_Rows"

@@ -24,8 +24,19 @@ data class SetDraft(
      * from it — the machine in the corner labelled in pounds among a gym of kilogram ones.
      */
     val displayUnit: WeightUnit = WeightUnit.DEFAULT,
+    /**
+     * What the lifter themselves reads in — their **Preferred unit**, not this machine's label.
+     *
+     * Only a distance is read in it. The two are different questions: the gym's lb lat pulldown is
+     * labelled in pounds whoever walks up to it, while a distance belongs to the person reading it,
+     * and a treadmill somebody once set to pounds must not start reporting miles to a lifter who
+     * thinks in kilometres.
+     */
+    val lifterUnit: WeightUnit = WeightUnit.DEFAULT,
     /** Seconds held, for an exercise measured in time rather than loaded with a weight. */
     val durationText: String = "",
+    /** How far, for an exercise that covers ground. Read in [distanceUnit]. */
+    val distanceText: String = "",
     /**
      * What the exercise being logged records, which decides what this draft must hold before it is
      * a set and which fields the screen shows.
@@ -41,6 +52,19 @@ data class SetDraft(
     /** The reps entered, or null until they read as a whole positive count. */
     val reps: Int?
         get() = repsText.trim().toIntOrNull()?.takeIf { it > 0 }
+
+    /**
+     * What a distance typed here is read in.
+     *
+     * Derived from [lifterUnit] rather than chosen separately, so the two cannot come apart: a
+     * lifter reading pounds runs in miles. Nothing stores it, because there is nothing to store
+     * that the **Preferred unit** does not already answer.
+     */
+    val distanceUnit: DistanceUnit get() = DistanceUnit.alongside(lifterUnit)
+
+    /** How far entered, or null while it is blank, unreadable, or nowhere at all. */
+    val distance: Metres?
+        get() = distanceText.asEnteredAmount()?.takeIf { it > 0.0 }?.let(distanceUnit::toMetres)
 
     /**
      * The time held, or null until it reads as one. Nobody held a plank for no time at all.
@@ -61,6 +85,9 @@ data class SetDraft(
      */
     val performance: Performance?
         get() = when {
+            loggingType.recordsDistance && loggingType.recordsDuration ->
+                distance?.let { distance -> duration?.let { Performance.DistanceAndTime(distance, it) } }
+
             loggingType.recordsDuration -> duration?.let(Performance::Timed)
 
             loggingType.recordsWeight && loggingType.recordsReps ->
@@ -95,7 +122,7 @@ data class SetDraft(
      * rather than inert until it is.
      */
     fun stepWeight(steps: Int): SetDraft =
-        copy(weightText = displayUnit.stepped(amount ?: 0.0, steps).asWeightText())
+        copy(weightText = displayUnit.stepped(amount ?: 0.0, steps).asAmountText())
 
     /**
      * The number typed, read in [displayUnit] and before it is turned into a weight.

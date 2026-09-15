@@ -65,9 +65,18 @@ data class SetEntryEntity(
     @ColumnInfo(name = "reps")
     val reps: Int? = null,
 
-    /** Seconds held, for a set measured in time. Null for one measured in weight and reps. */
+    /** Seconds held or run, for a set measured in time. Null for one measured in weight and reps. */
     @ColumnInfo(name = "duration_seconds")
     val durationSeconds: Int? = null,
+
+    /**
+     * Canonical metres, always — the same rule the weight follows.
+     *
+     * A treadmill labelled in miles and a track measured in kilometres are the same running, so
+     * what a lifter reads it in never reaches storage. Null for a set that covered no ground.
+     */
+    @ColumnInfo(name = "distance_m")
+    val distanceM: Double? = null,
 
     @ColumnInfo(name = "note")
     val note: String?,
@@ -117,11 +126,20 @@ fun SetEntryEntity.recording(performance: Performance): SetEntryEntity = when (p
         weightKg = performance.weight.value,
         reps = performance.reps,
         durationSeconds = null,
+        distanceM = null,
     )
 
     is Performance.Timed -> copy(
         weightKg = null,
         reps = null,
         durationSeconds = performance.duration.seconds.toInt(),
+        distanceM = null,
+    )
+
+    is Performance.DistanceAndTime -> copy(
+        weightKg = null,
+        reps = null,
+        durationSeconds = performance.duration.seconds.toInt(),
+        distanceM = performance.distance.value,
     )
 }

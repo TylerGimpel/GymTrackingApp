@@ -178,4 +178,65 @@ class SetDraftTest {
     fun `a draft records weight and reps until it is told which exercise it is for`() {
         assertEquals(LoggingType.WEIGHT_REPS, SetDraft().loggingType)
     }
+
+    @Test
+    fun `a distance-and-time set needs both halves`() {
+        val draft = SetDraft(
+            loggingType = LoggingType.DISTANCE_TIME,
+            durationText = "1680",
+            distanceText = "5",
+        )
+
+        assertTrue(draft.isLoggable)
+        assertEquals(
+            Performance.DistanceAndTime(Metres(5000.0), Duration.ofMinutes(28)),
+            draft.performance,
+        )
+        assertNull(SetDraft(loggingType = LoggingType.DISTANCE_TIME, distanceText = "5").performance)
+        assertNull(SetDraft(loggingType = LoggingType.DISTANCE_TIME, durationText = "1680").performance)
+    }
+
+    @Test
+    fun `a lifter who reads pounds runs in miles`() {
+        val draft = SetDraft(
+            loggingType = LoggingType.DISTANCE_TIME,
+            durationText = "1680",
+            distanceText = "3.1",
+            lifterUnit = WeightUnit.POUNDS,
+        )
+
+        // One setting, so there is no second one to keep in step with it.
+        assertEquals(DistanceUnit.MILES, draft.distanceUnit)
+        assertEquals(4988.9664, (draft.performance as Performance.DistanceAndTime).distance.value, 1e-6)
+    }
+
+    @Test
+    fun `a machine labelled in pounds does not decide what a distance is read in`() {
+        // The two units answer different questions. A treadmill somebody once set to pounds — which
+        // it could be, because this exercise showed a weight field before it recorded distance —
+        // must not start reporting miles to a lifter who thinks in kilometres.
+        val draft = SetDraft(
+            loggingType = LoggingType.DISTANCE_TIME,
+            durationText = "1680",
+            distanceText = "5",
+            displayUnit = WeightUnit.POUNDS,
+            lifterUnit = WeightUnit.KILOGRAMS,
+        )
+
+        assertEquals(DistanceUnit.KILOMETRES, draft.distanceUnit)
+        assertEquals(5000.0, (draft.performance as Performance.DistanceAndTime).distance.value, 0.0)
+    }
+
+    @Test
+    fun `a distance that is not a number is not a distance`() {
+        assertNull(
+            SetDraft(loggingType = LoggingType.DISTANCE_TIME, durationText = "600", distanceText = "far")
+                .performance,
+        )
+        // Nobody ran nowhere.
+        assertNull(
+            SetDraft(loggingType = LoggingType.DISTANCE_TIME, durationText = "600", distanceText = "0")
+                .performance,
+        )
+    }
 }
