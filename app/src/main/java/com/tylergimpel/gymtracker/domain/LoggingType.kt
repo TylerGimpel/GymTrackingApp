@@ -6,12 +6,32 @@ package com.tylergimpel.gymtracker.domain
  * [ASSISTED] inverts progression: less weight means more progress, so every comparison built on it
  * — beat, missed, personal best, graph direction — flips.
  */
-enum class LoggingType(val stored: String) {
-    WEIGHT_REPS("weight_reps"),
-    BODYWEIGHT_REPS("bodyweight_reps"),
-    ASSISTED("assisted"),
-    TIME("time"),
-    DISTANCE_TIME("distance_time"),
+enum class LoggingType(
+    val stored: String,
+    /**
+     * What a set of this type records.
+     *
+     * Held here so that a screen asks the type what to show rather than deciding for it, and so
+     * that adding a type is one line here instead of a hunt for every `when` that forgot it.
+     */
+    val recordsWeight: Boolean,
+    val recordsReps: Boolean,
+    val recordsDuration: Boolean,
+) {
+    WEIGHT_REPS("weight_reps", recordsWeight = true, recordsReps = true, recordsDuration = false),
+
+    // These two record a weight that is the belt or the machine's assistance rather than the load.
+    // Giving that weight its own meaning is its own ticket; until then the field it is typed into
+    // is the only place a lifter has to put it, so it stays.
+    BODYWEIGHT_REPS("bodyweight_reps", recordsWeight = true, recordsReps = true, recordsDuration = false),
+    ASSISTED("assisted", recordsWeight = true, recordsReps = true, recordsDuration = false),
+
+    TIME("time", recordsWeight = false, recordsReps = false, recordsDuration = true),
+
+    // Deliberately unchanged until distance arrives with its own ticket. Recording the time half
+    // alone would write rows indistinguishable from a hold, and the ticket that adds distance would
+    // have no way to tell a thirty-minute run from a thirty-minute plank after the fact.
+    DISTANCE_TIME("distance_time", recordsWeight = true, recordsReps = true, recordsDuration = false),
     ;
 
     companion object {

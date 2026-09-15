@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.Duration
+
 /**
  * A set part-way through being entered: what the screen currently holds, and what it means.
  *
@@ -22,6 +24,16 @@ data class SetDraft(
      * from it — the machine in the corner labelled in pounds among a gym of kilogram ones.
      */
     val displayUnit: WeightUnit = WeightUnit.DEFAULT,
+    /** Seconds held, for an exercise measured in time rather than loaded with a weight. */
+    val durationText: String = "",
+    /**
+     * What the exercise being logged records, which decides what this draft must hold before it is
+     * a set and which fields the screen shows.
+     *
+     * Last, and defaulted, because weight and reps is what all but a handful of exercises record —
+     * a draft says which exercise it is for only when that is not the answer.
+     */
+    val loggingType: LoggingType = LoggingType.WEIGHT_REPS,
 ) {
     /** The weight entered, or null while it is blank or unreadable. Zero is a real answer. */
     val weight: Kilograms? get() = amount?.let(displayUnit::toKilograms)
@@ -30,7 +42,37 @@ data class SetDraft(
     val reps: Int?
         get() = repsText.trim().toIntOrNull()?.takeIf { it > 0 }
 
-    val isLoggable: Boolean get() = weight != null && reps != null
+    /**
+     * The time held, or null until it reads as one. Nobody held a plank for no time at all.
+     *
+     * Read as an `Int` of seconds rather than a `Long`, because that is what the column holds: a
+     * number too large to store should refuse here, where the field is, rather than overflow
+     * quietly on the way into the database.
+     */
+    val duration: Duration?
+        get() = durationText.trim().toIntOrNull()?.takeIf { it > 0 }
+            ?.let { Duration.ofSeconds(it.toLong()) }
+
+    /**
+     * What this draft would record, or null while it does not yet amount to a set.
+     *
+     * Reads only the fields its [loggingType] records: a weight left over from the previous
+     * exercise cannot follow the lifter onto a plank and be written down as something they lifted.
+     */
+    val performance: Performance?
+        get() = when {
+            loggingType.recordsDuration -> duration?.let(Performance::Timed)
+
+            loggingType.recordsWeight && loggingType.recordsReps ->
+                weight?.let { weight -> reps?.let { Performance.WeightAndReps(weight, it) } }
+
+            // A type whose shape has no home here yet records nothing rather than being filed as
+            // the nearest thing that fits. Silently writing a weight for an exercise that does not
+            // record one is how a meaningless number ends up in a progression graph.
+            else -> null
+        }
+
+    val isLoggable: Boolean get() = performance != null
 
     /**
      * The same set read in [to]: the number is rewritten, what it weighs is not.

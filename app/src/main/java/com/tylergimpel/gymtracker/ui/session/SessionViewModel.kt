@@ -22,6 +22,9 @@ import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
+import com.tylergimpel.gymtracker.domain.durationOrNull
+import com.tylergimpel.gymtracker.domain.repsOrNull
+import com.tylergimpel.gymtracker.domain.weightOrNull
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -213,13 +216,21 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         it.copy(
             selected = exercise,
             // The drafts start in the unit this exercise is read in, which is the point of
-            // remembering it: walking up to the pound machine needs no setting up first.
-            draft = SetDraft(displayUnit = exercise.displayUnit),
+            // remembering it: walking up to the pound machine needs no setting up first — and
+            // recording what this exercise records, so a plank asks for seconds rather than a
+            // weight nobody put on it.
+            draft = SetDraft(
+                loggingType = exercise.loggingType,
+                displayUnit = exercise.displayUnit,
+            ),
             perSide = false,
             // Departing is a property of the machine in front of the lifter, so it does not
             // follow them to the next exercise any more than per-side entry does.
             overridingDisplayUnit = false,
-            rightDraft = SetDraft(displayUnit = exercise.displayUnit),
+            rightDraft = SetDraft(
+                loggingType = exercise.loggingType,
+                displayUnit = exercise.displayUnit,
+            ),
         )
     }
 
@@ -317,10 +328,12 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 sessionExerciseId = performed.id,
                 setIndex = set.setIndex,
                 draft = SetDraft(
+                    loggingType = performed.exercise.loggingType,
                     // Seeded in the unit the set is shown in, so opening one for correction does
                     // not change the number the lifter was reading a moment ago.
-                    weightText = effort.weight.asTextIn(displayUnit),
-                    repsText = effort.reps.toString(),
+                    weightText = effort.performance.weightOrNull?.asTextIn(displayUnit).orEmpty(),
+                    repsText = effort.performance.repsOrNull?.toString().orEmpty(),
+                    durationText = effort.performance.durationOrNull?.seconds?.toString().orEmpty(),
                     note = effort.note,
                     type = set.type,
                     displayUnit = displayUnit,

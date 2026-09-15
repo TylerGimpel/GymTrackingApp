@@ -62,11 +62,11 @@ class DisplayUnitTest {
         // a lifter who moves to the pound machine has not lifted a different amount last Tuesday.
         assertEquals(
             listOf(100.0, 102.5, 105.0),
-            inPounds.sets.map { it.leadingEffort.weight.value },
+            inPounds.sets.map { it.leadingEffort.performance.weightOrNull!!.value },
         )
         assertEquals(
             listOf(220.46, 225.97, 231.49),
-            inPounds.sets.map { WeightUnit.POUNDS.fromKilograms(it.leadingEffort.weight) },
+            inPounds.sets.map { WeightUnit.POUNDS.fromKilograms(it.leadingEffort.performance.weightOrNull!!) },
         )
     }
 
@@ -109,8 +109,7 @@ class DisplayUnitTest {
                     Effort(
                         id = position + 1L,
                         side = null,
-                        weight = weight,
-                        reps = 5,
+                        performance = Performance.WeightAndReps(weight, reps = 5),
                         note = null,
                     ),
                 ),

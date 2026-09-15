@@ -138,7 +138,12 @@ class SupersetTest {
                 setIndex = it,
                 type = SetType.WORKING,
                 efforts = listOf(
-                    Effort(id = it.toLong(), side = null, weight = Kilograms(60.0), reps = 5, note = null),
+                    Effort(
+                        id = it.toLong(),
+                        side = null,
+                        performance = Performance.WeightAndReps(Kilograms(60.0), 5),
+                        note = null,
+                    ),
                 ),
             )
         },

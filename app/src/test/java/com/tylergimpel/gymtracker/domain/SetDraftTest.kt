@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Duration
 
 /**
  * What the logging screen has typed so far, and what it means.
@@ -130,5 +131,51 @@ class SetDraftTest {
     @Test
     fun `a draft reads in kilograms until it is told otherwise`() {
         assertEquals(WeightUnit.DEFAULT, SetDraft().displayUnit)
+    }
+
+    @Test
+    fun `a timed set is loggable on a duration alone`() {
+        // A plank has no weight and no reps to wait for, so requiring them would make it
+        // unloggable — which is exactly what it is today.
+        val draft = SetDraft(loggingType = LoggingType.TIME, durationText = "90")
+
+        assertTrue(draft.isLoggable)
+        assertEquals(Performance.Timed(Duration.ofSeconds(90)), draft.performance)
+    }
+
+    @Test
+    fun `a timed set is not loggable until the duration reads as a length of time`() {
+        assertFalse(SetDraft(loggingType = LoggingType.TIME).isLoggable)
+        assertFalse(SetDraft(loggingType = LoggingType.TIME, durationText = "a while").isLoggable)
+        // Nobody held a plank for no time at all.
+        assertFalse(SetDraft(loggingType = LoggingType.TIME, durationText = "0").isLoggable)
+    }
+
+    @Test
+    fun `a weight typed against a timed exercise is not recorded`() {
+        // The controls do not offer a weight field for a plank, but a draft carried over from the
+        // previous exercise must not smuggle one into the set that is logged.
+        val draft = SetDraft(
+            loggingType = LoggingType.TIME,
+            weightText = "60",
+            repsText = "5",
+            durationText = "60",
+        )
+
+        assertEquals(Performance.Timed(Duration.ofSeconds(60)), draft.performance)
+    }
+
+    @Test
+    fun `a weight-and-reps set still needs both halves`() {
+        val draft = SetDraft(weightText = "60", repsText = "5")
+
+        assertEquals(Performance.WeightAndReps(Kilograms(60.0), 5), draft.performance)
+        assertNull(SetDraft(weightText = "60").performance)
+        assertNull(SetDraft(repsText = "5").performance)
+    }
+
+    @Test
+    fun `a draft records weight and reps until it is told which exercise it is for`() {
+        assertEquals(LoggingType.WEIGHT_REPS, SetDraft().loggingType)
     }
 }

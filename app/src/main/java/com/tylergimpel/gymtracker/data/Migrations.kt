@@ -322,6 +322,42 @@ internal val MIGRATION_11_12 = object : Migration(11, 12) {
     }
 }
 
+/**
+ * Version 13 lets a set record something other than a weight and a rep count.
+ *
+ * `weight_kg` and `reps` were `NOT NULL`, and a timed set has neither — a plank is a length of time
+ * and nothing else. SQLite cannot drop `NOT NULL` in place, so `set_entry` is rebuilt the way Room's
+ * own generated migrations do it: build the table as version 13 declares it, copy every row across,
+ * swap the names.
+ *
+ * **Every row keeps its id.** `drop_segment` points at `set_entry.id`, and a set is identified by
+ * its position within its exercise rather than by that id (ADR 0003) — so an id that moved would
+ * strand a drop against a set that no longer exists, silently, in history nobody is looking at.
+ *
+ * Nothing already logged changes meaning: every existing set had a weight and reps and still has
+ * them, and `duration_seconds` is null on all of them, which is the truth about sets logged when
+ * there was no way to record time.
+ */
+internal val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `_new_set_entry` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `session_exercise_id` INTEGER NOT NULL, `set_index` INTEGER NOT NULL, `type` TEXT NOT NULL DEFAULT 'working', `weight_kg` REAL, `reps` INTEGER, `duration_seconds` INTEGER, `note` TEXT, `side` TEXT, `display_unit` TEXT, FOREIGN KEY(`session_exercise_id`) REFERENCES `session_exercise`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "INSERT INTO `_new_set_entry` (`id`, `session_exercise_id`, `set_index`, `type`, " +
+                "`weight_kg`, `reps`, `note`, `side`, `display_unit`) " +
+                "SELECT `id`, `session_exercise_id`, `set_index`, `type`, `weight_kg`, `reps`, " +
+                "`note`, `side`, `display_unit` FROM `set_entry`",
+        )
+        db.execSQL("DROP TABLE `set_entry`")
+        db.execSQL("ALTER TABLE `_new_set_entry` RENAME TO `set_entry`")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_set_entry_session_exercise_id` ON `set_entry` (`session_exercise_id`)",
+        )
+        db.failIfReferencesBroke("set_entry")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -334,4 +370,23 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_9_10,
     MIGRATION_10_11,
     MIGRATION_11_12,
+    MIGRATION_12_13,
 )
+
+/**
+ * Fails the migration if [table] now holds a row pointing at something that is not there.
+ *
+ * `PRAGMA foreign_key_check` *returns* the offending rows rather than raising, so running it with
+ * `execSQL` — which discards what a statement returns — checks nothing at all. The rebuilds above
+ * predate this and are left as they are: they have shipped, and turning a silent inconsistency on
+ * an installed copy into a refusal to open the app is not a fix anyone asked for. New rebuilds use
+ * this, where the alternative is a drop hanging off a set that no longer exists, discovered months
+ * later in history nobody is looking at.
+ */
+private fun SupportSQLiteDatabase.failIfReferencesBroke(table: String) {
+    query("PRAGMA foreign_key_check(`$table`)").use { broken ->
+        check(broken.count == 0) {
+            "Migrating `$table` left ${broken.count} row(s) referencing something that is not there"
+        }
+    }
+}

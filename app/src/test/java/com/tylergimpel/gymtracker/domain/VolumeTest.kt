@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Duration
 
 /**
  * Volume is sets per muscle, counted directly and indirectly.
@@ -179,9 +180,52 @@ class VolumeTest {
         )
         // Different weights per side is the valid, expected shape: tracking an imbalance is the
         // only reason to expand a set at all.
-        assertEquals(listOf(22.5, 20.0), perSide.efforts.map { it.weight.value })
+        assertEquals(listOf(22.5, 20.0), perSide.efforts.map { it.performance.weightOrNull!!.value })
         assertEquals(listOf(Side.LEFT, Side.RIGHT), perSide.efforts.map { it.side })
         assertTrue(perSide.isPerSide)
+    }
+
+    @Test
+    fun `a set with no weight is still a set`() {
+        // A plank is one set of work against the muscle it holds, and volume counts sets. Nothing
+        // here reads a weight, which is why a set that has none counts exactly like one that does.
+        val plank = exercise("Plank", primary = listOf("abdominals"), secondary = listOf("lower back"))
+        val held = PerformedSet(
+            setIndex = 1,
+            type = SetType.WORKING,
+            efforts = listOf(
+                Effort(
+                    id = 1,
+                    side = null,
+                    performance = Performance.Timed(Duration.ofSeconds(90)),
+                    note = null,
+                ),
+            ),
+        )
+
+        assertEquals(
+            mapOf("abdominals" to 1.0, "lower back" to 0.5),
+            volumeByMuscle(performed(plank, held)),
+        )
+    }
+
+    @Test
+    fun `a warm-up hold earns nothing, exactly as a warm-up lift does`() {
+        val plank = exercise("Plank", primary = listOf("abdominals"), secondary = emptyList())
+        val held = PerformedSet(
+            setIndex = 1,
+            type = SetType.WARMUP,
+            efforts = listOf(
+                Effort(
+                    id = 1,
+                    side = null,
+                    performance = Performance.Timed(Duration.ofSeconds(30)),
+                    note = null,
+                ),
+            ),
+        )
+
+        assertEquals(emptyMap<String, Double>(), volumeByMuscle(performed(plank, held)))
     }
 
     private fun exercise(id: String, primary: List<String>, secondary: List<String>) = Exercise(
@@ -215,7 +259,12 @@ class VolumeTest {
         side: Side? = null,
         weight: Double = 60.0,
         reps: Int = 5,
-    ) = Effort(id = id, side = side, weight = Kilograms(weight), reps = reps, note = null)
+    ) = Effort(
+        id = id,
+        side = side,
+        performance = Performance.WeightAndReps(Kilograms(weight), reps),
+        note = null,
+    )
 
     private fun drop(orderIndex: Int, weight: Double, reps: Int) =
         Drop(id = orderIndex.toLong(), orderIndex = orderIndex, weight = Kilograms(weight), reps = reps)

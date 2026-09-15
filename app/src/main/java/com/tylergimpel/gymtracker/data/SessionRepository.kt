@@ -93,8 +93,7 @@ class SessionRepository(
         draft: SetDraft,
         exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
     ): Boolean {
-        val weight = draft.weight ?: return false
-        val reps = draft.reps ?: return false
+        val performance = draft.performance ?: return false
         val displayUnit = draft.displayUnit.overriding(exerciseUnit)
 
         database.withTransaction {
@@ -106,12 +105,10 @@ class SessionRepository(
                     sessionExerciseId = performed.id,
                     setIndex = nextSetIndexFor(performed.id),
                     type = draft.type.stored,
-                    weightKg = weight.value,
-                    reps = reps,
                     note = draft.note,
                     side = null,
                     displayUnit = displayUnit?.stored,
-                ),
+                ).recording(performance),
             )
         }
         return true
@@ -146,12 +143,10 @@ class SessionRepository(
                         sessionExerciseId = performed.id,
                         setIndex = setIndex,
                         type = left.type.stored,
-                        weightKg = requireNotNull(entered.weight).value,
-                        reps = requireNotNull(entered.reps),
                         note = entered.note,
                         side = side.stored,
                         displayUnit = displayUnit?.stored,
-                    ),
+                    ).recording(requireNotNull(entered.performance)),
                 )
             }
         }
@@ -244,14 +239,13 @@ class SessionRepository(
         draft: SetDraft,
         exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
     ): Boolean {
-        val weight = draft.weight ?: return false
-        val reps = draft.reps ?: return false
+        val performance = draft.performance ?: return false
         val existing = sessions.setEntry(effortId) ?: return false
         val displayUnit = draft.displayUnit.overriding(exerciseUnit)
 
         database.withTransaction {
             sessions.update(
-                existing.copy(weightKg = weight.value, reps = reps, note = draft.note),
+                existing.copy(note = draft.note).recording(performance),
             )
             sessions.retypeSet(existing.sessionExerciseId, existing.setIndex, draft.type.stored)
             sessions.redisplaySet(

@@ -237,15 +237,26 @@ object ExerciseBankBuilder {
     // --- derivation --------------------------------------------------------------------------
 
     /**
-     * What a set of this exercise records, derived from category and equipment.
+     * What a set of this exercise records, derived from category, force and equipment.
      *
      * Upstream carries no such field, so it has to come from somewhere. The cardio rows are patched
      * by `cardio-retag.json` rather than relying on the `cardio` branch here, which is why that
      * branch almost never fires; it is kept so that a future untagged cardio row still lands
      * somewhere sensible rather than being logged as weight and reps.
+     *
+     * A **static** force is a hold: nothing moves, so there is nothing to count and the only
+     * measurement is how long it was held. That is what puts the plank, the side bridge, the
+     * isometric neck work and the grip holds where they belong — upstream files them under
+     * `strength`, `strongman` and `plyometrics`, so category alone would log every one of them as
+     * reps of a movement that never happened.
      */
-    internal fun deriveLoggingType(category: String, equipment: String?): String = when {
+    internal fun deriveLoggingType(
+        category: String,
+        equipment: String?,
+        force: String? = null,
+    ): String = when {
         category == "stretching" -> "time"
+        force == "static" -> "time"
         category == "cardio" -> "distance_time"
         equipment == null || equipment == "body only" -> "bodyweight_reps"
         else -> "weight_reps"
@@ -263,7 +274,7 @@ object ExerciseBankBuilder {
         fun toUpstreamExercise(problems: MutableList<String>): BankExercise? {
             val common = common(problems) ?: return null
             return common.copy(
-                loggingType = deriveLoggingType(common.category, common.equipment),
+                loggingType = deriveLoggingType(common.category, common.equipment, common.force),
                 unilateral = deriveUnilateral(common.name),
                 source = SOURCE_UPSTREAM,
             )

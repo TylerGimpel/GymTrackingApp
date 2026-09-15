@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.SetType
 
 /**
@@ -49,12 +50,24 @@ data class SetEntryEntity(
     @ColumnInfo(name = "type", defaultValue = SetEntryEntity.DEFAULT_TYPE)
     val type: String,
 
-    /** Canonical kilograms, always. Display units never reach storage. */
+    /**
+     * Canonical kilograms, always. Display units never reach storage.
+     *
+     * Null for a set its exercise does not weigh — a plank is a length of time and nothing else.
+     * Null rather than zero, because zero is a weight: an unloaded bar and a bodyweight dip both
+     * genuinely weigh nothing added, and a progression engine reading a stand-in zero as real would
+     * be reading a set nobody performed.
+     */
     @ColumnInfo(name = "weight_kg")
-    val weightKg: Double,
+    val weightKg: Double? = null,
 
+    /** Null for a set its exercise does not count, for the same reason as [weightKg]. */
     @ColumnInfo(name = "reps")
-    val reps: Int,
+    val reps: Int? = null,
+
+    /** Seconds held, for a set measured in time. Null for one measured in weight and reps. */
+    @ColumnInfo(name = "duration_seconds")
+    val durationSeconds: Int? = null,
 
     @ColumnInfo(name = "note")
     val note: String?,
@@ -91,3 +104,24 @@ data class SetEntryEntity(
     }
 }
 
+/**
+ * The same row, recording [performance] and nothing else.
+ *
+ * Every shape's columns are cleared and only its own filled, so a set corrected from a weight and
+ * reps to a duration cannot keep a weight it no longer has. That is one rule in one place rather
+ * than a nulling-out every caller has to remember — and the reason the three measurement columns
+ * default to null: a row is built empty and then told what it records, never filled field by field.
+ */
+fun SetEntryEntity.recording(performance: Performance): SetEntryEntity = when (performance) {
+    is Performance.WeightAndReps -> copy(
+        weightKg = performance.weight.value,
+        reps = performance.reps,
+        durationSeconds = null,
+    )
+
+    is Performance.Timed -> copy(
+        weightKg = null,
+        reps = null,
+        durationSeconds = performance.duration.seconds.toInt(),
+    )
+}

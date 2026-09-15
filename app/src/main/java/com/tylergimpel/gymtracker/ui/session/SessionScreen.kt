@@ -48,6 +48,7 @@ import com.tylergimpel.gymtracker.domain.Drop
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggedSession
+import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -57,6 +58,7 @@ import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
+import com.tylergimpel.gymtracker.domain.asTimeText
 import com.tylergimpel.gymtracker.domain.asWeightText
 import com.tylergimpel.gymtracker.ui.DayPickerDialog
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
@@ -629,30 +631,52 @@ private fun SetDraftFields(
     unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // What the exercise records decides what is on screen. A plank offered a weight field is
+        // asking for a number that means nothing, and one that reaches storage is worse than one
+        // that does not.
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
-                value = draft.weightText,
-                onValueChange = { onChange(draft.copy(weightText = it)) },
-                // Labelled with the unit the number is read in, because that is what decides what
-                // typing 225 means.
-                label = { Text(stringResource(draft.displayUnit.label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = draft.repsText,
-                onValueChange = { onChange(draft.copy(repsText = it)) },
-                label = { Text(stringResource(R.string.set_reps)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-            )
+            if (draft.loggingType.recordsWeight) {
+                OutlinedTextField(
+                    value = draft.weightText,
+                    onValueChange = { onChange(draft.copy(weightText = it)) },
+                    // Labelled with the unit the number is read in, because that is what decides
+                    // what typing 225 means.
+                    label = { Text(stringResource(draft.displayUnit.label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (draft.loggingType.recordsReps) {
+                OutlinedTextField(
+                    value = draft.repsText,
+                    onValueChange = { onChange(draft.copy(repsText = it)) },
+                    label = { Text(stringResource(R.string.set_reps)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (draft.loggingType.recordsDuration) {
+                OutlinedTextField(
+                    value = draft.durationText,
+                    onValueChange = { onChange(draft.copy(durationText = it)) },
+                    label = { Text(stringResource(R.string.set_seconds)) },
+                    // What the lifter reads back is a clock, so the field says what it will become.
+                    supportingText = draft.duration?.let { { Text(it.asTimeText()) } },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
-        WeightControls(draft, onChange, unitChoice)
+        // The steppers and the unit chips are about a weight, so they follow the weight field.
+        if (draft.loggingType.recordsWeight) {
+            WeightControls(draft, onChange, unitChoice)
+        }
         if (showNote) {
             OutlinedTextField(
                 value = draft.note.orEmpty(),
@@ -924,8 +948,13 @@ private fun LoggedSetRows(
             // A drop is part of the set it continues, so it is read in the set's unit.
             effort.drops.forEach { drop -> DropRow(drop, displayUnit) }
 
-            TextButton(onClick = { onAddDrop(displayUnit, effort) }) {
-                Text(stringResource(R.string.set_add_drop))
+            // A Drop is a continuation at reduced weight, so it is offered against the effort in
+            // hand rather than against what its exercise records today: an exercise retagged by a
+            // bank update must not change what a set logged last year was.
+            if (effort.performance is Performance.WeightAndReps) {
+                TextButton(onClick = { onAddDrop(displayUnit, effort) }) {
+                    Text(stringResource(R.string.set_add_drop))
+                }
             }
         }
     }
@@ -1066,10 +1095,15 @@ private fun WhichDayDialog(
     )
 }
 
+/** What one effort reads as: what it recorded, written the way the lifter entered it. */
 @Composable
-private fun Effort.summary(displayUnit: WeightUnit): String = stringResource(
-    R.string.set_summary,
-    weight.asTextIn(displayUnit),
-    stringResource(displayUnit.label),
-    reps,
-)
+private fun Effort.summary(displayUnit: WeightUnit): String = when (val done = performance) {
+    is Performance.WeightAndReps -> stringResource(
+        R.string.set_summary,
+        done.weight.asTextIn(displayUnit),
+        stringResource(displayUnit.label),
+        done.reps,
+    )
+
+    is Performance.Timed -> done.duration.asTimeText()
+}

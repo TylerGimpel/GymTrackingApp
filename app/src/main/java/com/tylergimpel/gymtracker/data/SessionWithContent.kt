@@ -4,12 +4,14 @@ import androidx.room.Embedded
 import androidx.room.Relation
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import java.time.Duration
 
 /** One stored row of a set, together with any drops continuing it. */
 data class SetEntryWithDrops(
@@ -104,8 +106,21 @@ fun List<SetEntryWithDrops>.toPerformedSets(): List<PerformedSet> =
 private fun SetEntryWithDrops.toEffort() = Effort(
     id = setEntry.id,
     side = Side.fromStored(setEntry.side),
-    weight = Kilograms(setEntry.weightKg),
-    reps = setEntry.reps,
+    performance = setEntry.toPerformance(),
     note = setEntry.note,
     drops = drops.sortedBy(DropSegmentEntity::orderIndex).map(DropSegmentEntity::toDomain),
 )
+
+/**
+ * What the row records, read from the columns it filled rather than from the exercise it hangs off.
+ *
+ * The row is self-describing on purpose: a set is a record of what happened, and re-reading an old
+ * one through whatever its exercise records *today* would let a correction to the bank rewrite
+ * history. A row that filled neither shape is corrupt rather than empty, and says so here instead
+ * of arriving somewhere further away as a weight of zero.
+ */
+private fun SetEntryEntity.toPerformance(): Performance = when {
+    durationSeconds != null -> Performance.Timed(Duration.ofSeconds(durationSeconds.toLong()))
+    weightKg != null && reps != null -> Performance.WeightAndReps(Kilograms(weightKg), reps)
+    else -> error("Set entry $id records neither a weight and reps nor a duration")
+}

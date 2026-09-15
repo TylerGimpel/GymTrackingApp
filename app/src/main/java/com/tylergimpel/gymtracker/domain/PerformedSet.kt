@@ -31,19 +31,27 @@ data class Drop(
 )
 
 /**
- * One effort within a set — a weight, some reps, and the row that stores them.
+ * One effort within a set — what was done in one go, and the row that stores it.
+ *
+ * What "what was done" means depends on the exercise: a weight and a rep count for a bench press, a
+ * length of time for a plank. That is [performance], and it is a type rather than a handful of
+ * nullable columns so that an effort recording nothing cannot exist.
  *
  * [side] is null for a set logged as a single entry, which is how every set is logged by default.
- * A unilateral exercise can be expanded to per-side, and then a set has two efforts whose weights
- * may differ, because tracking an imbalance is the reason to expand it at all.
+ * A unilateral exercise can be expanded to per-side, and then a set has two efforts that may differ,
+ * because tracking an imbalance is the reason to expand it at all.
  */
 data class Effort(
     val id: Long,
     val side: Side?,
-    val weight: Kilograms,
-    val reps: Int,
+    val performance: Performance,
     val note: String?,
-    /** The drops continuing this effort, in the order they were performed. */
+    /**
+     * The drops continuing this effort, in the order they were performed.
+     *
+     * Empty for an effort there is nothing to drop from: a **Drop** is a continuation at reduced
+     * weight, which is a sentence about a loaded exercise and not about a plank.
+     */
     val drops: List<Drop> = emptyList(),
 )
 

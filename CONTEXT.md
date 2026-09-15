@@ -54,7 +54,7 @@ What a bank update does to a shipped exercise it has dropped that somebody has a
 _Avoid_: delete, archive — one is what tombstoning exists to prevent and the other suggests the lifter did it.
 
 **Logging type**:
-What a set of a given exercise records — one of `weight_reps`, `bodyweight_reps`, `assisted`, `time`, `distance_time`. Determines which inputs the logging screen shows.
+What a set of a given exercise records — one of `weight_reps`, `bodyweight_reps`, `assisted`, `time`, `distance_time`. It is the type that says what it records, so the screen asks rather than deciding: a plank is offered seconds and no weight, because a weight field on a hold asks for a number that means nothing and one that reached storage would be read later as something the lifter lifted.
 
 **Progression model**:
 How an exercise's recommendation advances over time, including `none` for exercises that are recorded but never prescribed.
@@ -110,7 +110,10 @@ A standing exclusion of an exercise from everything the app suggests. Global, re
 One unit of work against an exercise, identified by its position within that exercise in a session. A set is one set regardless of how many rows record it — a drop set and a per-side set are each still one set.
 
 **Effort**:
-One weight-and-reps within a set, and the row that stores it. A set has one, or one per side when a unilateral exercise is expanded. What progression reads is the first effort, never a drop.
+What was done in one go within a set, and the row that stores it. A set has one, or one per side when a unilateral exercise is expanded. What progression reads is the first effort, never a drop.
+
+**Performance**:
+What an effort amounted to — whatever its exercise's **Logging type** records. A weight and a rep count for a bench press; a length of time for a hold. Held as one of a closed set of shapes rather than as a weight, a rep count and a duration that may each be missing, so that an effort recording nothing cannot exist and no reader has to decide what a weight of zero meant. A **Drop** is a continuation at reduced weight, so an effort with no weight has none.
 
 **Set type**:
 What a set is for — one of `warmup`, `working`, `calibration`, `backoff`, `amrap`. Determines whether the set counts toward training volume.

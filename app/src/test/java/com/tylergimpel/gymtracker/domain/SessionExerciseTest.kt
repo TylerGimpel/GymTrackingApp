@@ -33,7 +33,7 @@ class SessionExerciseTest {
         assertEquals(listOf(1, 3, 4, 5), remaining.map(PerformedSet::setIndex))
         // Weights are seeded from the set index, so renumbering would show up as a set carrying
         // someone else's weight rather than merely as a different index.
-        assertEquals(listOf(61.0, 63.0, 64.0, 65.0), remaining.map { it.leadingEffort.weight.value })
+        assertEquals(listOf(61.0, 63.0, 64.0, 65.0), remaining.map { it.leadingEffort.performance.weightOrNull!!.value })
     }
 
     @Test
@@ -76,8 +76,7 @@ class SessionExerciseTest {
                     Effort(
                         id = index.toLong(),
                         side = null,
-                        weight = Kilograms(60.0 + index),
-                        reps = 5,
+                        performance = Performance.WeightAndReps(Kilograms(60.0 + index), reps = 5),
                         note = null,
                     ),
                 ),

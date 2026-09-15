@@ -488,6 +488,76 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToSetsThatNeedNotBeAWeightAndReps() {
+        helper.createDatabase(TWELFTH_DATABASE, 12).use { version12 ->
+            version12.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source, " +
+                    "tombstoned) VALUES ('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', " +
+                    "'compound', 'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream', 0)",
+            )
+            version12.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            version12.execSQL(
+                "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            version12.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps, " +
+                    "note, side, display_unit) VALUES (1, 1, 'working', 60.0, 5, 'felt heavy', " +
+                    "NULL, 'lb')",
+            )
+            // A drop hangs off that row by its id, which is what the rebuild must not move.
+            version12.execSQL(
+                "INSERT INTO drop_segment (set_entry_id, order_index, weight_kg, reps) " +
+                    "VALUES (1, 1, 50.0, 4)",
+            )
+        }
+
+        val version13 = helper.runMigrationsAndValidate(TWELFTH_DATABASE, 13, true, MIGRATION_12_13)
+
+        version13.use { db ->
+            // `set_entry` is rebuilt so its weight and reps can be null, and everything logged has
+            // to come across unchanged — the id above all, because a drop points at it and a set is
+            // identified by its position rather than by that id (ADR 0003).
+            db.query(
+                "SELECT id, session_exercise_id, set_index, type, weight_kg, reps, " +
+                    "duration_seconds, note, side, display_unit FROM set_entry",
+            ).use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+                assertEquals(1, it.getInt(1))
+                assertEquals(1, it.getInt(2))
+                assertEquals("working", it.getString(3))
+                assertEquals(60.0, it.getDouble(4), 0.0)
+                assertEquals(5, it.getInt(5))
+                // Nothing logged before this could have recorded a time.
+                assertTrue(it.isNull(6))
+                assertEquals("felt heavy", it.getString(7))
+                assertTrue(it.isNull(8))
+                assertEquals("lb", it.getString(9))
+            }
+            db.query("SELECT set_entry_id FROM drop_segment").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+            // And a set that is a length of time and nothing else can now be written.
+            db.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, duration_seconds) " +
+                    "VALUES (1, 2, 'working', 90)",
+            )
+            db.query("SELECT duration_seconds, weight_kg, reps FROM set_entry WHERE set_index = 2").use {
+                it.moveToFirst()
+                assertEquals(90, it.getInt(0))
+                assertTrue(it.isNull(1))
+                assertTrue(it.isNull(2))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -500,5 +570,6 @@ class GymDatabaseMigrationTest {
         const val NINTH_DATABASE = "gym-migration-test-9.db"
         const val TENTH_DATABASE = "gym-migration-test-10.db"
         const val ELEVENTH_DATABASE = "gym-migration-test-11.db"
+        const val TWELFTH_DATABASE = "gym-migration-test-12.db"
     }
 }

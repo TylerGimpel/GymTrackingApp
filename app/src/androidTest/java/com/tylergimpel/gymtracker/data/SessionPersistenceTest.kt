@@ -6,13 +6,17 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSession
+import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.repsOrNull
 import com.tylergimpel.gymtracker.domain.volumeByMuscle
+import com.tylergimpel.gymtracker.domain.weightOrNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -25,6 +29,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -110,7 +115,7 @@ class SessionPersistenceTest {
     fun weightIsStoredAsTheKilogramsItWasEnteredIn() = runBlocking {
         repository.logSet(BENCH, SetDraft("62.5", "5"))
 
-        assertEquals(62.5, currentSession().exercises.single().sets.single().leadingEffort.weight.value, 0.0)
+        assertEquals(62.5, currentSession().exercises.single().sets.single().leadingEffort.performance.weightOrNull!!.value, 0.0)
     }
 
     @Test
@@ -122,7 +127,7 @@ class SessionPersistenceTest {
 
         val remaining = currentSession().exercises.single().sets
         assertEquals(listOf(1, 3), remaining.map(PerformedSet::setIndex))
-        assertEquals(listOf(60.0, 62.0), remaining.map { it.leadingEffort.weight.value })
+        assertEquals(listOf(60.0, 62.0), remaining.map { it.leadingEffort.performance.weightOrNull!!.value })
     }
 
     @Test
@@ -144,8 +149,8 @@ class SessionPersistenceTest {
         repository.editSet(middle.leadingEffort.id, SetDraft("70", "3", note = "felt heavy"))
 
         val sets = currentSession().exercises.single().sets
-        assertEquals(listOf(60.0, 70.0, 62.0), sets.map { it.leadingEffort.weight.value })
-        assertEquals(listOf(5, 3, 5), sets.map { it.leadingEffort.reps })
+        assertEquals(listOf(60.0, 70.0, 62.0), sets.map { it.leadingEffort.performance.weightOrNull!!.value })
+        assertEquals(listOf(5, 3, 5), sets.map { it.leadingEffort.performance.repsOrNull!! })
         assertEquals("felt heavy", sets[1].leadingEffort.note)
         // The edited set keeps its position: editing is not a delete and re-add.
         assertEquals(listOf(1, 2, 3), sets.map(PerformedSet::setIndex))
@@ -289,7 +294,7 @@ class SessionPersistenceTest {
         assertEquals(1, set.setIndex)
         assertEquals(listOf(Side.LEFT, Side.RIGHT), set.efforts.map { it.side })
         // Weights may differ, which is the only reason to expand a set to per-side at all.
-        assertEquals(listOf(22.5, 20.0), set.efforts.map { it.weight.value })
+        assertEquals(listOf(22.5, 20.0), set.efforts.map { it.performance.weightOrNull!!.value })
     }
 
     @Test
@@ -343,8 +348,8 @@ class SessionPersistenceTest {
 
         // The fatigued drop must never be what an estimated one-rep max is built from.
         val leading = currentSession().exercises.single().sets.single().leadingEffort
-        assertEquals(60.0, leading.weight.value, 0.0)
-        assertEquals(8, leading.reps)
+        assertEquals(60.0, leading.performance.weightOrNull!!.value, 0.0)
+        assertEquals(8, leading.performance.repsOrNull!!)
     }
 
     @Test
@@ -393,8 +398,8 @@ class SessionPersistenceTest {
         repository.editSet(set.efforts.last().id, SetDraft("21", "9"))
 
         val corrected = currentSession().exercises.single().sets.single()
-        assertEquals(listOf(22.5, 21.0), corrected.efforts.map { it.weight.value })
-        assertEquals(listOf(10, 9), corrected.efforts.map { it.reps })
+        assertEquals(listOf(22.5, 21.0), corrected.efforts.map { it.performance.weightOrNull!!.value })
+        assertEquals(listOf(10, 9), corrected.efforts.map { it.performance.repsOrNull!! })
         assertEquals(listOf(Side.LEFT, Side.RIGHT), corrected.efforts.map { it.side })
     }
 
@@ -414,7 +419,7 @@ class SessionPersistenceTest {
         repository.logSet(BENCH, SetDraft("225", "5", displayUnit = WeightUnit.POUNDS))
 
         val logged = currentSession().exercises.single().sets.single()
-        assertEquals(102.05828325, logged.leadingEffort.weight.value, 1e-9)
+        assertEquals(102.05828325, logged.leadingEffort.performance.weightOrNull!!.value, 1e-9)
     }
 
     @Test
@@ -478,7 +483,7 @@ class SessionPersistenceTest {
         val performed = currentSession().exercises.single()
         assertNull(performed.sets.single().displayUnit)
         assertEquals(WeightUnit.POUNDS, performed.displayUnitFor(performed.sets.single()))
-        assertEquals(102.05828325, performed.sets.single().leadingEffort.weight.value, 1e-9)
+        assertEquals(102.05828325, performed.sets.single().leadingEffort.performance.weightOrNull!!.value, 1e-9)
     }
 
     @Test
@@ -631,8 +636,8 @@ class SessionPersistenceTest {
         val after = currentSession()
         assertEquals(2, after.positions.size)
         assertTrue(after.positions.all { it is SessionPosition.Alone })
-        assertEquals(listOf(60.0, 62.5), after.exercises[0].sets.map { it.leadingEffort.weight.value })
-        assertEquals(listOf(100.0), after.exercises[1].sets.map { it.leadingEffort.weight.value })
+        assertEquals(listOf(60.0, 62.5), after.exercises[0].sets.map { it.leadingEffort.performance.weightOrNull!!.value })
+        assertEquals(listOf(100.0), after.exercises[1].sets.map { it.leadingEffort.performance.weightOrNull!!.value })
         assertEquals(0, countOf("superset_group"))
     }
 
@@ -682,11 +687,93 @@ class SessionPersistenceTest {
         assertEquals(0, countOf("superset_group"))
     }
 
-    private fun storedWeights(): List<Double> =
+    @Test
+    fun aTimedSetRecordsHowLongAndNoWeightAtAll() = runBlocking {
+        repository.logSet(HAMSTRING_STRETCH, SetDraft(durationText = "90", loggingType = LoggingType.TIME))
+
+        val effort = currentSession().exercises.single().sets.single().leadingEffort
+        assertEquals(Performance.Timed(Duration.ofSeconds(90)), effort.performance)
+        // Not a weight of zero standing in for "there was no weight": there is no weight here.
+        assertNull(effort.performance.weightOrNull)
+        assertNull(effort.performance.repsOrNull)
+    }
+
+    @Test
+    fun aWeightTypedAgainstATimedExerciseIsNotRecorded() = runBlocking {
+        // The controls do not offer a weight field for a stretch, but a draft carried over from the
+        // previous exercise must not smuggle one into storage behind them.
+        repository.logSet(
+            HAMSTRING_STRETCH,
+            SetDraft(weightText = "60", repsText = "5", durationText = "90", loggingType = LoggingType.TIME),
+        )
+
+        assertEquals(listOf<Double?>(null), storedWeights())
+    }
+
+    @Test
+    fun aTimedSetIsOneSetTowardVolumeLikeAnyOther() = runBlocking {
+        repository.logSet(HAMSTRING_STRETCH, SetDraft(durationText = "60", loggingType = LoggingType.TIME))
+
+        // Counted by its set type, exactly as a loaded set is: a set is one set whatever it recorded.
+        assertEquals(
+            mapOf("hamstrings" to 1.0, "calves" to 0.5),
+            volumeByMuscle(currentSession().exercises),
+        )
+    }
+
+    @Test
+    fun aTimedSetIsCorrectedAndDeletedLikeAnyOther() = runBlocking {
+        repository.logSet(HAMSTRING_STRETCH, SetDraft(durationText = "60", loggingType = LoggingType.TIME))
+        val logged = currentSession().exercises.single()
+
+        repository.editSet(
+            logged.sets.single().leadingEffort.id,
+            SetDraft(durationText = "75", loggingType = LoggingType.TIME),
+        )
+
+        assertEquals(
+            Performance.Timed(Duration.ofSeconds(75)),
+            currentSession().exercises.single().sets.single().leadingEffort.performance,
+        )
+
+        repository.deleteSet(logged.id, logged.sets.single().setIndex)
+        assertEquals(emptyList<PerformedSet>(), currentSession().exercises.single().sets)
+    }
+
+    @Test
+    fun correctingASetFromATimeToAWeightLeavesNoTimeBehind() = runBlocking {
+        // Not a case a lifter reaches by accident, but a row that kept both would be a set that
+        // recorded two different things, and the reader takes the first it finds.
+        repository.logSet(HAMSTRING_STRETCH, SetDraft(durationText = "60", loggingType = LoggingType.TIME))
+        val effortId = currentSession().exercises.single().sets.single().leadingEffort.id
+
+        repository.editSet(effortId, SetDraft("60", "5"))
+
+        val effort = currentSession().exercises.single().sets.single().leadingEffort
+        assertEquals(Performance.WeightAndReps(Kilograms(60.0), 5), effort.performance)
+        assertEquals(listOf<Int?>(null), storedDurations())
+    }
+
+    private fun storedDurations(): List<Int?> =
+        database.openHelper.readableDatabase
+            .query("SELECT duration_seconds FROM set_entry ORDER BY id")
+            .use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(if (cursor.isNull(0)) null else cursor.getInt(0))
+                    }
+                }
+            }
+
+    private fun storedWeights(): List<Double?> =
         database.openHelper.readableDatabase
             .query("SELECT weight_kg FROM set_entry ORDER BY id")
             .use { cursor ->
-                buildList { while (cursor.moveToNext()) add(cursor.getDouble(0)) }
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(if (cursor.isNull(0)) null else cursor.getDouble(0))
+                    }
+                }
             }
 
     private suspend fun sessionExerciseId(): Long =
@@ -717,6 +804,7 @@ class SessionPersistenceTest {
     private companion object {
         const val TEST_DATABASE = "session-persistence-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
+        const val HAMSTRING_STRETCH = "90_90_Hamstring"
         const val SQUAT = "Barbell_Squat"
         const val CURL = "Barbell_Curl"
         const val ROW = "Seated_Cable_Rows"

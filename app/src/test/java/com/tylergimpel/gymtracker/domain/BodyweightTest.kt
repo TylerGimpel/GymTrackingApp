@@ -192,7 +192,12 @@ class BodyweightTest {
                         setIndex = 1,
                         type = SetType.WORKING,
                         efforts = listOf(
-                            Effort(id = 1, side = null, weight = Kilograms(60.0), reps = 5, note = null),
+                            Effort(
+                                id = 1,
+                                side = null,
+                                performance = Performance.WeightAndReps(Kilograms(60.0), 5),
+                                note = null,
+                            ),
                         ),
                     ),
                 ),
@@ -206,7 +211,7 @@ class BodyweightTest {
             listOf(60.0),
             performed.flatMap(SessionExercise::sets)
                 .flatMap(PerformedSet::efforts)
-                .map { it.weight.value },
+                .map { it.performance.weightOrNull!!.value },
         )
         assertEquals(mapOf("chest" to 1.0, "triceps" to 0.5), volumeByMuscle(performed))
     }

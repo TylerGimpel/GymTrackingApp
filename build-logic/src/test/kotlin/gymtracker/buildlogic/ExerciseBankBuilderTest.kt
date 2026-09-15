@@ -217,13 +217,26 @@ class ExerciseBankBuilderTest {
     fun `derives logging type from category and equipment`() {
         val derive = ExerciseBankBuilder::deriveLoggingType
 
-        assertEquals("time", derive("stretching", "foam roll"))
-        assertEquals("time", derive("stretching", "body only"))
-        assertEquals("bodyweight_reps", derive("strength", "body only"))
-        assertEquals("bodyweight_reps", derive("plyometrics", null))
-        assertEquals("weight_reps", derive("strength", "barbell"))
-        assertEquals("weight_reps", derive("strongman", "other"))
-        assertEquals("distance_time", derive("cardio", "machine"))
+        assertEquals("time", derive("stretching", "foam roll", null))
+        assertEquals("time", derive("stretching", "body only", null))
+        assertEquals("bodyweight_reps", derive("strength", "body only", null))
+        assertEquals("bodyweight_reps", derive("plyometrics", null, null))
+        assertEquals("weight_reps", derive("strength", "barbell", null))
+        assertEquals("weight_reps", derive("strongman", "other", null))
+        assertEquals("distance_time", derive("cardio", "machine", null))
+    }
+
+    @Test
+    fun `a held exercise is measured in time, whatever upstream files it under`() {
+        val derive = ExerciseBankBuilder::deriveLoggingType
+
+        // The plank, the side bridge and the isometric neck work are all `strength` upstream, and
+        // the Crucifix is `strongman`. Nothing moves in any of them, so there is nothing to count.
+        assertEquals("time", derive("strength", "body only", "static"))
+        assertEquals("time", derive("strongman", "other", "static"))
+        assertEquals("time", derive("plyometrics", "body only", "static"))
+        // A movement with a direction is still counted in reps.
+        assertEquals("bodyweight_reps", derive("strength", "body only", "push"))
     }
 
     @Test
