@@ -1,0 +1,97 @@
+package com.tylergimpel.gymtracker.domain
+
+import kotlin.math.round
+
+/**
+ * The international pound, exactly.
+ *
+ * Defined rather than approximated because it is the whole conversion: a rounded constant would put
+ * a small error into every weight a lifter ever reads off an imperial stack.
+ */
+private const val KILOGRAMS_PER_POUND = 0.45359237
+
+/**
+ * How a weight is read, as opposed to what it weighs.
+ *
+ * A unit is a display concern and only ever a display concern: storage is canonical kilograms, and
+ * everything here converts a reading into one or back out again. That is what lets the kg lat
+ * pulldown and the lb lat pulldown at the same gym both be logged honestly, with no step change in
+ * the progress graph the week the lifter moves between them.
+ *
+ * **A machine's stack number is not a unit.** Pulley ratios vary between manufacturers and are not
+ * labelled, so "60" on one machine and "60" on another are not the same load and nothing here tries
+ * to make them one — a stack is its own gym-local scale, converted against nothing.
+ */
+enum class WeightUnit(
+    val stored: String,
+    /** What one of this unit weighs, which is what makes the conversion one multiplication. */
+    private val kilogramsEach: Double,
+    /**
+     * What a stepper moves by in this unit.
+     *
+     * Deliberately the unit's own step rather than a converted one: 5 lb is 2.27 kg, so converting
+     * would offer weights no barbell can be loaded to and no stack has a pin for. This is not the
+     * **Increment** of the glossary, which is what a given piece of equipment can actually do.
+     */
+    val step: Double,
+) {
+    KILOGRAMS("kg", 1.0, 2.5),
+    POUNDS("lb", KILOGRAMS_PER_POUND, 5.0),
+    ;
+
+    /** What [weight] reads as on a machine labelled in this unit. */
+    fun fromKilograms(weight: Kilograms): Double = readable(weight.value / kilogramsEach)
+
+    /**
+     * This unit where it departs from [exercise], and nothing where it agrees with it.
+     *
+     * What a set records, in other words. A set that stored its unit either way would freeze its
+     * own display, and an exercise switched to pounds would leave a trail of kilogram sets behind
+     * it — the opposite of the one continuous history the canonical storage is for.
+     */
+    fun overriding(exercise: WeightUnit): WeightUnit? = takeIf { it != exercise }
+
+    /** What an [amount] read in this unit actually weighs. */
+    fun toKilograms(amount: Double): Kilograms = Kilograms(amount * kilogramsEach)
+
+    /**
+     * [amount] moved by [steps] of this unit's own [step], never below nothing.
+     *
+     * Plain addition rather than a snap to the nearest multiple: a lifter who typed 61 means 61,
+     * and quietly rounding it to 62.5 on the way up would rewrite a number they chose.
+     */
+    fun stepped(amount: Double, steps: Int): Double =
+        readable((amount + steps * step).coerceAtLeast(0.0))
+
+    /**
+     * A reading rounded to the hundredth of this unit.
+     *
+     * Rounding at all is what makes 225 lb come back as 225 rather than 225.00000000000003. A
+     * hundredth is finer than any plate or stack step, so nothing a lifter can load is lost.
+     *
+     * It is not lossless across units: 62.5 kg reads as 137.79 lb, and correcting that set in
+     * pounds stores 62.5005 kg. Half a gram, invisible at every point it is read back, and the
+     * reason the rounding is not coarser — a step to the nearest quarter would move the weight by
+     * enough to see.
+     */
+    private fun readable(amount: Double): Double = round(amount * HUNDREDTHS) / HUNDREDTHS
+
+    companion object {
+        /**
+         * What an exercise reads in until the lifter says otherwise.
+         *
+         * Kilograms because storage is kilograms, so the default display is the one reading that
+         * cannot be wrong. A profile-wide default belongs to onboarding rather than here.
+         */
+        val DEFAULT = KILOGRAMS
+
+        private const val HUNDREDTHS = 100.0
+
+        private val BY_STORED = entries.associateBy(WeightUnit::stored)
+
+        /** The unit a stored value names, or null where nothing was stored. */
+        fun fromStored(value: String?): WeightUnit? = value?.let {
+            requireNotNull(BY_STORED[it]) { "Unknown weight unit `$it`" }
+        }
+    }
+}

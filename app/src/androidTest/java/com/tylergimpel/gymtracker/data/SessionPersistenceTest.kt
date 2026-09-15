@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
+import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.volumeByMuscle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -40,6 +41,7 @@ class SessionPersistenceTest {
 
     private lateinit var database: GymDatabase
     private lateinit var repository: SessionRepository
+    private lateinit var exercises: ExerciseRepository
 
     @Before
     fun setUp() {
@@ -51,6 +53,8 @@ class SessionPersistenceTest {
             .addMigrations(*MIGRATIONS)
             .build()
         repository = SessionRepository(database, database.sessionDao(), clock, zone)
+        exercises =
+            ExerciseRepository(database, database.exerciseDao(), database.sessionDao())
     }
 
     @After
@@ -386,6 +390,108 @@ class SessionPersistenceTest {
         assertEquals(listOf(10, 9), corrected.efforts.map { it.reps })
         assertEquals(listOf(Side.LEFT, Side.RIGHT), corrected.efforts.map { it.side })
     }
+
+    @Test
+    fun anExerciseRemembersTheUnitItIsReadIn() = runBlocking {
+        exercises.setDisplayUnit(BENCH, WeightUnit.POUNDS)
+
+        repository.logSet(BENCH, SetDraft("225", "5", displayUnit = WeightUnit.POUNDS))
+
+        // The choice comes back attached to the exercise, from a table the shipped bank does not
+        // own — so a bank update replacing the row cannot take it away.
+        assertEquals(WeightUnit.POUNDS, currentSession().exercises.single().exercise.displayUnit)
+    }
+
+    @Test
+    fun aWeightReadInPoundsIsStoredAsTheKilogramsItWeighs() = runBlocking {
+        repository.logSet(BENCH, SetDraft("225", "5", displayUnit = WeightUnit.POUNDS))
+
+        val logged = currentSession().exercises.single().sets.single()
+        assertEquals(102.05828325, logged.leadingEffort.weight.value, 1e-9)
+    }
+
+    @Test
+    fun switchingAnExercisesUnitChangesNothingThatWasStored() = runBlocking {
+        repository.logSet(BENCH, SetDraft("100", "5"))
+        repository.logSet(BENCH, SetDraft("102.5", "5"))
+        val before = storedWeights()
+
+        exercises.setDisplayUnit(BENCH, WeightUnit.POUNDS)
+
+        assertEquals(before, storedWeights())
+        assertEquals(WeightUnit.POUNDS, currentSession().exercises.single().exercise.displayUnit)
+    }
+
+    @Test
+    fun aSingleSetOverridesTheUnitWithoutChangingTheExercisesSetting() = runBlocking {
+        repository.logSet(BENCH, SetDraft("100", "5"))
+        repository.logSet(BENCH, SetDraft("225", "5", displayUnit = WeightUnit.POUNDS))
+
+        val performed = currentSession().exercises.single()
+        assertEquals(WeightUnit.KILOGRAMS, performed.exercise.displayUnit)
+        assertEquals(WeightUnit.KILOGRAMS, performed.displayUnitFor(performed.sets[0]))
+        assertEquals(WeightUnit.POUNDS, performed.displayUnitFor(performed.sets[1]))
+    }
+
+    @Test
+    fun aSetThatDidNotOverrideFollowsItsExerciseWhenTheUnitChanges() = runBlocking {
+        repository.logSet(BENCH, SetDraft("100", "5"))
+
+        exercises.setDisplayUnit(BENCH, WeightUnit.POUNDS)
+
+        // Nothing stored on the set itself, so its display moves with the exercise and the history
+        // stays readable in one unit rather than splitting at the day the lifter switched.
+        val performed = currentSession().exercises.single()
+        assertNull(performed.sets.single().displayUnit)
+        assertEquals(WeightUnit.POUNDS, performed.displayUnitFor(performed.sets.single()))
+    }
+
+    @Test
+    fun rereadingOneSideOfAPerSideSetRereadsTheWholeSet() = runBlocking {
+        repository.logPerSideSet(BENCH, SetDraft("22.5", "10"), SetDraft("20", "10"))
+        val right = currentSession().exercises.single().sets.single().efforts.last()
+
+        repository.editSet(right.id, SetDraft("44", "10", displayUnit = WeightUnit.POUNDS))
+
+        // A unit belongs to the set, like its type: one arm shown in pounds and the other in
+        // kilograms would be two numbers a lifter cannot compare.
+        assertEquals(WeightUnit.POUNDS, currentSession().exercises.single().sets.single().displayUnit)
+    }
+
+    @Test
+    fun adoptingAUnitClearsTheOverridesThatHadDepartedToIt() = runBlocking {
+        // Logged off the odd machine while the exercise still read in kilograms...
+        repository.logSet(BENCH, SetDraft("225", "5", displayUnit = WeightUnit.POUNDS))
+
+        // ...and then the lifter decides the whole exercise is read that way.
+        exercises.setDisplayUnit(BENCH, WeightUnit.POUNDS)
+
+        // The set is no longer departing from anything, so it stops claiming to. Were the override
+        // left on it, moving the exercise back to kilograms would strand that one set in pounds.
+        val performed = currentSession().exercises.single()
+        assertNull(performed.sets.single().displayUnit)
+        assertEquals(WeightUnit.POUNDS, performed.displayUnitFor(performed.sets.single()))
+        assertEquals(102.05828325, performed.sets.single().leadingEffort.weight.value, 1e-9)
+    }
+
+    @Test
+    fun adoptingAUnitLeavesAnOverrideInTheOtherUnitAlone() = runBlocking {
+        repository.logSet(BENCH, SetDraft("225", "5", displayUnit = WeightUnit.POUNDS))
+
+        // The lifter settles the exercise on kilograms. The set read off the pound machine is
+        // still a departure from that, and only overrides the adopted unit made redundant go.
+        exercises.setDisplayUnit(BENCH, WeightUnit.KILOGRAMS)
+
+        val performed = currentSession().exercises.single()
+        assertEquals(WeightUnit.POUNDS, performed.displayUnitFor(performed.sets.single()))
+    }
+
+    private fun storedWeights(): List<Double> =
+        database.openHelper.readableDatabase
+            .query("SELECT weight_kg FROM set_entry ORDER BY id")
+            .use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getDouble(0)) }
+            }
 
     private suspend fun sessionExerciseId(): Long =
         currentSession().exercises.single().id

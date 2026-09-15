@@ -17,6 +17,7 @@ import androidx.room.TypeConverters
 @Database(
     entities = [
         ExerciseEntity::class,
+        ExercisePreferenceEntity::class,
         SessionEntity::class,
         SessionExerciseEntity::class,
         SetEntryEntity::class,
@@ -40,7 +41,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun routineDao(): RoutineDao
 
     companion object {
-        const val VERSION = 5
+        const val VERSION = 6
 
         /** Path inside assets, written there at build time by `generate<Variant>ExerciseBank`. */
         const val ASSET_PATH = "databases/gym-bank.db"

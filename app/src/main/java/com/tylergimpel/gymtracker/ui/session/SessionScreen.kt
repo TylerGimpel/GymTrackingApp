@@ -20,6 +20,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -41,11 +42,15 @@ import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.Drop
 import com.tylergimpel.gymtracker.domain.Effort
+import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.asTextIn
+import com.tylergimpel.gymtracker.domain.asWeightText
 
 /**
  * The plain logging screen: pick an exercise, enter a weight and reps, see what was logged.
@@ -68,6 +73,7 @@ fun SessionScreen(
         onDraftChange = viewModel::changeDraft,
         onRightDraftChange = viewModel::changeRightDraft,
         onTogglePerSide = viewModel::togglePerSide,
+        onRememberDisplayUnit = viewModel::rememberDisplayUnit,
         onLogSet = viewModel::logSet,
         onEditEffort = viewModel::startEditing,
         onEditingDraftChange = viewModel::changeEditingDraft,
@@ -94,13 +100,14 @@ fun SessionScreen(
     onDraftChange: (SetDraft) -> Unit = {},
     onRightDraftChange: (SetDraft) -> Unit = {},
     onTogglePerSide: () -> Unit = {},
+    onRememberDisplayUnit: () -> Unit = {},
     onLogSet: () -> Unit = {},
-    onEditEffort: (Long, PerformedSet, Effort) -> Unit = { _, _, _ -> },
+    onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit = { _, _, _ -> },
     onEditingDraftChange: (SetDraft) -> Unit = {},
     onSaveEditing: () -> Unit = {},
     onDeleteEditing: () -> Unit = {},
     onCancelEditing: () -> Unit = {},
-    onAddDrop: (Effort) -> Unit = {},
+    onAddDrop: (WeightUnit, Effort) -> Unit = { _, _ -> },
     onDropDraftChange: (SetDraft) -> Unit = {},
     onSaveDrop: () -> Unit = {},
     onCancelDrop: () -> Unit = {},
@@ -169,6 +176,7 @@ fun SessionScreen(
                         onDraftChange = onDraftChange,
                         onRightDraftChange = onRightDraftChange,
                         onTogglePerSide = onTogglePerSide,
+                        onRememberDisplayUnit = onRememberDisplayUnit,
                         onLogSet = onLogSet,
                     )
                     HorizontalDivider()
@@ -245,13 +253,14 @@ private fun EmptySession(hasSelection: Boolean) {
 
 @Composable
 private fun SetEntryControls(
-    exercise: SelectedExercise,
+    exercise: Exercise,
     draft: SetDraft,
     rightDraft: SetDraft,
     perSide: Boolean,
     onDraftChange: (SetDraft) -> Unit,
     onRightDraftChange: (SetDraft) -> Unit,
     onTogglePerSide: () -> Unit,
+    onRememberDisplayUnit: () -> Unit,
     onLogSet: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -274,7 +283,28 @@ private fun SetEntryControls(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SetDraftFields(rightDraft, onRightDraftChange, showType = false)
+            // The unit belongs to the set rather than to one of its rows, so it is chosen once
+            // above and this side follows it.
+            SetDraftFields(
+                rightDraft,
+                onRightDraftChange,
+                showType = false,
+                showDisplayUnit = false,
+            )
+        }
+
+        // Offered only where it would do something: the unit in the controls is this set's, and
+        // this is how it becomes the exercise's.
+        if (draft.displayUnit != exercise.displayUnit) {
+            TextButton(onClick = onRememberDisplayUnit) {
+                Text(
+                    stringResource(
+                        R.string.set_unit_remember,
+                        stringResource(draft.displayUnit.label),
+                        exercise.name,
+                    ),
+                )
+            }
         }
 
         // Offered only where it means something. An exercise trained one side at a time is the one
@@ -297,13 +327,14 @@ private fun SetEntryControls(
     }
 }
 
-/** The weight, reps, note and type fields, shared by the entry controls and the edit dialog. */
+/** The weight, reps, note, unit and type fields, shared by the entry controls and the dialogs. */
 @Composable
 private fun SetDraftFields(
     draft: SetDraft,
     onChange: (SetDraft) -> Unit,
     showType: Boolean = true,
     showNote: Boolean = true,
+    showDisplayUnit: Boolean = true,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -313,7 +344,9 @@ private fun SetDraftFields(
             OutlinedTextField(
                 value = draft.weightText,
                 onValueChange = { onChange(draft.copy(weightText = it)) },
-                label = { Text(stringResource(R.string.set_weight_kg)) },
+                // Labelled with the unit the number is read in, because that is what decides what
+                // typing 225 means.
+                label = { Text(stringResource(draft.displayUnit.label)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.weight(1f),
@@ -327,6 +360,7 @@ private fun SetDraftFields(
                 modifier = Modifier.weight(1f),
             )
         }
+        WeightSteppers(draft, onChange, showDisplayUnit)
         if (showNote) {
             OutlinedTextField(
                 value = draft.note.orEmpty(),
@@ -338,6 +372,51 @@ private fun SetDraftFields(
         }
         if (showType) {
             SetTypeChooser(draft.type) { onChange(draft.copy(type = it)) }
+        }
+    }
+}
+
+/**
+ * Stepping the weight, and saying what unit it is read in.
+ *
+ * The steps are the display unit's own — 2.5 kg or 5 lb — and are written on the buttons, because a
+ * lifter who has just switched to pounds needs to see that the step came with it. Converting one
+ * unit's step into the other would offer weights no barbell can be loaded to.
+ *
+ * Choosing a unit here changes this set alone, and making it stick to the exercise is a separate,
+ * named action. `docs/design/logging-screen.md` has one tap do the remembering, but that screen
+ * always has a prescription in front of the lifter to undo against; here the safe half is the
+ * default and the remembered change says out loud what it is about to do.
+ */
+@Composable
+private fun WeightSteppers(
+    draft: SetDraft,
+    onChange: (SetDraft) -> Unit,
+    showDisplayUnit: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(onClick = { onChange(draft.stepWeight(-1)) }) {
+            Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asWeightText()))
+        }
+        OutlinedButton(onClick = { onChange(draft.stepWeight(1)) }) {
+            Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asWeightText()))
+        }
+        if (showDisplayUnit) {
+            WeightUnit.entries.forEach { candidate ->
+                FilterChip(
+                    selected = candidate == draft.displayUnit,
+                    // A reading, not a value: the number in the field is rewritten and what it
+                    // weighs is untouched.
+                    onClick = { onChange(draft.readIn(candidate)) },
+                    label = { Text(stringResource(candidate.label)) },
+                )
+            }
         }
     }
 }
@@ -373,8 +452,8 @@ private fun SetTypeChooser(selected: SetType, onSelect: (SetType) -> Unit) {
 @Composable
 private fun LoggedExercise(
     performed: SessionExercise,
-    onEditEffort: (Long, PerformedSet, Effort) -> Unit,
-    onAddDrop: (Effort) -> Unit,
+    onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit,
+    onAddDrop: (WeightUnit, Effort) -> Unit,
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         Text(performed.exercise.name, style = MaterialTheme.typography.titleMedium)
@@ -385,7 +464,9 @@ private fun LoggedExercise(
                 // the sets in front of them.
                 number = position + 1,
                 set = set,
-                onEditEffort = { effort -> onEditEffort(performed.id, set, effort) },
+                // The exercise's unit, unless this set was read off some other machine.
+                displayUnit = performed.displayUnitFor(set),
+                onEditEffort = { effort -> onEditEffort(performed, set, effort) },
                 onAddDrop = onAddDrop,
             )
         }
@@ -402,8 +483,9 @@ private fun LoggedExercise(
 private fun LoggedSetRows(
     number: Int,
     set: PerformedSet,
+    displayUnit: WeightUnit,
     onEditEffort: (Effort) -> Unit,
-    onAddDrop: (Effort) -> Unit,
+    onAddDrop: (WeightUnit, Effort) -> Unit,
 ) {
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
         set.efforts.forEachIndexed { index, effort ->
@@ -430,7 +512,7 @@ private fun LoggedSetRows(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(effort.summary(), style = MaterialTheme.typography.bodyLarge)
+                Text(effort.summary(displayUnit), style = MaterialTheme.typography.bodyLarge)
                 if (index == 0 && set.type != SetType.WORKING) {
                     Text(
                         text = stringResource(set.type.label),
@@ -447,9 +529,10 @@ private fun LoggedSetRows(
                 }
             }
 
-            effort.drops.forEach { drop -> DropRow(drop) }
+            // A drop is part of the set it continues, so it is read in the set's unit.
+            effort.drops.forEach { drop -> DropRow(drop, displayUnit) }
 
-            TextButton(onClick = { onAddDrop(effort) }) {
+            TextButton(onClick = { onAddDrop(displayUnit, effort) }) {
                 Text(stringResource(R.string.set_add_drop))
             }
         }
@@ -457,12 +540,13 @@ private fun LoggedSetRows(
 }
 
 @Composable
-private fun DropRow(drop: Drop) {
+private fun DropRow(drop: Drop, displayUnit: WeightUnit) {
     Text(
         text = stringResource(
             R.string.set_drop_summary,
             drop.orderIndex,
-            drop.weight.asText(),
+            drop.weight.asTextIn(displayUnit),
+            stringResource(displayUnit.label),
             drop.reps,
         ),
         style = MaterialTheme.typography.bodyMedium,
@@ -528,10 +612,18 @@ private fun AddDropDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(stringResource(R.string.set_drop)) },
-        // Neither a type nor a note: a drop is part of the set it continues, carrying no type of
-        // its own and nowhere to store a note. Offering fields that discard what is typed into them
-        // is worse than not offering them.
-        text = { SetDraftFields(adding.draft, onChange, showType = false, showNote = false) },
+        // Neither a type, a note nor a unit of its own: a drop is part of the set it continues, so
+        // it is read in that set's unit and has nowhere to store the other two. Offering fields
+        // that discard what is typed into them is worse than not offering them.
+        text = {
+            SetDraftFields(
+                adding.draft,
+                onChange,
+                showType = false,
+                showNote = false,
+                showDisplayUnit = false,
+            )
+        },
         confirmButton = {
             TextButton(onClick = onSave, enabled = adding.draft.isLoggable) {
                 Text(stringResource(R.string.session_save))
@@ -583,5 +675,9 @@ private fun WhichDayDialog(
 }
 
 @Composable
-private fun Effort.summary(): String =
-    stringResource(R.string.set_summary, weight.asText(), reps)
+private fun Effort.summary(displayUnit: WeightUnit): String = stringResource(
+    R.string.set_summary,
+    weight.asTextIn(displayUnit),
+    stringResource(displayUnit.label),
+    reps,
+)

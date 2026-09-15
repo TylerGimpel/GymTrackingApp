@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.Side
+import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Clock
@@ -52,11 +53,19 @@ class SessionRepository(
      * Records a set against [exerciseId], opening a session and an entry for the exercise if this
      * is the first set of either.
      *
+     * [exerciseUnit] is what the exercise is read in, which is all this needs to know to decide
+     * whether the set departed from it. What is written is canonical kilograms either way.
+     *
      * Returns false if the draft does not yet read as a weight and a rep count.
      */
-    suspend fun logSet(exerciseId: String, draft: SetDraft): Boolean {
+    suspend fun logSet(
+        exerciseId: String,
+        draft: SetDraft,
+        exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
+    ): Boolean {
         val weight = draft.weight ?: return false
         val reps = draft.reps ?: return false
+        val displayUnit = draft.displayUnit.overriding(exerciseUnit)
 
         database.withTransaction {
             val session = currentSession()
@@ -71,6 +80,7 @@ class SessionRepository(
                     reps = reps,
                     note = draft.note,
                     side = null,
+                    displayUnit = displayUnit?.stored,
                 ),
             )
         }
@@ -83,8 +93,14 @@ class SessionRepository(
      * Both rows take the same set index, because this is one set: a lifter expanding a unilateral
      * exercise to per-side is tracking an imbalance, not doubling their training.
      */
-    suspend fun logPerSideSet(exerciseId: String, left: SetDraft, right: SetDraft): Boolean {
+    suspend fun logPerSideSet(
+        exerciseId: String,
+        left: SetDraft,
+        right: SetDraft,
+        exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
+    ): Boolean {
         if (!left.isLoggable || !right.isLoggable) return false
+        val displayUnit = left.displayUnit.overriding(exerciseUnit)
 
         database.withTransaction {
             val session = currentSession()
@@ -92,8 +108,8 @@ class SessionRepository(
                 ?: openSessionExercise(session.id, exerciseId)
             val setIndex = nextSetIndexFor(performed.id)
 
-            // The type comes from the left draft for both rows: a type belongs to the set, and the
-            // controls only offer one chooser for that reason.
+            // The type and the unit come from the left draft for both rows: both belong to the
+            // set, and the controls only offer one chooser of each for that reason.
             listOf(Side.LEFT to left, Side.RIGHT to right).forEach { (side, entered) ->
                 sessions.insert(
                     SetEntryEntity(
@@ -104,6 +120,7 @@ class SessionRepository(
                         reps = requireNotNull(entered.reps),
                         note = entered.note,
                         side = side.stored,
+                        displayUnit = displayUnit?.stored,
                     ),
                 )
             }
@@ -133,20 +150,31 @@ class SessionRepository(
     /**
      * Corrects one effort, leaving its index and every other set alone.
      *
-     * The weight, reps and note belong to the effort, so only that row changes. The type belongs to
-     * the set, so every row of it is retyped together — otherwise the two sides of a per-side set
-     * could disagree about whether the set counts at all.
+     * The weight, reps and note belong to the effort, so only that row changes. The type and the
+     * unit belong to the set, so every row of it is restated together — otherwise the two sides of
+     * a per-side set could disagree about whether the set counts at all, or about what its numbers
+     * are read in.
      */
-    suspend fun editSet(effortId: Long, draft: SetDraft): Boolean {
+    suspend fun editSet(
+        effortId: Long,
+        draft: SetDraft,
+        exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
+    ): Boolean {
         val weight = draft.weight ?: return false
         val reps = draft.reps ?: return false
         val existing = sessions.setEntry(effortId) ?: return false
+        val displayUnit = draft.displayUnit.overriding(exerciseUnit)
 
         database.withTransaction {
             sessions.update(
                 existing.copy(weightKg = weight.value, reps = reps, note = draft.note),
             )
             sessions.retypeSet(existing.sessionExerciseId, existing.setIndex, draft.type.stored)
+            sessions.redisplaySet(
+                existing.sessionExerciseId,
+                existing.setIndex,
+                displayUnit?.stored,
+            )
         }
         return true
     }

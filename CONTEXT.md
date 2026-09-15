@@ -52,6 +52,13 @@ How an exercise's recommendation advances over time, including `none` for exerci
 **Unilateral**:
 An exercise trained one side at a time. Logged as a single entry by default, expandable to per-side.
 
+**Display unit**:
+The unit an exercise is read in — kilograms or pounds — remembered per exercise, because it is a property of the machine rather than of the person. A single set can override it without disturbing the exercise's own setting. Display only: what is stored is canonical kilograms whatever this says, so the gym's kg lat pulldown and its lb one share one continuous history.
+_Avoid_: unit on its own as a name for it, which reads as something the weight is stored in.
+
+**Stack number**:
+What a machine's selector plate is labelled with. Treated as its own gym-local scale and converted against nothing: pulley ratios differ between manufacturers and are not labelled, so 60 on one machine is not 60 on another and no arithmetic can make it so.
+
 ### Recording
 
 **Session**:
@@ -123,3 +130,5 @@ The best set a user has performed at a given rep count for an exercise — best 
 
 **Increment**:
 The smallest weight step actually achievable on a given exercise, set by the equipment rather than by arithmetic — plate pairs on a barbell, rack steps on dumbbells, and for machines, the stack positions the user has been observed to use.
+
+Distinct from the **step** a weight stepper takes, which is a round number in the display unit — 2.5 kg or 5 lb — and belongs to how a weight is read rather than to what the equipment can do. Converting one unit's step into the other is what the separate numbers exist to avoid.

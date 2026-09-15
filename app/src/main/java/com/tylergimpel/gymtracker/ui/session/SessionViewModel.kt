@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
+import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.data.LoggedSession
 import com.tylergimpel.gymtracker.data.RoutineProgress
@@ -16,6 +17,8 @@ import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.asTextIn
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,20 +32,17 @@ import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.ZoneId
 
-/** The exercise the entry controls are currently pointed at. */
-data class SelectedExercise(
-    val id: String,
-    val name: String,
-    /** Whether this exercise is trained one side at a time, and so can be expanded to per-side. */
-    val unilateral: Boolean,
-)
-
 /** The effort being corrected, if one is open for editing. */
 data class EditingEffort(
     val effortId: Long,
     val sessionExerciseId: Long,
     val setIndex: Int,
     val draft: SetDraft,
+    /**
+     * What the exercise reads in, which is what decides whether this set records a unit at all:
+     * correcting a set must not quietly turn the exercise's own setting into an override on it.
+     */
+    val exerciseUnit: WeightUnit,
 )
 
 /** The effort a drop is being added to, if one is open. */
@@ -55,7 +55,7 @@ data class AddingDrop(val effortId: Long, val draft: SetDraft)
  * five and the alternative is packing values into pairs to smuggle them past it.
  */
 private data class ScreenState(
-    val selected: SelectedExercise? = null,
+    val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
     val perSide: Boolean = false,
     val rightDraft: SetDraft = SetDraft(),
@@ -67,7 +67,7 @@ private data class ScreenState(
 data class SessionUiState(
     val session: Session? = null,
     val exercises: List<SessionExercise> = emptyList(),
-    val selected: SelectedExercise? = null,
+    val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
     /** Whether the entry controls are expanded to record each side separately. */
     val perSide: Boolean = false,
@@ -91,6 +91,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         clock = Clock.systemDefaultZone(),
         zone = ZoneId.systemDefault(),
     )
+
+    private val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao())
 
     private val routines = RoutineRepository(
         database = database,
@@ -131,16 +133,42 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      */
     fun select(exercise: Exercise) = screen.update {
         it.copy(
-            selected = SelectedExercise(exercise.id, exercise.name, exercise.unilateral),
-            draft = SetDraft(),
+            selected = exercise,
+            // The drafts start in the unit this exercise is read in, which is the point of
+            // remembering it: walking up to the pound machine needs no setting up first.
+            draft = SetDraft(displayUnit = exercise.displayUnit),
             perSide = false,
-            rightDraft = SetDraft(),
+            rightDraft = SetDraft(displayUnit = exercise.displayUnit),
         )
     }
 
-    fun changeDraft(draft: SetDraft) = screen.update { it.copy(draft = draft) }
+    /**
+     * Takes what the left-hand controls now hold, keeping the right-hand side reading in the same
+     * unit — a set is read off one machine, so its two sides cannot be in different ones.
+     */
+    fun changeDraft(draft: SetDraft) = screen.update {
+        it.copy(draft = draft, rightDraft = it.rightDraft.readIn(draft.displayUnit))
+    }
 
     fun changeRightDraft(draft: SetDraft) = screen.update { it.copy(rightDraft = draft) }
+
+    /**
+     * Remembers the unit the controls are in as how this exercise is read from now on.
+     *
+     * Offered separately from changing the unit rather than happening on every toggle: the one
+     * machine in the corner labelled in pounds is a set-sized decision, and rewriting the
+     * exercise's setting on its behalf would make every later set follow a one-off.
+     */
+    fun rememberDisplayUnit() {
+        val exercise = screen.value.selected ?: return
+        val displayUnit = screen.value.draft.displayUnit
+        viewModelScope.launch {
+            exercises.setDisplayUnit(exercise.id, displayUnit)
+            // Carried across rather than re-read: this view model is the only thing that writes a
+            // preference, and the controls should not sit in the old unit while the write lands.
+            screen.update { it.copy(selected = it.selected?.copy(displayUnit = displayUnit)) }
+        }
+    }
 
     /** Expands the controls to record each side separately, or collapses them back to one entry. */
     fun togglePerSide() = screen.update {
@@ -152,9 +180,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val exercise = current.selected ?: return
         viewModelScope.launch {
             val recorded = if (current.perSide) {
-                repository.logPerSideSet(exercise.id, current.draft, current.rightDraft)
+                repository.logPerSideSet(
+                    exercise.id,
+                    current.draft,
+                    current.rightDraft,
+                    exercise.displayUnit,
+                )
             } else {
-                repository.logSet(exercise.id, current.draft)
+                repository.logSet(exercise.id, current.draft, exercise.displayUnit)
             }
             if (!recorded) return@launch
             // Keep the numbers: the next set is usually the same load, and retyping them every time
@@ -168,18 +201,23 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun startEditing(sessionExerciseId: Long, set: PerformedSet, effort: Effort) = screen.update {
+    fun startEditing(performed: SessionExercise, set: PerformedSet, effort: Effort) = screen.update {
+        val displayUnit = performed.displayUnitFor(set)
         it.copy(
             editing = EditingEffort(
                 effortId = effort.id,
-                sessionExerciseId = sessionExerciseId,
+                sessionExerciseId = performed.id,
                 setIndex = set.setIndex,
                 draft = SetDraft(
-                    weightText = effort.weight.asText(),
+                    // Seeded in the unit the set is shown in, so opening one for correction does
+                    // not change the number the lifter was reading a moment ago.
+                    weightText = effort.weight.asTextIn(displayUnit),
                     repsText = effort.reps.toString(),
                     note = effort.note,
                     type = set.type,
+                    displayUnit = displayUnit,
                 ),
+                exerciseUnit = performed.exercise.displayUnit,
             ),
         )
     }
@@ -192,7 +230,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun saveEditing() {
         val open = screen.value.editing ?: return
         viewModelScope.launch {
-            repository.editSet(open.effortId, open.draft)
+            repository.editSet(open.effortId, open.draft, open.exerciseUnit)
             screen.update { it.copy(editing = null) }
         }
     }
@@ -206,8 +244,10 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun startAddingDrop(effort: Effort) =
-        screen.update { it.copy(addingDrop = AddingDrop(effort.id, SetDraft())) }
+    /** [displayUnit] is what the set being continued reads in: a drop is part of it, not apart. */
+    fun startAddingDrop(displayUnit: WeightUnit, effort: Effort) = screen.update {
+        it.copy(addingDrop = AddingDrop(effort.id, SetDraft(displayUnit = displayUnit)))
+    }
 
     fun changeDropDraft(draft: SetDraft) =
         screen.update { it.copy(addingDrop = it.addingDrop?.copy(draft = draft)) }

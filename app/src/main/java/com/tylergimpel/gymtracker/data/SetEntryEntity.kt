@@ -67,6 +67,16 @@ data class SetEntryEntity(
      */
     @ColumnInfo(name = "side")
     val side: String?,
+
+    /**
+     * The unit this set was read in, or null where it reads as its exercise does.
+     *
+     * Null rather than a copy of the exercise's unit at the time, so that moving an exercise
+     * between units moves its whole history's display with it (ADR 0009). Display only either way:
+     * [weightKg] is what was lifted and nothing here touches it.
+     */
+    @ColumnInfo(name = "display_unit")
+    val displayUnit: String?,
 ) {
     companion object {
         /**

@@ -70,7 +70,7 @@ class ExerciseBankAssetTest {
 
     @Test
     fun everyExerciseCarriesAPrimaryMuscleAndAReadableLoggingType() = runBlocking {
-        val bank = ExerciseRepository(fromAsset.exerciseDao()).observeBank().first()
+        val bank = ExerciseRepository(fromAsset, fromAsset.exerciseDao(), fromAsset.sessionDao()).observeBank().first()
 
         assertEquals(896, bank.size)
         assertTrue(bank.all { it.primaryMuscle != null })
@@ -81,7 +81,7 @@ class ExerciseBankAssetTest {
 
     @Test
     fun cardioRowsShipWithTheirRetaggedEquipment() = runBlocking {
-        val bank = ExerciseRepository(fromAsset.exerciseDao()).observeBank().first().associateBy { it.id }
+        val bank = ExerciseRepository(fromAsset, fromAsset.exerciseDao(), fromAsset.sessionDao()).observeBank().first().associateBy { it.id }
 
         // Upstream tags every cardio machine as the generic `machine`, which cannot drive the gym
         // equipment checklist. These are the re-tagged values from data/cardio-retag.json.
@@ -92,7 +92,7 @@ class ExerciseBankAssetTest {
 
     @Test
     fun authoredExercisesShipAlongsideUpstreamOnes() = runBlocking {
-        val bank = ExerciseRepository(fromAsset.exerciseDao()).observeBank().first().associateBy { it.id }
+        val bank = ExerciseRepository(fromAsset, fromAsset.exerciseDao(), fromAsset.sessionDao()).observeBank().first().associateBy { it.id }
 
         assertNotNull(bank["Pendlay_Row"])
         assertEquals(listOf("shoulders"), bank.getValue("Landmine_Press").primaryMuscles)

@@ -23,6 +23,9 @@ data class SessionExercise(
      */
     val nextSetIndex: Int get() = nextSetIndex(sets)
 
+    /** The unit [set] reads in: its own where it overrode one, and the exercise's otherwise. */
+    fun displayUnitFor(set: PerformedSet): WeightUnit = set.displayUnit ?: exercise.displayUnit
+
     /**
      * This exercise without the set at [setIndex]. Every remaining set keeps the index it had:
      * renumbering mid-session can corrupt the set the user is editing at that moment.

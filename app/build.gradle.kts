@@ -17,7 +17,7 @@ plugins {
  * crash rather than a compile error.
  */
 val roomSchemaDirectory = layout.projectDirectory.dir("schemas")
-val roomDatabaseVersion = 5
+val roomDatabaseVersion = 6
 
 android {
     namespace = "com.tylergimpel.gymtracker"

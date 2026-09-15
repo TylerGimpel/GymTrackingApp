@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
+import com.tylergimpel.gymtracker.domain.WeightUnit
 
 /** One stored row of a set, together with any drops continuing it. */
 data class SetEntryWithDrops(
@@ -23,8 +24,8 @@ data class SessionExerciseWithSets(
     @Embedded
     val sessionExercise: SessionExerciseEntity,
 
-    @Relation(parentColumn = "exercise_id", entityColumn = "id")
-    val exercise: ExerciseEntity,
+    @Relation(entity = ExerciseEntity::class, parentColumn = "exercise_id", entityColumn = "id")
+    val exercise: ExerciseWithPreference,
 
     @Relation(
         entity = SetEntryEntity::class,
@@ -71,6 +72,8 @@ fun List<SetEntryWithDrops>.toPerformedSets(): List<PerformedSet> =
                 // Every row of one set carries the same type: the set is the thing that has a type,
                 // and each of its rows records it.
                 type = SetType.fromStored(rows.first().setEntry.type),
+                // As with the type: the unit belongs to the set, and each of its rows records it.
+                displayUnit = WeightUnit.fromStored(rows.first().setEntry.displayUnit),
                 efforts = rows.sortedBy { it.setEntry.id }.map(SetEntryWithDrops::toEffort),
             )
         }

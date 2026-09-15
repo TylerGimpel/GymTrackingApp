@@ -125,5 +125,27 @@ internal val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/**
+ * Version 6 gives an exercise a unit to be read in, and a set the right to depart from it.
+ *
+ * Nothing about what is stored changes: `weight_kg` was canonical kilograms before this migration
+ * and still is after it. The new table is empty and `display_unit` is null on every existing row,
+ * which together say "every exercise reads in kilograms and no set has overridden that" — exactly
+ * what was true of a database that had no notion of units at all.
+ *
+ * The preferences are a table of their own rather than columns on `exercise`, for the reasons in
+ * `docs/adr/0009-user-choices-live-apart-from-the-shipped-bank.md`.
+ */
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `exercise_preference` (`exercise_id` TEXT NOT NULL, `display_unit` TEXT NOT NULL, PRIMARY KEY(`exercise_id`), FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "ALTER TABLE `set_entry` ADD COLUMN `display_unit` TEXT",
+        )
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)

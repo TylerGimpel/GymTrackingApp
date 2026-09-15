@@ -79,6 +79,37 @@ interface SessionDao {
     suspend fun retypeSet(sessionExerciseId: Long, setIndex: Int, type: String)
 
     /**
+     * Changes which unit one set reads in, every row of it together.
+     *
+     * The same reasoning as the type: a per-side set whose two rows disagreed about the unit would
+     * show one arm in kilograms and the other in pounds.
+     */
+    @Query(
+        """
+        UPDATE set_entry SET display_unit = :displayUnit
+        WHERE session_exercise_id = :sessionExerciseId AND set_index = :setIndex
+        """,
+    )
+    suspend fun redisplaySet(sessionExerciseId: Long, setIndex: Int, displayUnit: String?)
+
+    /**
+     * Drops the unit override from every set of [exerciseId] that had overridden to [displayUnit].
+     *
+     * Run when an exercise adopts a unit some of its sets had already departed to: those sets are
+     * no longer departures from anything, and one that kept its override would be frozen in that
+     * unit the next time the exercise moved (ADR 0009).
+     */
+    @Query(
+        """
+        UPDATE set_entry SET display_unit = NULL
+        WHERE display_unit = :displayUnit AND session_exercise_id IN (
+            SELECT id FROM session_exercise WHERE exercise_id = :exerciseId
+        )
+        """,
+    )
+    suspend fun clearDisplayUnitOverrides(exerciseId: String, displayUnit: String)
+
+    /**
      * Removes every row of one set. No renumbering: the index it held stays empty, because shifting
      * the sets around it can corrupt one the lifter is editing at that moment.
      */

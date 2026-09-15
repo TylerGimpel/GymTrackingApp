@@ -183,10 +183,57 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToDisplayUnitsLeavingEveryStoredWeightInKilograms() {
+        helper.createDatabase(FIFTH_DATABASE, 5).use { version5 ->
+            version5.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source) VALUES " +
+                    "('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', 'compound', " +
+                    "'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream')",
+            )
+            version5.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            version5.execSQL(
+                "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            version5.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps, " +
+                    "note, side) VALUES (1, 1, 'working', 60.0, 5, NULL, NULL)",
+            )
+        }
+
+        val version6 = helper.runMigrationsAndValidate(FIFTH_DATABASE, 6, true, MIGRATION_5_6)
+
+        version6.use { db ->
+            // The weight was canonical kilograms before units existed and is the same number after:
+            // this migration adds a way to read a weight, not a way to change one.
+            db.query("SELECT weight_kg, display_unit FROM set_entry").use {
+                it.moveToFirst()
+                assertEquals(60.0, it.getDouble(0), 0.0)
+                // No override, so the set reads however its exercise does.
+                assertTrue(it.isNull(1))
+            }
+            // And an exercise can now be told which unit it is read in.
+            db.execSQL(
+                "INSERT INTO exercise_preference (exercise_id, display_unit) " +
+                    "VALUES ('Test_Exercise', 'lb')",
+            )
+            db.query("SELECT display_unit FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
         const val SECOND_DATABASE = "gym-migration-test-2.db"
         const val THIRD_DATABASE = "gym-migration-test-3.db"
+        const val FIFTH_DATABASE = "gym-migration-test-5.db"
     }
 }

@@ -2,14 +2,26 @@ package com.tylergimpel.gymtracker.data
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ExerciseDao {
 
     /** The whole bank, in the order a reader scanning it would expect. */
+    @Transaction
     @Query("SELECT * FROM exercise ORDER BY name COLLATE NOCASE")
-    fun observeAll(): Flow<List<ExerciseEntity>>
+    fun observeAll(): Flow<List<ExerciseWithPreference>>
+
+    /**
+     * Records what a lifter has decided about an exercise, replacing whatever they decided before.
+     *
+     * An upsert because a preference is a single standing answer rather than a history: a lifter
+     * moving an exercise back to kilograms is correcting the answer, not adding to it.
+     */
+    @Upsert
+    suspend fun save(preference: ExercisePreferenceEntity)
 
     @Query("SELECT COUNT(*) FROM exercise")
     suspend fun count(): Int

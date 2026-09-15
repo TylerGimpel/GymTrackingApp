@@ -20,6 +20,14 @@ data class Exercise(
     val loggingType: LoggingType,
     /** Trained one side at a time. Logged as a single entry by default, expandable to per-side. */
     val unilateral: Boolean,
+    /**
+     * The unit this exercise is read in, which the lifter sets once and the app then remembers.
+     *
+     * A property of the exercise because it is a property of the machine: the lat pulldown at this
+     * gym is labelled in pounds whoever walks up to it. It changes what is shown and never what is
+     * stored, so a gym with both kinds of machine still has one continuous progress graph.
+     */
+    val displayUnit: WeightUnit = WeightUnit.DEFAULT,
 ) {
     /**
      * The muscle to list this exercise under, which is the first of its primary muscles.

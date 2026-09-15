@@ -59,6 +59,15 @@ data class PerformedSet(
     val type: SetType,
     /** One effort, or one per side. Never empty. */
     val efforts: List<Effort>,
+    /**
+     * The unit this one set was read in, or null where it reads as its exercise does.
+     *
+     * Null rather than a copy of the exercise's setting, so that switching an exercise between
+     * kilograms and pounds moves its whole history's display with it and leaves behind only the
+     * sets a lifter deliberately logged off an odd machine (ADR 0009). Display only either way:
+     * the weights below are canonical kilograms whatever this says.
+     */
+    val displayUnit: WeightUnit? = null,
 ) {
     /** What progression reads: the first effort, before any drop. */
     val leadingEffort: Effort get() = efforts.first()

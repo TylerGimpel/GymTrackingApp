@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.WeightUnit
 
 /**
  * A row of the exercise bank as it ships in the prepopulated asset database.
@@ -58,7 +59,13 @@ data class ExerciseEntity(
     val source: String,
 )
 
-fun ExerciseEntity.toDomain() = Exercise(
+/**
+ * The bank's own fields as a domain exercise.
+ *
+ * [displayUnit] is passed in rather than read from a column: it is a choice the lifter made, held in
+ * `exercise_preference` so a bank update cannot overwrite it.
+ */
+fun ExerciseEntity.toDomain(displayUnit: WeightUnit) = Exercise(
     id = id,
     name = name,
     primaryMuscles = primaryMuscles,
@@ -70,4 +77,5 @@ fun ExerciseEntity.toDomain() = Exercise(
     level = level,
     loggingType = LoggingType.fromStored(loggingType),
     unilateral = unilateral,
+    displayUnit = displayUnit,
 )

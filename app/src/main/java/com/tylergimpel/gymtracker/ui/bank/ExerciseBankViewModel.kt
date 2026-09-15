@@ -35,8 +35,10 @@ private data class ScreenState(val query: String = "", val muscle: String? = nul
 
 class ExerciseBankViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val database = GymDatabase.getInstance(application)
+
     private val repository =
-        ExerciseRepository(GymDatabase.getInstance(application).exerciseDao())
+        ExerciseRepository(database, database.exerciseDao(), database.sessionDao())
     private val aliasStore = ExerciseAliasStore(application)
 
     private val screen = MutableStateFlow(ScreenState())
