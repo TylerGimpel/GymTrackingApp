@@ -63,8 +63,11 @@ How an exercise's recommendation advances over time, including `none` for exerci
 An exercise trained one side at a time. Logged as a single entry by default, expandable to per-side.
 
 **Display unit**:
-The unit an exercise is read in — kilograms or pounds — remembered per exercise, because it is a property of the machine rather than of the person. A single set can override it without disturbing the exercise's own setting. Display only: what is stored is canonical kilograms whatever this says, so the gym's kg lat pulldown and its lb one share one continuous history.
+The unit an exercise is read in — kilograms or pounds — remembered per exercise, because it is a property of the machine rather than of the person: the gym's lb lat pulldown is labelled in pounds whoever walks up to it. A departure from the lifter's **Preferred unit**, and held only where it actually departs — an exercise set to the unit its owner already reads in has chosen nothing, and storing the agreement would strand it there the day they switched. A single set can override it in turn without disturbing the exercise's own setting. Display only at every level: what is stored is canonical kilograms whatever any of them says, so the gym's kg lat pulldown and its lb one share one continuous history.
 _Avoid_: unit on its own as a name for it, which reads as something the weight is stored in.
+
+**Preferred unit**:
+The unit this lifter reads weights in — theirs rather than any machine's, and the one thing on this list that is about the person. Seeded from the device's locale, settled the moment they tap kg or lb, and from then on theirs: a phone that changes locale does not re-read their history in a unit they did not ask for. Everything reads in it until something more specific says otherwise — an exercise with a **Display unit** of its own, or a single set overriding that.
 
 **Stack number**:
 What a machine's selector plate is labelled with. Treated as its own gym-local scale and converted against nothing: pulley ratios differ between manufacturers and are not labelled, so 60 on one machine is not 60 on another and no arithmetic can make it so.
@@ -131,10 +134,11 @@ Forming a superset from neighbouring exercises, and breaking one up. Both are st
 What the app tells the user to do for a given set — weight, reps and rest, where the reps of a working set are a rep range rather than a single count. Recorded alongside what they actually did, so the two can be compared.
 
 **Bodyweight entry**:
-What the lifter weighed on a given day. Profile data rather than training: it sits on the same calendar as the sessions and belongs to none of them, contributes nothing to **Volume** and is never a **Set** — it carries no session, no exercise and no set index, so there is nothing for a volume or set query to reach rather than something to filter out. Stored in canonical kilograms like every other weight and read in the unit the lifter reads, which is theirs rather than a machine's — unlike an exercise's **Display unit**, there is one scale and one person standing on it.
+What the lifter weighed, and when they weighed it. Profile data rather than training: it sits on the same calendar as the sessions and belongs to none of them, contributes nothing to **Volume** and is never a **Set** — it carries no session, no exercise and no set index, so there is nothing for a volume or set query to reach rather than something to filter out. Stored in canonical kilograms like every other weight, and read in the lifter's **Preferred unit**.
 
-A day holds one weight, so weighing again on a day corrects it rather than recording a second reading: bodyweight swings a kilogram across a day, and two answers to "what did I weigh on Monday" cannot be chosen between. The most recent entry is the most recent *day's*, never the row written last — a lifter filling in a missed weigh-in has not lost weight since this morning.
+A day holds as many readings as were taken. Bodyweight swings a kilogram or two between morning and evening, so a lifter who stepped on the scale twice measured that swing rather than corrected themselves; each reading carries the moment it was recorded, which is what tells two on one day apart and orders them. The day it is filed on is its own value, correctable like a session's date, so a weigh-in remembered on Monday can still be Saturday's. The latest bodyweight is the latest reading on the most recent day, never the row written last.
 _Avoid_: weight on its own as a name for it, which already means what is on the bar.
+
 
 ### Recommending
 

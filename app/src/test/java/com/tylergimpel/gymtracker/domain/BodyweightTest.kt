@@ -6,6 +6,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Bodyweight is what the lifter weighs, recorded against a day.
@@ -17,6 +19,7 @@ import java.time.LocalDate
 class BodyweightTest {
 
     private val monday: LocalDate = LocalDate.of(2026, 9, 14)
+    private val zone: ZoneId = ZoneId.of("Europe/London")
 
     @Test
     fun `an entry records a day and what the lifter weighed on it`() {
@@ -74,6 +77,60 @@ class BodyweightTest {
     }
 
     @Test
+    fun `a day can hold more than one reading, and keeps both`() {
+        // Bodyweight swings a kilogram or two across a day, so a lifter who stepped on the scale
+        // morning and evening measured that swing. Keeping only the last would throw away the more
+        // useful of the two readings and call it tidiness.
+        val history = BodyweightHistory(
+            listOf(
+                entry(id = 1, on = monday, weighing = 82.4, at = "07:10"),
+                entry(id = 2, on = monday, weighing = 83.6, at = "21:30"),
+            ),
+        )
+
+        assertEquals(listOf(2L, 1L), history.mostRecentFirst.map(BodyweightEntry::id))
+        assertEquals(setOf(monday), history.daysWeighedSeveralTimes)
+    }
+
+    @Test
+    fun `a day weighed once is not a day with several readings`() {
+        // What decides whether a time is worth showing beside a date at all.
+        val history = BodyweightHistory(
+            listOf(
+                entry(id = 1, on = monday, weighing = 82.4),
+                entry(id = 2, on = monday.minusDays(1), weighing = 82.8),
+            ),
+        )
+
+        assertEquals(emptySet<LocalDate>(), history.daysWeighedSeveralTimes)
+    }
+
+    @Test
+    fun `the latest reading of the most recent day is the latest weight`() {
+        val history = BodyweightHistory(
+            listOf(
+                entry(id = 1, on = monday, weighing = 82.4, at = "07:10"),
+                entry(id = 2, on = monday, weighing = 83.6, at = "21:30"),
+            ),
+        )
+
+        assertEquals(83.6, history.latest!!.weight.value, 0.0)
+    }
+
+    @Test
+    fun `a weigh-in backfilled onto an earlier day is that day's, however recently it was typed`() {
+        // Recorded last and dated first: the day leads the ordering, because Saturday's weight is
+        // Saturday's whether it was typed on Saturday or remembered on Monday.
+        val saturday = entry(id = 2, on = monday.minusDays(2), weighing = 83.1, at = "23:59")
+        val history = BodyweightHistory(
+            listOf(entry(id = 1, on = monday, weighing = 82.4, at = "07:10"), saturday),
+        )
+
+        assertEquals(listOf(1L, 2L), history.mostRecentFirst.map(BodyweightEntry::id))
+        assertEquals(82.4, history.latest!!.weight.value, 0.0)
+    }
+
+    @Test
     fun `history reads most recent first, whatever order the entries arrive in`() {
         val history = BodyweightHistory(
             listOf(
@@ -90,7 +147,7 @@ class BodyweightTest {
     }
 
     @Test
-    fun `the latest bodyweight is the most recent day's, not the most recently typed`() {
+    fun `the latest bodyweight is the most recent day's, not the most recently written`() {
         // What cold-start estimation will ask for. A lifter filling in last week's missed weigh-in
         // today has not lost weight since this morning, and the row written last is not the answer.
         val history = BodyweightHistory(
@@ -154,8 +211,13 @@ class BodyweightTest {
         assertEquals(mapOf("chest" to 1.0, "triceps" to 0.5), volumeByMuscle(performed))
     }
 
-    private fun entry(id: Long, on: LocalDate, weighing: Double) =
-        BodyweightEntry(id = id, date = on, weight = Kilograms(weighing))
+    private fun entry(id: Long, on: LocalDate, weighing: Double, at: String = "07:10") =
+        BodyweightEntry(
+            id = id,
+            recordedAt = LocalDateTime.parse("${on}T$at").atZone(zone).toInstant(),
+            date = on,
+            weight = Kilograms(weighing),
+        )
 
     private val bench = Exercise(
         id = "Barbell_Bench_Press",

@@ -104,7 +104,7 @@
     <string name="bodyweight_edit">Edit this weigh-in</string>
     <string name="bodyweight_on">On %1$s</string>
     <string name="bodyweight_summary">%1$s %2$s</string>
-    <string name="bodyweight_day_taken">%1$s already has a weight. Change the day, or delete one of the two.</string>
+    <string name="bodyweight_day_at">%1$s at %2$s</string>
     <string name="bodyweight_empty">No weigh-ins yet. A weight here is yours rather than your training: it counts toward no session and no volume.</string>
     <string name="session_open_bodyweight">Bodyweight</string>
 </resources>

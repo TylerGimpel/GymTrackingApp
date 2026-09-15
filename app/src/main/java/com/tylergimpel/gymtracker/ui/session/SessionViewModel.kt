@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.SessionRepository
+import com.tylergimpel.gymtracker.data.profileRepository
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggedSession
@@ -145,14 +146,18 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     private val database = GymDatabase.getInstance(application)
 
+    private val profile = database.profileRepository()
+
     private val repository = SessionRepository(
         database = database,
         sessions = database.sessionDao(),
         clock = Clock.systemDefaultZone(),
         zone = ZoneId.systemDefault(),
+        profile = profile,
     )
 
-    private val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao())
+    private val exercises =
+        ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
 
     private val routines = RoutineRepository(
         database = database,

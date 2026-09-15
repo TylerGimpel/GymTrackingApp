@@ -41,7 +41,11 @@ import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.ui.DayPickerDialog
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
 import com.tylergimpel.gymtracker.ui.label
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Where the lifter records what they weigh, and reads back what they have weighed.
@@ -120,7 +124,14 @@ fun BodyweightScreen(
             // Newest first: what a lifter came here to read is what they weigh now, and the rest is
             // the trend behind it.
             items(state.history, key = BodyweightEntry::id) { entry ->
-                WeighInRow(entry, state.displayUnit, onEdit)
+                WeighInRow(
+                    entry = entry,
+                    displayUnit = state.displayUnit,
+                    // Only where the day holds more than one reading: otherwise the day is the
+                    // whole of what a lifter came to read.
+                    showTime = entry.date in state.daysWeighedSeveralTimes,
+                    onEdit = onEdit,
+                )
             }
         }
     }
@@ -215,8 +226,10 @@ private fun DayButton(date: LocalDate, onPick: (LocalDate) -> Unit) {
 private fun WeighInRow(
     entry: BodyweightEntry,
     displayUnit: WeightUnit,
+    showTime: Boolean,
     onEdit: (BodyweightEntry) -> Unit,
 ) {
+    val day = entry.date.toString()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -229,7 +242,11 @@ private fun WeighInRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = entry.date.toString(),
+            text = if (showTime) {
+                stringResource(R.string.bodyweight_day_at, day, entry.recordedAt.asLocalTimeText())
+            } else {
+                day
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
@@ -266,18 +283,6 @@ private fun EditWeighInDialog(
                 WeighInField(editing.draft, onChange, modifier = Modifier.fillMaxWidth())
                 WeightUnitChips(selected = editing.draft.displayUnit, onReadIn = onReadIn)
                 DayButton(editing.draft.date) { onChange(editing.draft.copy(date = it)) }
-                // Said rather than done: a day already weighed is not overwritten from here,
-                // because the weight it holds is a reading the lifter never asked to lose.
-                if (editing.dayAlreadyWeighed) {
-                    Text(
-                        text = stringResource(
-                            R.string.bodyweight_day_taken,
-                            editing.draft.date.toString(),
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
             }
         },
         confirmButton = {
@@ -290,3 +295,14 @@ private fun EditWeighInDialog(
         },
     )
 }
+
+/**
+ * A moment as the time of day it was, in the lifter's own zone and their own locale's shape.
+ *
+ * Shown only to tell two readings on one day apart, so the date is left to the row beside it and
+ * the seconds to nobody: a scale is not read to the second.
+ */
+@Composable
+private fun Instant.asLocalTimeText(): String =
+    DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+        .format(atZone(ZoneId.systemDefault()).toLocalTime())

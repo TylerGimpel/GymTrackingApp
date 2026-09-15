@@ -46,7 +46,7 @@ interface ExerciseDao {
         ON CONFLICT(exercise_id) DO UPDATE SET display_unit = excluded.display_unit
         """,
     )
-    suspend fun setDisplayUnit(exerciseId: String, displayUnit: String)
+    suspend fun setDisplayUnit(exerciseId: String, displayUnit: String?)
 
     /** Records what the lifter calls an exercise, or clears it back to the bank's name. */
     @Query(

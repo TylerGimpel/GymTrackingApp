@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.unperformedExerciseCounts
 import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -52,7 +53,13 @@ class RoutinePersistenceTest {
             database.sessionDao(),
             clock,
         )
-        sessions = SessionRepository(database, database.sessionDao(), clock, zone)
+        sessions = SessionRepository(
+            database,
+            database.sessionDao(),
+            clock,
+            zone,
+            ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS),
+        )
     }
 
     @After

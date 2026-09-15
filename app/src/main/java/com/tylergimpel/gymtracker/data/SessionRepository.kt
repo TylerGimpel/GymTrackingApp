@@ -12,6 +12,7 @@ import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.time.Clock
 import java.time.Instant
@@ -30,6 +31,11 @@ class SessionRepository(
     private val sessions: SessionDao,
     private val clock: Clock,
     private val zone: ZoneId,
+    /**
+     * Where the unit comes from for an exercise the lifter has said nothing about, so that a logged
+     * set and the same exercise in the bank are never read in different units.
+     */
+    private val profile: ProfileRepository,
 ) {
     fun observeActiveSession(): Flow<Session?> =
         sessions.observeActiveSession().map { it?.toDomain() }
@@ -42,7 +48,7 @@ class SessionRepository(
      * filed on the wrong day.
      */
     fun observeLastFinished(): Flow<LoggedSession?> =
-        sessions.observeLastFinished().map { it?.toLoggedSession() }
+        sessions.observeLastFinished().withLifterUnit { last, unit -> last?.toLoggedSession(unit) }
 
     /**
      * The most recent finished sessions, newest first — what [unperformedExerciseCounts] reads.
@@ -51,10 +57,12 @@ class SessionRepository(
      * a routine they abandoned a year ago should not answer it.
      */
     fun observeRecent(limit: Int = RECENT_SESSIONS): Flow<List<LoggedSession>> =
-        sessions.observeRecent(limit).map { sessions -> sessions.map { it.toLoggedSession() } }
+        sessions.observeRecent(limit).withLifterUnit { recent, unit ->
+            recent.map { it.toLoggedSession(unit) }
+        }
 
     fun observeSession(sessionId: Long): Flow<LoggedSession?> =
-        sessions.observeContent(sessionId).map { it?.toLoggedSession() }
+        sessions.observeContent(sessionId).withLifterUnit { content, unit -> content?.toLoggedSession(unit) }
 
     /**
      * Opens a session for a routine day, recording [plan] as what it is for.
@@ -336,11 +344,21 @@ class SessionRepository(
     private suspend fun nextSetIndexFor(sessionExerciseId: Long): Int =
         SessionExercise.nextSetIndex(sessions.setsFor(sessionExerciseId).toPerformedSets())
 
-    private fun SessionWithContent.toLoggedSession() = LoggedSession(
+    /**
+     * Reads what comes out of storage alongside the unit this lifter reads in.
+     *
+     * The unit is a property of who is looking rather than of what happened, so it joins here on the
+     * way out rather than being stored on anything: changing it re-reads the whole log and moves not
+     * one logged kilogram.
+     */
+    private fun <T, R> Flow<T>.withLifterUnit(read: (T, WeightUnit) -> R): Flow<R> =
+        combine(profile.observeDisplayUnit(), read)
+
+    private fun SessionWithContent.toLoggedSession(lifterUnit: WeightUnit) = LoggedSession(
         session = session.toDomain(),
-        exercises = exercises.map(SessionExerciseWithSets::toDomain)
+        exercises = exercises.map { it.toDomain(lifterUnit) }
             .sortedBy(SessionExercise::orderIndex),
-        plan = plan.toSessionPlan(),
+        plan = plan.toSessionPlan(lifterUnit),
         supersets = supersets.map(SupersetGroupEntity::toDomain),
     )
 

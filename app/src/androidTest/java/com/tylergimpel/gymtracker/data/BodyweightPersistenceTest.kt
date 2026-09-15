@@ -12,9 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,6 +55,7 @@ class BodyweightPersistenceTest {
             sessions = database.sessionDao(),
             clock = Clock.fixed(at("2026-09-14T18:00"), zone),
             zone = zone,
+            profile = ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS),
         )
     }
 
@@ -68,7 +67,7 @@ class BodyweightPersistenceTest {
 
     @Test
     fun recordingAWeightStoresTheDayAndTheKilograms() = runBlocking {
-        repository.record(monday, Kilograms(82.4))
+        repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
         val recorded = repository.observeHistory().first().mostRecentFirst.single()
         assertEquals(monday, recorded.date)
@@ -77,30 +76,33 @@ class BodyweightPersistenceTest {
 
     @Test
     fun aReadingTakenInPoundsIsStoredAsKilograms() = runBlocking {
-        repository.record(monday, WeightUnit.POUNDS.toKilograms(180.0))
+        repository.record(at("2026-09-14T07:10"), monday, WeightUnit.POUNDS.toKilograms(180.0))
 
         assertEquals(81.65, storedWeights().single(), 0.01)
         assertEquals(180.0, WeightUnit.POUNDS.fromKilograms(repository.latest()!!.weight), 0.0)
     }
 
     @Test
-    fun weighingAgainOnADayCorrectsThatDayRatherThanAddingASecondReading() = runBlocking {
-        repository.record(monday, Kilograms(82.4))
+    fun weighingAgainOnADayIsASecondReadingRatherThanACorrection() = runBlocking {
+        repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
-        repository.record(monday, Kilograms(82.9))
+        repository.record(at("2026-09-14T21:30"), monday, Kilograms(82.9))
 
+        // Morning and evening, both kept and the evening read first: the swing between them is a
+        // measurement rather than a mistake.
         val history = repository.observeHistory().first().mostRecentFirst
-        assertEquals(1, history.size)
-        assertEquals(82.9, history.single().weight.value, 0.0)
+        assertEquals(listOf(82.9, 82.4), history.map { it.weight.value })
+        assertEquals(listOf(monday, monday), history.map(BodyweightEntry::date))
+        assertEquals(82.9, repository.latest()!!.weight.value, 0.0)
     }
 
     @Test
     fun historyIsListedMostRecentFirst() = runBlocking {
         // Written out of order on purpose: a lifter catching up on a missed weigh-in writes the
         // older row last, and the list they read is still newest first.
-        repository.record(monday, Kilograms(82.4))
-        repository.record(monday.minusDays(14), Kilograms(84.0))
-        repository.record(monday.minusDays(7), Kilograms(83.1))
+        repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
+        repository.record(at("2026-08-31T07:10"), monday.minusDays(14), Kilograms(84.0))
+        repository.record(at("2026-09-07T07:10"), monday.minusDays(7), Kilograms(83.1))
 
         assertEquals(
             listOf(monday, monday.minusDays(7), monday.minusDays(14)),
@@ -110,8 +112,8 @@ class BodyweightPersistenceTest {
 
     @Test
     fun theLatestWeightIsTheMostRecentDayRatherThanTheRowWrittenLast() = runBlocking {
-        repository.record(monday, Kilograms(82.4))
-        repository.record(monday.minusDays(7), Kilograms(83.1))
+        repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
+        repository.record(at("2026-09-07T07:10"), monday.minusDays(7), Kilograms(83.1))
 
         assertEquals(82.4, repository.latest()!!.weight.value, 0.0)
     }
@@ -123,9 +125,9 @@ class BodyweightPersistenceTest {
 
     @Test
     fun anEntryCanBeCorrected() = runBlocking {
-        val id = repository.record(monday, Kilograms(82.4))
+        val id = repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
-        assertTrue(repository.correct(id, monday.minusDays(1), Kilograms(83.0)))
+        repository.correct(id, monday.minusDays(1), Kilograms(83.0))
 
         val corrected = repository.observeHistory().first().mostRecentFirst.single()
         assertEquals(monday.minusDays(1), corrected.date)
@@ -133,33 +135,35 @@ class BodyweightPersistenceTest {
     }
 
     @Test
-    fun correctingOnlyTheWeightLeavesTheEntryOnItsOwnDay() = runBlocking {
-        // The day is unchanged, so the entry is not being moved anywhere and the day it already
-        // occupies is not a day that is taken.
-        val id = repository.record(monday, Kilograms(82.4))
+    fun correctingAWeighInLeavesWhenItWasTakenAlone() = runBlocking {
+        val id = repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
-        assertTrue(repository.correct(id, monday, Kilograms(82.9)))
+        repository.correct(id, monday, Kilograms(82.9))
 
-        assertEquals(82.9, repository.latest()!!.weight.value, 0.0)
+        // The same correction a session's date gets: what was written down changes, and the moment
+        // the lifter actually stood on the scale is not a thing an edit gets to claim.
+        val corrected = repository.latest()!!
+        assertEquals(82.9, corrected.weight.value, 0.0)
+        assertEquals(at("2026-09-14T07:10"), corrected.recordedAt)
     }
 
     @Test
-    fun anEntryIsNotMovedOntoADayThatAlreadyHasOne() = runBlocking {
-        repository.record(monday.minusDays(1), Kilograms(83.0))
-        val id = repository.record(monday, Kilograms(82.4))
+    fun anEntryCanBeMovedOntoADayThatAlreadyHasOne() = runBlocking {
+        // A day holds as many readings as the lifter took, so moving one onto an already-weighed
+        // day is an ordinary correction and destroys nothing.
+        repository.record(at("2026-09-13T07:10"), monday.minusDays(1), Kilograms(83.0))
+        val id = repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
-        assertFalse(repository.correct(id, monday.minusDays(1), Kilograms(82.4)))
+        repository.correct(id, monday.minusDays(1), Kilograms(82.4))
 
-        // Both readings survive, untouched. A mistyped date is a common slip and the record it
-        // lands on is the one thing that cannot be recovered by typing again.
         val history = repository.observeHistory().first().mostRecentFirst
-        assertEquals(listOf(monday, monday.minusDays(1)), history.map(BodyweightEntry::date))
-        assertEquals(listOf(82.4, 83.0), history.map { it.weight.value })
+        assertEquals(listOf(monday.minusDays(1), monday.minusDays(1)), history.map(BodyweightEntry::date))
+        assertEquals(setOf(82.4, 83.0), history.map { it.weight.value }.toSet())
     }
 
     @Test
     fun anEntryCanBeDeleted() = runBlocking {
-        val id = repository.record(monday, Kilograms(82.4))
+        val id = repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
         repository.delete(id)
 
@@ -169,7 +173,7 @@ class BodyweightPersistenceTest {
 
     @Test
     fun recordingAWeightOpensNoSessionAndWritesNoSet() = runBlocking {
-        repository.record(monday, Kilograms(82.4))
+        repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
         assertNull(sessions.observeActiveSession().first())
         assertEquals(0, countOf("session"))
@@ -181,7 +185,7 @@ class BodyweightPersistenceTest {
     fun aWeighInOnATrainingDayIsNeitherASetNorAnyVolume() = runBlocking {
         sessions.logSet(BENCH, SetDraft("60", "5"))
 
-        repository.record(monday, Kilograms(82.4))
+        repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
         // The session stays exactly what it was: one set, and the volume that one set earns. The
         // heaviest number on the calendar that day is the one that counts for nothing.
@@ -199,7 +203,7 @@ class BodyweightPersistenceTest {
     fun deletingASessionLeavesEveryWeighInWhereItWas() = runBlocking {
         sessions.logSet(BENCH, SetDraft("60", "5"))
         val session = sessions.observeActiveSession().first()!!
-        repository.record(monday, Kilograms(82.4))
+        repository.record(at("2026-09-14T07:10"), monday, Kilograms(82.4))
 
         database.openHelper.writableDatabase.execSQL("DELETE FROM session WHERE id = ${session.id}")
 

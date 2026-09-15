@@ -46,6 +46,9 @@ class SessionPersistenceTest {
     private lateinit var repository: SessionRepository
     private lateinit var exercises: ExerciseRepository
 
+    /** Pinned rather than the device's: what a test reads in is part of what it asserts. */
+    private lateinit var profile: ProfileRepository
+
     @Before
     fun setUp() {
         context.deleteDatabase(TEST_DATABASE)
@@ -55,9 +58,10 @@ class SessionPersistenceTest {
             .createFromAsset(GymDatabase.ASSET_PATH)
             .addMigrations(*MIGRATIONS)
             .build()
-        repository = SessionRepository(database, database.sessionDao(), clock, zone)
+        profile = ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)
+        repository = SessionRepository(database, database.sessionDao(), clock, zone, profile)
         exercises =
-            ExerciseRepository(database, database.exerciseDao(), database.sessionDao())
+            ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
     }
 
     @After

@@ -278,6 +278,50 @@ internal val MIGRATION_9_10 = object : Migration(9, 10) {
     }
 }
 
+/**
+ * Version 11 gives a weigh-in the moment it was taken, and lets a day hold more than one.
+ *
+ * Version 10 made a day unique, on the reasoning that two readings for one day is a question with
+ * two answers. It is not: bodyweight swings a kilogram or two between morning and evening, so a
+ * lifter who steps on the scale twice has measured that swing, and the way to tell the readings
+ * apart is to record when each was taken rather than to keep only the last.
+ *
+ * The table is rebuilt rather than altered, because the unique index is the thing being dropped and
+ * `recorded_at` is not null. Every reading already stored keeps its id, its day and its weight, and
+ * takes the start of its own day as the moment it was recorded — the only honest answer for a row
+ * written when nothing recorded a time, and one that leaves it ordered exactly where it was.
+ */
+internal val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `_new_bodyweight_entry` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `recorded_at` INTEGER NOT NULL, `date` TEXT NOT NULL, `weight_kg` REAL NOT NULL)",
+        )
+        db.execSQL(
+            "INSERT INTO `_new_bodyweight_entry` (`id`, `recorded_at`, `date`, `weight_kg`) " +
+                "SELECT `id`, CAST(strftime('%s', `date`) AS INTEGER) * 1000, `date`, `weight_kg` " +
+                "FROM `bodyweight_entry`",
+        )
+        db.execSQL("DROP TABLE `bodyweight_entry`")
+        db.execSQL("ALTER TABLE `_new_bodyweight_entry` RENAME TO `bodyweight_entry`")
+    }
+}
+
+/**
+ * Version 12 gives the lifter somewhere to keep what they read weights in.
+ *
+ * One row, arriving empty, which is the truth about an installed copy: nobody has said what unit
+ * they think in, so the device's locale answers until they tap a chip and settle it. Kept apart from
+ * `exercise_preference` because it is not about any exercise — that table says what a machine is
+ * labelled in, and this says what a person reads.
+ */
+internal val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `profile` (`id` INTEGER NOT NULL, `display_unit` TEXT, PRIMARY KEY(`id`))",
+        )
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -288,4 +332,6 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_7_8,
     MIGRATION_8_9,
     MIGRATION_9_10,
+    MIGRATION_10_11,
+    MIGRATION_11_12,
 )

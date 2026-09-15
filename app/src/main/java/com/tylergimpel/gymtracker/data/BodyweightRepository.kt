@@ -6,6 +6,7 @@ import com.tylergimpel.gymtracker.domain.BodyweightHistory
 import com.tylergimpel.gymtracker.domain.Kilograms
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -23,39 +24,28 @@ class BodyweightRepository(
         entries.observeAll().map { rows -> BodyweightHistory(rows.map(BodyweightEntryEntity::toDomain)) }
 
     /**
-     * Records [weight] on [date], correcting that day if it has already been weighed.
+     * Records [weight] as read at [recordedAt] and filed on [date].
      *
-     * A day holds one weight. Stepping on the scale twice on a Monday is a lifter correcting
-     * Monday, not two data points — bodyweight swings a kilogram across a day, and a history with
-     * two answers for one day has no way to choose between them.
+     * Always a new reading, never an overwrite. A lifter who steps on the scale twice on a Monday
+     * has measured the swing between morning and evening rather than corrected themselves, and
+     * keeping only the last of the two would throw away the more useful reading.
      */
-    suspend fun record(date: LocalDate, weight: Kilograms): Long = database.withTransaction {
-        val existing = entries.entryOn(date)
-        if (existing == null) {
-            entries.insert(BodyweightEntryEntity(date = date, weightKg = weight.value))
-        } else {
-            entries.update(existing.copy(weightKg = weight.value))
-            existing.id
-        }
-    }
+    suspend fun record(recordedAt: Instant, date: LocalDate, weight: Kilograms): Long =
+        entries.insert(
+            BodyweightEntryEntity(recordedAt = recordedAt, date = date, weightKg = weight.value),
+        )
 
     /**
-     * Corrects an entry — the weight, the day, or both.
+     * Corrects a weigh-in — the weight, the day it is filed on, or both.
      *
-     * Returns false, changing nothing, where the day being moved onto already holds a different
-     * weigh-in. A day holds one weight, so something would have to give, and quietly dropping the
-     * weight already recorded there would destroy a reading the lifter never asked to lose — a
-     * mistyped date is a common slip, and the record it lands on is the one thing that cannot be
-     * recovered by typing again. Correcting that day directly, or deleting one of the two, are both
-     * still open; neither of them is silent.
+     * When it was taken is untouched, exactly as correcting a session's date leaves when it was
+     * trained alone: the lifter is fixing what they wrote down, not claiming to have stood on the
+     * scale at a different moment.
      */
-    suspend fun correct(id: Long, date: LocalDate, weight: Kilograms): Boolean =
-        database.withTransaction {
-            val occupied = entries.entryOn(date)?.let { it.id != id } == true
-            if (occupied) return@withTransaction false
-            entries.update(BodyweightEntryEntity(id = id, date = date, weightKg = weight.value))
-            true
-        }
+    suspend fun correct(id: Long, date: LocalDate, weight: Kilograms) = database.withTransaction {
+        val existing = entries.entry(id) ?: return@withTransaction
+        entries.update(existing.copy(date = date, weightKg = weight.value))
+    }
 
     suspend fun delete(id: Long) = entries.delete(id)
 

@@ -5,7 +5,6 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
 
 @Dao
 interface BodyweightDao {
@@ -14,9 +13,9 @@ interface BodyweightDao {
      * Every weigh-in, unordered.
      *
      * Ordering and "the latest" are the domain's, so that "most recent" has one meaning in one
-     * place: it is the most recent *day*, which is not the row written last. One row per day makes
-     * this a few hundred rows for a lifter who has weighed themselves daily for a year, so there is
-     * nothing to page and nothing to push into SQL.
+     * place: it is the latest reading on the most recent day, which is not the row written last.
+     * A lifter weighing themselves daily writes a few hundred rows a year, so there is nothing to
+     * page and nothing to push into SQL.
      */
     @Query("SELECT * FROM bodyweight_entry")
     fun observeAll(): Flow<List<BodyweightEntryEntity>>
@@ -24,9 +23,9 @@ interface BodyweightDao {
     @Query("SELECT * FROM bodyweight_entry")
     suspend fun all(): List<BodyweightEntryEntity>
 
-    /** What a day already holds, which is what makes weighing again on it a correction. */
-    @Query("SELECT * FROM bodyweight_entry WHERE date = :date")
-    suspend fun entryOn(date: LocalDate): BodyweightEntryEntity?
+    /** One weigh-in, to correct what it holds without disturbing when it was taken. */
+    @Query("SELECT * FROM bodyweight_entry WHERE id = :id")
+    suspend fun entry(id: Long): BodyweightEntryEntity?
 
     @Insert
     suspend fun insert(entry: BodyweightEntryEntity): Long

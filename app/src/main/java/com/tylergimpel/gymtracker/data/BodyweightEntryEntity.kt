@@ -2,10 +2,10 @@ package com.tylergimpel.gymtracker.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.tylergimpel.gymtracker.domain.BodyweightEntry
 import com.tylergimpel.gymtracker.domain.Kilograms
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -17,20 +17,23 @@ import java.time.LocalDate
  * table is not on that path at all. Keeping it off that path is structural rather than a matter of
  * writing careful queries later.
  *
- * `date` is unique. A day holds one weight, so weighing again on a day corrects that day rather
- * than adding a second reading for it — see [BodyweightEntry].
+ * A day may hold several readings, each with the moment it was taken. Bodyweight swings a kilogram
+ * or two between morning and evening, so a lifter who weighed themselves twice measured that swing;
+ * `recorded_at` is what tells the two apart and orders them.
  *
  * `weight_kg` is canonical kilograms, like every other weight stored in this app.
  */
-@Entity(
-    tableName = "bodyweight_entry",
-    indices = [Index(value = ["date"], unique = true)],
-)
+@Entity(tableName = "bodyweight_entry")
 data class BodyweightEntryEntity(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
     val id: Long = 0,
 
+    /** When the reading was taken. Stored as a moment, like every other instant in this schema. */
+    @ColumnInfo(name = "recorded_at")
+    val recordedAt: Instant,
+
+    /** The day it is filed on, which a lifter can correct without moving when it was taken. */
     @ColumnInfo(name = "date")
     val date: LocalDate,
 
@@ -40,6 +43,7 @@ data class BodyweightEntryEntity(
 
 fun BodyweightEntryEntity.toDomain() = BodyweightEntry(
     id = id,
+    recordedAt = recordedAt,
     date = date,
     weight = Kilograms(weightKg),
 )

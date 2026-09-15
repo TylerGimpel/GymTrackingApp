@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.tylergimpel.gymtracker.data.ExerciseAliasStore
 import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.data.GymDatabase
+import com.tylergimpel.gymtracker.data.profileRepository
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.NewExerciseDraft
 import com.tylergimpel.gymtracker.domain.hasNameLike
@@ -67,7 +68,12 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
     private val database = GymDatabase.getInstance(application)
 
     private val repository =
-        ExerciseRepository(database, database.exerciseDao(), database.sessionDao())
+        ExerciseRepository(
+            database,
+            database.exerciseDao(),
+            database.sessionDao(),
+            database.profileRepository(),
+        )
     private val aliasStore = ExerciseAliasStore(application)
 
     private val screen = MutableStateFlow(ScreenState())

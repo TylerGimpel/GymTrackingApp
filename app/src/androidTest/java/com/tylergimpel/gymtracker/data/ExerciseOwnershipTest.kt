@@ -43,6 +43,9 @@ class ExerciseOwnershipTest {
     private lateinit var sessions: SessionRepository
     private lateinit var routines: RoutineRepository
 
+    /** Pinned rather than the device's: what a test reads in is part of what it asserts. */
+    private lateinit var profile: ProfileRepository
+
     @Before
     fun setUp() {
         context.deleteDatabase(TEST_DATABASE)
@@ -50,8 +53,14 @@ class ExerciseOwnershipTest {
             .createFromAsset(GymDatabase.ASSET_PATH)
             .addMigrations(*MIGRATIONS)
             .build()
-        exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao())
-        sessions = SessionRepository(database, database.sessionDao(), clock, zone)
+        profile = ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)
+        exercises = ExerciseRepository(
+            database,
+            database.exerciseDao(),
+            database.sessionDao(),
+            profile,
+        )
+        sessions = SessionRepository(database, database.sessionDao(), clock, zone, profile)
         routines = RoutineRepository(database, database.routineDao(), database.sessionDao(), clock)
     }
 

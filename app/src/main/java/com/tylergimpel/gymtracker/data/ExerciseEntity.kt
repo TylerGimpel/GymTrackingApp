@@ -80,7 +80,15 @@ data class ExerciseEntity(
  * [preference] is passed in rather than read from this row: a rename, a note and a unit are choices
  * the lifter made, held in `exercise_preference` so a bank update cannot overwrite them (ADR 0009).
  */
-fun ExerciseEntity.toDomain(preference: ExercisePreferenceEntity?) = Exercise(
+/**
+ * [lifterUnit] is what this exercise reads in when the lifter has said nothing about it — their own
+ * unit rather than kilograms, because someone who reads in pounds reads a machine they have never
+ * touched in pounds too. A preference row still wins: that is the machine's own label.
+ */
+fun ExerciseEntity.toDomain(
+    preference: ExercisePreferenceEntity?,
+    lifterUnit: WeightUnit = WeightUnit.DEFAULT,
+) = Exercise(
     id = id,
     bankName = name,
     primaryMuscles = primaryMuscles,
@@ -92,7 +100,7 @@ fun ExerciseEntity.toDomain(preference: ExercisePreferenceEntity?) = Exercise(
     level = level,
     loggingType = LoggingType.fromStored(loggingType),
     unilateral = unilateral,
-    displayUnit = WeightUnit.fromStored(preference?.displayUnit) ?: WeightUnit.DEFAULT,
+    displayUnit = WeightUnit.fromStored(preference?.displayUnit) ?: lifterUnit,
     userName = preference?.name,
     note = preference?.note,
     source = ExerciseSource.fromStored(source),

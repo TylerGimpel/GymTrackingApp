@@ -423,6 +423,71 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToTimestampedWeighInsCarryingEveryReadingOntoTheStartOfItsOwnDay() {
+        helper.createDatabase(TENTH_DATABASE, 10).use { version10 ->
+            version10.execSQL(
+                "INSERT INTO bodyweight_entry (date, weight_kg) VALUES ('2026-09-14', 82.4)",
+            )
+        }
+
+        val version11 = helper.runMigrationsAndValidate(TENTH_DATABASE, 11, true, MIGRATION_10_11)
+
+        version11.use { db ->
+            // The reading survives the rebuild with its id, its day and its weight, and takes the
+            // start of its own day as when it was recorded — the only honest answer for a row
+            // written when nothing recorded a time, and one that leaves it ordered where it was.
+            db.query("SELECT id, recorded_at, date, weight_kg FROM bodyweight_entry").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+                // 2026-09-14T00:00:00Z.
+                assertEquals(1789344000000L, it.getLong(1))
+                assertEquals("2026-09-14", it.getString(2))
+                assertEquals(82.4, it.getDouble(3), 0.0)
+            }
+            // And a day can now hold the morning and the evening both, which version 10 refused.
+            db.execSQL(
+                "INSERT INTO bodyweight_entry (recorded_at, date, weight_kg) " +
+                    "VALUES (1789394400000, '2026-09-14', 83.6)",
+            )
+            db.query("SELECT COUNT(*) FROM bodyweight_entry WHERE date = '2026-09-14'").use {
+                it.moveToFirst()
+                assertEquals(2, it.getInt(0))
+            }
+        }
+    }
+
+    @Test
+    fun migratesToAProfileWithNothingChosenInIt() {
+        helper.createDatabase(ELEVENTH_DATABASE, 11).use { version11 ->
+            version11.execSQL(
+                "INSERT INTO bodyweight_entry (recorded_at, date, weight_kg) " +
+                    "VALUES (1789344000000, '2026-09-14', 82.4)",
+            )
+        }
+
+        val version12 = helper.runMigrationsAndValidate(ELEVENTH_DATABASE, 12, true, MIGRATION_11_12)
+
+        version12.use { db ->
+            // Empty, which is the truth about an installed copy: nobody has said what unit they
+            // read in, so the device's locale answers until they tap a chip.
+            db.query("SELECT COUNT(*) FROM profile").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+            // What they weigh is untouched by where the unit they read it in now lives.
+            db.query("SELECT weight_kg FROM bodyweight_entry").use {
+                it.moveToFirst()
+                assertEquals(82.4, it.getDouble(0), 0.0)
+            }
+            db.execSQL("INSERT INTO profile (id, display_unit) VALUES (1, 'lb')")
+            db.query("SELECT display_unit FROM profile WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -433,5 +498,7 @@ class GymDatabaseMigrationTest {
         const val SEVENTH_DATABASE = "gym-migration-test-7.db"
         const val EIGHTH_DATABASE = "gym-migration-test-8.db"
         const val NINTH_DATABASE = "gym-migration-test-9.db"
+        const val TENTH_DATABASE = "gym-migration-test-10.db"
+        const val ELEVENTH_DATABASE = "gym-migration-test-11.db"
     }
 }

@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.domain.NewExerciseDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.planBankUpdate
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -16,13 +17,28 @@ class ExerciseRepository(
     private val database: GymDatabase,
     private val exercises: ExerciseDao,
     private val sessions: SessionDao,
+    /**
+     * Where the unit comes from for an exercise the lifter has said nothing about.
+     *
+     * Injected rather than read here, so that "what does this lifter read in" has one answer in one
+     * place and a bank row cannot disagree with a logged set about it.
+     */
+    private val profile: ProfileRepository,
 ) {
 
     fun observeBank(): Flow<List<Exercise>> =
-        exercises.observeAll().map { rows -> rows.map(ExerciseWithPreference::toDomain) }
+        combine(exercises.observeAll(), profile.observeDisplayUnit()) { rows, lifterUnit ->
+            rows.map { it.toDomain(lifterUnit) }
+        }
 
     /**
      * Remembers that [exerciseId] is read in [displayUnit] from now on.
+     *
+     * A unit matching the lifter's own is stored as no choice at all, the same move a set makes
+     * against its exercise: this row is for a machine that departs from how its owner reads, and an
+     * exercise that agrees with them has not departed from anything. One that stored the agreement
+     * would be frozen in this unit the day the lifter switched, which is the trail of stranded
+     * kilogram sets ADR 0009 exists to prevent, one level up.
      *
      * Sets that had already departed to this very unit stop departing, in the same transaction: a
      * set logged in pounds before the exercise read in pounds is no longer an override of
@@ -34,7 +50,9 @@ class ExerciseRepository(
      */
     suspend fun setDisplayUnit(exerciseId: String, displayUnit: WeightUnit) =
         database.withTransaction {
-            exercises.setDisplayUnit(exerciseId, displayUnit.stored)
+            val chosen = displayUnit.takeIf { it != profile.displayUnit() }
+            exercises.setDisplayUnit(exerciseId, chosen?.stored)
+            exercises.forgetEmptyPreference(exerciseId)
             sessions.clearDisplayUnitOverrides(exerciseId, displayUnit.stored)
         }
 

@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.util.Locale
 import kotlin.math.round
 
 /**
@@ -78,12 +79,31 @@ enum class WeightUnit(
 
     companion object {
         /**
-         * What an exercise reads in until the lifter says otherwise.
+         * What a weight reads in when nothing at all is known about the lifter.
          *
-         * Kilograms because storage is kilograms, so the default display is the one reading that
-         * cannot be wrong. A profile-wide default belongs to onboarding rather than here.
+         * Kilograms because storage is kilograms, so it is the one reading that cannot be wrong.
+         * It is the floor rather than the answer: what a lifter actually reads in is their own
+         * setting, seeded from [forLocale] and changed by tapping a unit chip.
          */
         val DEFAULT = KILOGRAMS
+
+        /**
+         * The unit a lifter in [locale] most likely reads a scale in.
+         *
+         * A starting point and nothing more: it seeds the lifter's own setting, which one tap on a
+         * unit chip changes for good. Getting it right for most people is worth a guess this cheap,
+         * and getting it wrong costs that tap.
+         *
+         * The three countries that never adopted the metric system take pounds and everywhere else
+         * takes kilograms. The United Kingdom is deliberately not among them: bodyweight is spoken
+         * there in stones, which this app does not offer, while every barbell and stack in a
+         * British gym is labelled in kilograms.
+         */
+        fun forLocale(locale: Locale): WeightUnit =
+            if (locale.country.uppercase(Locale.ROOT) in POUND_COUNTRIES) POUNDS else KILOGRAMS
+
+        /** The United States, Liberia and Myanmar. */
+        private val POUND_COUNTRIES = setOf("US", "LR", "MM")
 
         private const val HUNDREDTHS = 100.0
 

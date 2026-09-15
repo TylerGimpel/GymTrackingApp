@@ -1,9 +1,10 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.Instant
 import java.time.LocalDate
 
 /**
- * What the lifter weighed on a given day.
+ * What the lifter weighed, and when they weighed it.
  *
  * Profile data rather than training. It sits on the same calendar as the sessions and belongs to
  * none of them: there is no session here, no exercise and no set index, which is what keeps a scale
@@ -17,10 +18,20 @@ import java.time.LocalDate
 data class BodyweightEntry(
     val id: Long,
     /**
-     * The day weighed, and the identity of the entry as far as a lifter is concerned: a day holds
-     * one weight, so weighing again on a day corrects it rather than recording a second reading.
-     * Bodyweight swings a kilogram or two across a day, and two readings for one day would make
-     * "what did I weigh on Monday" a question with two answers and no way to choose.
+     * The moment this reading was recorded.
+     *
+     * What makes a second weigh-in on a day a second reading rather than a correction of the first.
+     * Bodyweight swings a kilogram or two between morning and evening, and a lifter who steps on
+     * the scale twice has measured that swing — recording only the last of them would throw away
+     * the more useful of the two readings and call it tidiness.
+     */
+    val recordedAt: Instant,
+    /**
+     * The day this weigh-in is filed on, stamped from [recordedAt] and editable afterwards.
+     *
+     * Held as its own value rather than derived on read, for the reason a session's is: a lifter
+     * may correct it, having weighed themselves on Saturday and typed it in on Monday, and a day
+     * derived from an instant moves under a lifter who travels.
      */
     val date: LocalDate,
     val weight: Kilograms,
@@ -30,15 +41,19 @@ data class BodyweightEntry(
  * Every bodyweight recorded, in whatever order it came out of storage.
  *
  * Ordering and "the latest" live here rather than in a query so that the rule has one
- * implementation: the most recent weight is the most recent *day's*, which is not the same as the
- * row written last — a lifter filling in a missed weigh-in today has not lost weight since this
- * morning.
+ * implementation: the most recent weight is the most recent *reading on the most recent day*, which
+ * is not the same as the row written last — a lifter filling in a missed weigh-in today has not
+ * lost weight since this morning.
  */
 data class BodyweightHistory(val entries: List<BodyweightEntry> = emptyList()) {
 
-    /** The history as it is read: newest day first. */
-    val mostRecentFirst: List<BodyweightEntry>
-        get() = entries.sortedByDescending(BodyweightEntry::date)
+    /**
+     * The history as it is read: newest day first, and within a day the latest reading first.
+     *
+     * The day leads rather than the moment, because a weigh-in backfilled onto last Saturday is
+     * Saturday's however recently it was typed.
+     */
+    val mostRecentFirst: List<BodyweightEntry> get() = entries.sortedWith(NEWEST_FIRST)
 
     /**
      * The most recent weigh-in, or null for a lifter who has never recorded one.
@@ -46,16 +61,37 @@ data class BodyweightHistory(val entries: List<BodyweightEntry> = emptyList()) {
      * What cold-start estimation will ask for: an estimate that has to assume a bodyweight is worse
      * than one that knows it, and null is the honest answer rather than an invented figure.
      */
-    val latest: BodyweightEntry? get() = entries.maxByOrNull(BodyweightEntry::date)
+    val latest: BodyweightEntry? get() = mostRecentFirst.firstOrNull()
+
+    /**
+     * The days holding more than one reading.
+     *
+     * What lets the history show a time only where a time distinguishes anything. A date alone is
+     * how a lifter thinks of a weigh-in, and stamping every row with 07:14 to serve the rare day
+     * that was weighed twice would make every other row noisier to read.
+     */
+    val daysWeighedSeveralTimes: Set<LocalDate>
+        get() = entries.groupingBy(BodyweightEntry::date).eachCount()
+            .filterValues { it > 1 }
+            .keys
+
+    private companion object {
+        val NEWEST_FIRST: Comparator<BodyweightEntry> =
+            compareByDescending(BodyweightEntry::date)
+                .thenByDescending(BodyweightEntry::recordedAt)
+    }
 }
 
 /**
  * A weigh-in part-way through being entered: what the screen holds, and what it means.
  *
- * The same split as [SetDraft] — raw text here, so the screen stays a field and a date while the
+ * The same split as [SetDraft] — raw text here, so the screen stays a field and a day while the
  * rules about what counts as a bodyweight stay testable. What reaches storage is canonical
  * kilograms whatever [displayUnit] says; the unit decides what the number typed meant, never what
  * is written down.
+ *
+ * There is deliberately no moment here. When a reading was recorded is the clock's answer, taken as
+ * it is written, and not something a half-finished field carries around.
  */
 data class BodyweightDraft(
     val weightText: String = "",

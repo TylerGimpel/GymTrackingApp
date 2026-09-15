@@ -65,13 +65,14 @@ data class SessionWithContent(
  * Empty for a session trained with no routine, which reads back as a plan of nothing rather than as
  * anything missing.
  */
-fun List<SessionPlanWithExercise>.toSessionPlan() = SessionPlan(
-    exercises = sortedBy { it.entry.orderIndex }.map { it.exercise.toDomain() },
-)
+fun List<SessionPlanWithExercise>.toSessionPlan(lifterUnit: WeightUnit = WeightUnit.DEFAULT) =
+    SessionPlan(
+        exercises = sortedBy { it.entry.orderIndex }.map { it.exercise.toDomain(lifterUnit) },
+    )
 
-fun SessionExerciseWithSets.toDomain() = SessionExercise(
+fun SessionExerciseWithSets.toDomain(lifterUnit: WeightUnit = WeightUnit.DEFAULT) = SessionExercise(
     id = sessionExercise.id,
-    exercise = exercise.toDomain(),
+    exercise = exercise.toDomain(lifterUnit),
     orderIndex = sessionExercise.orderIndex,
     sets = sets.toPerformedSets(),
     supersetId = sessionExercise.supersetGroupId,

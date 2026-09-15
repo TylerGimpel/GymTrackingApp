@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.util.Locale
 
 /**
  * The arithmetic under "the gym has a kg lat pulldown and an lb one".
@@ -75,8 +76,31 @@ class WeightUnitTest {
     }
 
     @Test
-    fun `an exercise reads in kilograms until the lifter says otherwise`() {
+    fun `a weight reads in kilograms when nothing at all is known`() {
+        // The floor rather than the answer: storage is kilograms, so it is the one reading that
+        // cannot be wrong about what a number means.
         assertEquals(WeightUnit.KILOGRAMS, WeightUnit.DEFAULT)
+    }
+
+    @Test
+    fun `a lifter is assumed to read in what their country reads in`() {
+        assertEquals(WeightUnit.POUNDS, WeightUnit.forLocale(Locale.US))
+        assertEquals(WeightUnit.KILOGRAMS, WeightUnit.forLocale(Locale.FRANCE))
+        assertEquals(WeightUnit.KILOGRAMS, WeightUnit.forLocale(Locale.JAPAN))
+    }
+
+    @Test
+    fun `a British lifter reads in kilograms, whatever they weigh themselves in`() {
+        // Bodyweight is spoken in stones there, which this app does not offer; every barbell and
+        // stack in a British gym is labelled in kilograms.
+        assertEquals(WeightUnit.KILOGRAMS, WeightUnit.forLocale(Locale.UK))
+    }
+
+    @Test
+    fun `a locale naming no country is answered by the unit that cannot be wrong`() {
+        // A guess is worth making from a country and worth nothing from a language: Spanish is
+        // spoken either side of a unit boundary.
+        assertEquals(WeightUnit.DEFAULT, WeightUnit.forLocale(Locale.forLanguageTag("es")))
     }
 
     @Test
