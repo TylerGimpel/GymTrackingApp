@@ -58,6 +58,7 @@ private data class ScreenState(
     val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
     val perSide: Boolean = false,
+    val overridingDisplayUnit: Boolean = false,
     val rightDraft: SetDraft = SetDraft(),
     val editing: EditingEffort? = null,
     val addingDrop: AddingDrop? = null,
@@ -71,6 +72,13 @@ data class SessionUiState(
     val draft: SetDraft = SetDraft(),
     /** Whether the entry controls are expanded to record each side separately. */
     val perSide: Boolean = false,
+    /**
+     * Whether the unit chips are departing for this one set rather than settling the exercise.
+     *
+     * Off is the common case and the one the controls are built around: a machine is labelled in
+     * one unit whoever walks up to it, so the choice belongs to the exercise.
+     */
+    val overridingDisplayUnit: Boolean = false,
     /** The right-side draft, used only while [perSide] is set. */
     val rightDraft: SetDraft = SetDraft(),
     val editing: EditingEffort? = null,
@@ -117,6 +125,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 selected = screen.selected,
                 draft = screen.draft,
                 perSide = screen.perSide,
+                overridingDisplayUnit = screen.overridingDisplayUnit,
                 rightDraft = screen.rightDraft,
                 editing = screen.editing,
                 addingDrop = screen.addingDrop,
@@ -138,6 +147,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // remembering it: walking up to the pound machine needs no setting up first.
             draft = SetDraft(displayUnit = exercise.displayUnit),
             perSide = false,
+            // Departing is a property of the machine in front of the lifter, so it does not
+            // follow them to the next exercise any more than per-side entry does.
+            overridingDisplayUnit = false,
             rightDraft = SetDraft(displayUnit = exercise.displayUnit),
         )
     }
@@ -153,20 +165,47 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun changeRightDraft(draft: SetDraft) = screen.update { it.copy(rightDraft = draft) }
 
     /**
-     * Remembers the unit the controls are in as how this exercise is read from now on.
+     * Reads the controls in [displayUnit], and remembers it as how this exercise is read.
      *
-     * Offered separately from changing the unit rather than happening on every toggle: the one
-     * machine in the corner labelled in pounds is a set-sized decision, and rewriting the
-     * exercise's setting on its behalf would make every later set follow a one-off.
+     * Remembering is what a unit chip does, because a machine is labelled in one unit whoever walks
+     * up to it and the gym's pound lat pulldown is still in pounds next week — see
+     * `docs/design/logging-screen.md`. The exception is explicit: while the controls are
+     * overriding, this settles nothing beyond the set being entered.
      */
-    fun rememberDisplayUnit() {
+    fun readIn(displayUnit: WeightUnit) {
         val exercise = screen.value.selected ?: return
-        val displayUnit = screen.value.draft.displayUnit
+        screen.update {
+            it.copy(
+                draft = it.draft.readIn(displayUnit),
+                rightDraft = it.rightDraft.readIn(displayUnit),
+            )
+        }
+        if (screen.value.overridingDisplayUnit) return
         viewModelScope.launch {
             exercises.setDisplayUnit(exercise.id, displayUnit)
             // Carried across rather than re-read: this view model is the only thing that writes a
             // preference, and the controls should not sit in the old unit while the write lands.
             screen.update { it.copy(selected = it.selected?.copy(displayUnit = displayUnit)) }
+        }
+    }
+
+    /**
+     * Lets this one set depart from the exercise's unit, or puts it back on it.
+     *
+     * Going back re-reads the drafts in the exercise's own unit, so "not departing" and "reads as
+     * the exercise does" cannot come apart and leave a set quietly recording an override of a unit
+     * it agrees with.
+     */
+    fun toggleDisplayUnitOverride() = screen.update {
+        val exerciseUnit = it.selected?.displayUnit
+        if (it.overridingDisplayUnit && exerciseUnit != null) {
+            it.copy(
+                overridingDisplayUnit = false,
+                draft = it.draft.readIn(exerciseUnit),
+                rightDraft = it.rightDraft.readIn(exerciseUnit),
+            )
+        } else {
+            it.copy(overridingDisplayUnit = !it.overridingDisplayUnit)
         }
     }
 
@@ -297,7 +336,13 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
             screen.update {
-                it.copy(finishing = false, selected = null, draft = SetDraft(), perSide = false)
+                it.copy(
+                    finishing = false,
+                    selected = null,
+                    draft = SetDraft(),
+                    perSide = false,
+                    overridingDisplayUnit = false,
+                )
             }
         }
     }

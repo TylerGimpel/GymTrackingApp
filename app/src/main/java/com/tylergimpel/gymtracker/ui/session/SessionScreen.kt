@@ -73,7 +73,8 @@ fun SessionScreen(
         onDraftChange = viewModel::changeDraft,
         onRightDraftChange = viewModel::changeRightDraft,
         onTogglePerSide = viewModel::togglePerSide,
-        onRememberDisplayUnit = viewModel::rememberDisplayUnit,
+        onReadIn = viewModel::readIn,
+        onToggleDisplayUnitOverride = viewModel::toggleDisplayUnitOverride,
         onLogSet = viewModel::logSet,
         onEditEffort = viewModel::startEditing,
         onEditingDraftChange = viewModel::changeEditingDraft,
@@ -100,7 +101,8 @@ fun SessionScreen(
     onDraftChange: (SetDraft) -> Unit = {},
     onRightDraftChange: (SetDraft) -> Unit = {},
     onTogglePerSide: () -> Unit = {},
-    onRememberDisplayUnit: () -> Unit = {},
+    onReadIn: (WeightUnit) -> Unit = {},
+    onToggleDisplayUnitOverride: () -> Unit = {},
     onLogSet: () -> Unit = {},
     onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit = { _, _, _ -> },
     onEditingDraftChange: (SetDraft) -> Unit = {},
@@ -173,10 +175,12 @@ fun SessionScreen(
                         draft = state.draft,
                         rightDraft = state.rightDraft,
                         perSide = state.perSide,
+                        overridingDisplayUnit = state.overridingDisplayUnit,
                         onDraftChange = onDraftChange,
                         onRightDraftChange = onRightDraftChange,
                         onTogglePerSide = onTogglePerSide,
-                        onRememberDisplayUnit = onRememberDisplayUnit,
+                        onReadIn = onReadIn,
+                        onToggleDisplayUnitOverride = onToggleDisplayUnitOverride,
                         onLogSet = onLogSet,
                     )
                     HorizontalDivider()
@@ -257,10 +261,12 @@ private fun SetEntryControls(
     draft: SetDraft,
     rightDraft: SetDraft,
     perSide: Boolean,
+    overridingDisplayUnit: Boolean,
     onDraftChange: (SetDraft) -> Unit,
     onRightDraftChange: (SetDraft) -> Unit,
     onTogglePerSide: () -> Unit,
-    onRememberDisplayUnit: () -> Unit,
+    onReadIn: (WeightUnit) -> Unit,
+    onToggleDisplayUnitOverride: () -> Unit,
     onLogSet: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -273,7 +279,17 @@ private fun SetEntryControls(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        SetDraftFields(draft, onDraftChange)
+        SetDraftFields(
+            draft,
+            onDraftChange,
+            // Here a unit is a statement about the machine, so it settles the exercise — unless
+            // the lifter says this one set is the exception.
+            unitChoice = UnitChoice(
+                onReadIn = onReadIn,
+                overriding = overridingDisplayUnit,
+                onToggleOverride = onToggleDisplayUnitOverride,
+            ),
+        )
 
         // A single entry by default; expanding is for tracking an imbalance, and the two sides carry
         // their own weights because that is the only reason to bother.
@@ -289,22 +305,8 @@ private fun SetEntryControls(
                 rightDraft,
                 onRightDraftChange,
                 showType = false,
-                showDisplayUnit = false,
+                unitChoice = null,
             )
-        }
-
-        // Offered only where it would do something: the unit in the controls is this set's, and
-        // this is how it becomes the exercise's.
-        if (draft.displayUnit != exercise.displayUnit) {
-            TextButton(onClick = onRememberDisplayUnit) {
-                Text(
-                    stringResource(
-                        R.string.set_unit_remember,
-                        stringResource(draft.displayUnit.label),
-                        exercise.name,
-                    ),
-                )
-            }
         }
 
         // Offered only where it means something. An exercise trained one side at a time is the one
@@ -327,6 +329,25 @@ private fun SetEntryControls(
     }
 }
 
+/**
+ * What choosing a unit beside a weight means.
+ *
+ * Correcting or continuing a set changes that set alone, which is [forThisSetAlone] and the
+ * default. The entry controls pass their own, because a unit chosen while entering is a statement
+ * about the machine and is remembered for the exercise.
+ */
+private data class UnitChoice(
+    val onReadIn: (WeightUnit) -> Unit,
+    /** Whether the entry controls are departing for one set; null where there is nothing to settle. */
+    val overriding: Boolean? = null,
+    val onToggleOverride: () -> Unit = {},
+) {
+    companion object {
+        fun forThisSetAlone(draft: SetDraft, onChange: (SetDraft) -> Unit) =
+            UnitChoice(onReadIn = { onChange(draft.readIn(it)) })
+    }
+}
+
 /** The weight, reps, note, unit and type fields, shared by the entry controls and the dialogs. */
 @Composable
 private fun SetDraftFields(
@@ -334,7 +355,7 @@ private fun SetDraftFields(
     onChange: (SetDraft) -> Unit,
     showType: Boolean = true,
     showNote: Boolean = true,
-    showDisplayUnit: Boolean = true,
+    unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -360,7 +381,7 @@ private fun SetDraftFields(
                 modifier = Modifier.weight(1f),
             )
         }
-        WeightSteppers(draft, onChange, showDisplayUnit)
+        WeightControls(draft, onChange, unitChoice)
         if (showNote) {
             OutlinedTextField(
                 value = draft.note.orEmpty(),
@@ -383,39 +404,55 @@ private fun SetDraftFields(
  * lifter who has just switched to pounds needs to see that the step came with it. Converting one
  * unit's step into the other would offer weights no barbell can be loaded to.
  *
- * Choosing a unit here changes this set alone, and making it stick to the exercise is a separate,
- * named action. `docs/design/logging-screen.md` has one tap do the remembering, but that screen
- * always has a prescription in front of the lifter to undo against; here the safe half is the
- * default and the remembered change says out loud what it is about to do.
+ * A unit chip is remembered for the exercise (`docs/design/logging-screen.md`), which is right for
+ * a machine that carries its label whoever walks up to it. The chip beside them is the exception
+ * the spec also asks for: one set read off the odd machine, changing nothing else.
  */
 @Composable
-private fun WeightSteppers(
+private fun WeightControls(
     draft: SetDraft,
     onChange: (SetDraft) -> Unit,
-    showDisplayUnit: Boolean,
+    unitChoice: UnitChoice?,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OutlinedButton(onClick = { onChange(draft.stepWeight(-1)) }) {
-            Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asWeightText()))
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(onClick = { onChange(draft.stepWeight(-1)) }) {
+                Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asWeightText()))
+            }
+            OutlinedButton(onClick = { onChange(draft.stepWeight(1)) }) {
+                Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asWeightText()))
+            }
         }
-        OutlinedButton(onClick = { onChange(draft.stepWeight(1)) }) {
-            Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asWeightText()))
-        }
-        if (showDisplayUnit) {
-            WeightUnit.entries.forEach { candidate ->
-                FilterChip(
-                    selected = candidate == draft.displayUnit,
-                    // A reading, not a value: the number in the field is rewritten and what it
-                    // weighs is untouched.
-                    onClick = { onChange(draft.readIn(candidate)) },
-                    label = { Text(stringResource(candidate.label)) },
-                )
+
+        // A row of its own rather than trailing the steppers: "This set only" is the whole of the
+        // override and is useless half off the edge of a phone.
+        unitChoice?.let { choice ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                WeightUnit.entries.forEach { candidate ->
+                    FilterChip(
+                        selected = candidate == draft.displayUnit,
+                        // A reading, not a value: the number in the field is rewritten and what it
+                        // weighs is untouched, whichever of the two this settles.
+                        onClick = { choice.onReadIn(candidate) },
+                        label = { Text(stringResource(candidate.label)) },
+                    )
+                }
+                choice.overriding?.let { overriding ->
+                    FilterChip(
+                        selected = overriding,
+                        onClick = choice.onToggleOverride,
+                        label = { Text(stringResource(R.string.set_unit_this_set_only)) },
+                    )
+                }
             }
         }
     }
@@ -621,7 +658,7 @@ private fun AddDropDialog(
                 onChange,
                 showType = false,
                 showNote = false,
-                showDisplayUnit = false,
+                unitChoice = null,
             )
         },
         confirmButton = {
