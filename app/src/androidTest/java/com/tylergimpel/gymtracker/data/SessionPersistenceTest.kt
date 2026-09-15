@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -484,6 +485,45 @@ class SessionPersistenceTest {
 
         val performed = currentSession().exercises.single()
         assertEquals(WeightUnit.POUNDS, performed.displayUnitFor(performed.sets.single()))
+    }
+
+    @Test
+    fun nothingIsOfferedForCorrectionUntilASessionHasBeenFinished() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+
+        // The session being logged is already on screen. There is nothing behind it yet.
+        assertNull(repository.observeLastFinished().first())
+    }
+
+    @Test
+    fun theSessionMostRecentlyFinishedIsTheOneOfferedForCorrection() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        val monday = repository.observeActiveSession().first()!!
+        repository.finishSession(monday.id)
+
+        clock.moveTo(at("2026-09-17T18:00"))
+        repository.logSet(BENCH, SetDraft("65", "5"))
+        val thursday = repository.observeActiveSession().first()!!
+        repository.finishSession(thursday.id)
+
+        // The one just finished is the one a lifter is about to realise they misdated.
+        assertEquals(thursday.id, repository.observeLastFinished().first()!!.id)
+    }
+
+    @Test
+    fun aFinishedSessionsDateCanStillBeCorrected() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        val session = repository.observeActiveSession().first()!!
+        repository.finishSession(session.id)
+
+        repository.refile(session.id, LocalDate.of(2026, 9, 12))
+
+        val corrected = repository.observeLastFinished().first()!!
+        assertEquals(LocalDate.of(2026, 9, 12), corrected.date)
+        // Refiling moves where the session is filed and nothing else: it stays finished, and when
+        // it was actually trained is untouched.
+        assertEquals(session.startedAt, corrected.startedAt)
+        assertFalse(corrected.isActive)
     }
 
     private fun storedWeights(): List<Double> =

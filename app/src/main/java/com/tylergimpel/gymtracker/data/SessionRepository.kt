@@ -38,6 +38,16 @@ class SessionRepository(
     fun observeActiveSession(): Flow<Session?> =
         sessions.observeActiveSession().map { it?.toDomain() }
 
+    /**
+     * The session finished most recently, so its date can still be corrected.
+     *
+     * Kept reachable because realising the date was wrong usually comes after pressing Finish, and
+     * a lifter who has to wait for a history screen to fix it will simply live with a session
+     * filed on the wrong day.
+     */
+    fun observeLastFinished(): Flow<Session?> =
+        sessions.observeLastFinished().map { it?.toDomain() }
+
     fun observeSession(sessionId: Long): Flow<LoggedSession?> =
         sessions.observeContent(sessionId).map { content ->
             content?.let {

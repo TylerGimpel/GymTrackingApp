@@ -48,6 +48,7 @@ import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
+import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
@@ -129,7 +130,7 @@ fun SessionScreen(
     onSkipDay: () -> Unit = {},
     onConfirmSkip: () -> Unit = {},
     onCancelSkip: () -> Unit = {},
-    onStartRefiling: () -> Unit = {},
+    onStartRefiling: (Session) -> Unit = {},
     onRefileOn: (LocalDate) -> Unit = {},
     onCancelRefiling: () -> Unit = {},
     onFinish: () -> Unit = {},
@@ -155,7 +156,7 @@ fun SessionScreen(
                                         // A label, because the date alone says nothing about being
                                         // tappable to anyone who cannot see where it sits.
                                         onClickLabel = stringResource(R.string.session_refile),
-                                        onClick = onStartRefiling,
+                                        onClick = { onStartRefiling(it) },
                                     )
                                     // Padding rather than a button: it keeps the top bar quiet
                                     // while giving the target something to be hit with.
@@ -218,7 +219,13 @@ fun SessionScreen(
             }
 
             if (state.session == null) {
-                item { EmptySession(hasSelection = state.selected != null) }
+                item {
+                    EmptySession(
+                        hasSelection = state.selected != null,
+                        lastFinished = state.lastFinished,
+                        onStartRefiling = onStartRefiling,
+                    )
+                }
             }
 
             items(state.exercises, key = SessionExercise::id) { performed ->
@@ -244,9 +251,7 @@ fun SessionScreen(
         WhichDayDialog(state.routine, onFinishAs, onCancelFinishing)
     }
 
-    if (state.refiling) {
-        state.session?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
-    }
+    state.refiling?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
 
     state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
 }
@@ -352,16 +357,44 @@ private fun RefileSessionDialog(
     }
 }
 
+/**
+ * What the screen says with nothing being logged — and the way back to what was just logged.
+ *
+ * [lastFinished] is offered for one reason: a wrong date is usually noticed after pressing Finish,
+ * and without this the only way to correct one would be a history screen that does not exist yet.
+ * One session, not a list. This is a way back to the last thing done, not a place to browse.
+ */
 @Composable
-private fun EmptySession(hasSelection: Boolean) {
-    Text(
-        text = stringResource(
-            if (hasSelection) R.string.session_empty_selected else R.string.session_empty,
-        ),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun EmptySession(
+    hasSelection: Boolean,
+    lastFinished: Session?,
+    onStartRefiling: (Session) -> Unit,
+) {
+    Column(
         modifier = Modifier.padding(16.dp),
-    )
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(
+                if (hasSelection) R.string.session_empty_selected else R.string.session_empty,
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        lastFinished?.let { session ->
+            Text(
+                text = stringResource(R.string.session_last, session.date.toString()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clickable(
+                        onClickLabel = stringResource(R.string.session_refile),
+                        onClick = { onStartRefiling(session) },
+                    )
+                    .padding(vertical = 4.dp),
+            )
+        }
+    }
 }
 
 @Composable

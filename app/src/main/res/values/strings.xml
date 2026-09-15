@@ -67,6 +67,7 @@
     <string name="session_cycle">Cycle %1$d</string>
     <string name="session_skip_day">Skip</string>
     <string name="session_refile">Change the date</string>
+    <string name="session_last">Last session: %1$s — tap to fix the date</string>
     <string name="session_skip_title">Skip %1$s?</string>
     <string name="session_skip_explain">It is recorded as skipped rather than trained, and comes back around next cycle.</string>
 </resources>

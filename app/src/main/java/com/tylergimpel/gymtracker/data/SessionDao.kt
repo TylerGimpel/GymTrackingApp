@@ -17,6 +17,16 @@ interface SessionDao {
     @Query("SELECT * FROM session WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1")
     suspend fun activeSession(): SessionEntity?
 
+    /**
+     * The session finished most recently, if there is one.
+     *
+     * Ordered by when it was finished rather than by the date it carries, because the point of it
+     * is to be the session a lifter has just closed and is about to realise they misdated — and
+     * refiling is exactly the operation that would move it out of its own way.
+     */
+    @Query("SELECT * FROM session WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1")
+    fun observeLastFinished(): Flow<SessionEntity?>
+
     @Transaction
     @Query("SELECT * FROM session WHERE id = :sessionId")
     fun observeContent(sessionId: Long): Flow<SessionWithContent?>

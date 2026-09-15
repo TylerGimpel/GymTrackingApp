@@ -50,6 +50,15 @@ data class EditingEffort(
 data class AddingDrop(val effortId: Long, val draft: SetDraft)
 
 /**
+ * The session whose date is being changed, if one is.
+ *
+ * Carries the id rather than the session, because the one being refiled is not always the one on
+ * screen: a date is most often found to be wrong just after Finish, when the session has already
+ * stopped being the active one.
+ */
+data class Refiling(val sessionId: Long, val date: LocalDate)
+
+/**
  * Everything on this screen that is not read from the database.
  *
  * Held as one object rather than as a flow each, because `combine` runs out of typed overloads at
@@ -64,7 +73,7 @@ private data class ScreenState(
     val editing: EditingEffort? = null,
     val addingDrop: AddingDrop? = null,
     val finishing: Boolean = false,
-    val refiling: Boolean = false,
+    val refiling: Refiling? = null,
     val skipping: RoutineDay? = null,
 )
 
@@ -90,8 +99,15 @@ data class SessionUiState(
     val routine: RoutineProgress? = null,
     /** Set while the screen is asking which routine day the finishing session realised. */
     val finishing: Boolean = false,
-    /** Set while the screen is asking which day this session should be filed on. */
-    val refiling: Boolean = false,
+    /**
+     * The most recently finished session, offered only when none is being logged.
+     *
+     * There so that a date noticed to be wrong after pressing Finish is still fixable. Deliberately
+     * one session rather than a list: this is a way back to what was just done, not history.
+     */
+    val lastFinished: Session? = null,
+    /** The session whose date the screen is asking about, if it is asking. */
+    val refiling: Refiling? = null,
     /** The routine day the screen is asking about skipping, if it is asking. */
     val skipping: RoutineDay? = null,
 )
@@ -126,9 +142,15 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     val state: StateFlow<SessionUiState> =
-        combine(logged, routines.observeProgress(), screen) { logged, routine, screen ->
+        combine(
+            logged,
+            repository.observeLastFinished(),
+            routines.observeProgress(),
+            screen,
+        ) { logged, lastFinished, routine, screen ->
             SessionUiState(
                 session = logged?.session,
+                lastFinished = lastFinished,
                 exercises = logged?.exercises.orEmpty(),
                 selected = screen.selected,
                 draft = screen.draft,
@@ -347,9 +369,10 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun startRefiling() = screen.update { it.copy(refiling = true) }
+    fun startRefiling(session: Session) =
+        screen.update { it.copy(refiling = Refiling(session.id, session.date)) }
 
-    fun cancelRefiling() = screen.update { it.copy(refiling = false) }
+    fun cancelRefiling() = screen.update { it.copy(refiling = null) }
 
     /**
      * Refiles the session onto [date] — the fix for training on Saturday and remembering on Monday.
@@ -358,10 +381,10 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * the one it was trained on records no completion when it finishes.
      */
     fun refileOn(date: LocalDate) {
-        val session = logged.value?.session ?: return
+        val open = screen.value.refiling ?: return
         viewModelScope.launch {
-            repository.refile(session.id, date)
-            screen.update { it.copy(refiling = false) }
+            repository.refile(open.sessionId, date)
+            screen.update { it.copy(refiling = null) }
         }
     }
 
