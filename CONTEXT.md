@@ -130,6 +130,12 @@ Forming a superset from neighbouring exercises, and breaking one up. Both are st
 **Prescription**:
 What the app tells the user to do for a given set — weight, reps and rest, where the reps of a working set are a rep range rather than a single count. Recorded alongside what they actually did, so the two can be compared.
 
+**Bodyweight entry**:
+What the lifter weighed on a given day. Profile data rather than training: it sits on the same calendar as the sessions and belongs to none of them, contributes nothing to **Volume** and is never a **Set** — it carries no session, no exercise and no set index, so there is nothing for a volume or set query to reach rather than something to filter out. Stored in canonical kilograms like every other weight and read in the unit the lifter reads, which is theirs rather than a machine's — unlike an exercise's **Display unit**, there is one scale and one person standing on it.
+
+A day holds one weight, so weighing again on a day corrects it rather than recording a second reading: bodyweight swings a kilogram across a day, and two answers to "what did I weigh on Monday" cannot be chosen between. The most recent entry is the most recent *day's*, never the row written last — a lifter filling in a missed weigh-in has not lost weight since this morning.
+_Avoid_: weight on its own as a name for it, which already means what is on the bar.
+
 ### Recommending
 
 **Anchor**:

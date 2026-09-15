@@ -1,9 +1,11 @@
 package com.tylergimpel.gymtracker.data
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -381,6 +383,46 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToBodyweightEntriesWithNoWeighInsAndNothingJoiningThemToTraining() {
+        helper.createDatabase(NINTH_DATABASE, 9).use { version9 ->
+            version9.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source, " +
+                    "tombstoned) VALUES ('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', " +
+                    "'compound', 'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream', 0)",
+            )
+            version9.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+        }
+
+        val version10 = helper.runMigrationsAndValidate(NINTH_DATABASE, 10, true, MIGRATION_9_10)
+
+        version10.use { db ->
+            // Empty, which is the truth about an installed copy: nobody has weighed themselves in
+            // an app that had nowhere to put it, and a weight cannot be reconstructed after the
+            // fact any more than a plan can.
+            db.query("SELECT COUNT(*) FROM bodyweight_entry").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+            // A weigh-in is recorded against a day and nothing else. There is no session column
+            // here to point at the session above, which is what keeps it out of training.
+            db.execSQL("INSERT INTO bodyweight_entry (date, weight_kg) VALUES ('2026-09-14', 82.4)")
+            db.query("SELECT date, weight_kg FROM bodyweight_entry").use {
+                it.moveToFirst()
+                assertEquals("2026-09-14", it.getString(0))
+                assertEquals(82.4, it.getDouble(1), 0.0)
+            }
+            // And a day holds one weight: stepping on the scale twice on a Monday corrects Monday.
+            assertThrows(SQLiteConstraintException::class.java) {
+                db.execSQL("INSERT INTO bodyweight_entry (date, weight_kg) VALUES ('2026-09-14', 82.9)")
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -390,5 +432,6 @@ class GymDatabaseMigrationTest {
         const val SIXTH_DATABASE = "gym-migration-test-6.db"
         const val SEVENTH_DATABASE = "gym-migration-test-7.db"
         const val EIGHTH_DATABASE = "gym-migration-test-8.db"
+        const val NINTH_DATABASE = "gym-migration-test-9.db"
     }
 }

@@ -58,6 +58,9 @@ import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asWeightText
+import com.tylergimpel.gymtracker.ui.DayPickerDialog
+import com.tylergimpel.gymtracker.ui.WeightUnitChips
+import com.tylergimpel.gymtracker.ui.label
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -73,6 +76,7 @@ import java.time.ZoneOffset
 fun SessionScreen(
     onPickExercise: () -> Unit,
     onOpenRoutine: () -> Unit,
+    onOpenBodyweight: () -> Unit,
     viewModel: SessionViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -114,6 +118,7 @@ fun SessionScreen(
         onFinishAs = viewModel::finishSession,
         onCancelFinishing = viewModel::cancelFinishing,
         onOpenRoutine = onOpenRoutine,
+        onOpenBodyweight = onOpenBodyweight,
     )
 }
 
@@ -156,6 +161,7 @@ fun SessionScreen(
     onFinishAs: (RoutineDay?) -> Unit = {},
     onCancelFinishing: () -> Unit = {},
     onOpenRoutine: () -> Unit = {},
+    onOpenBodyweight: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -187,6 +193,12 @@ fun SessionScreen(
                 actions = {
                     TextButton(onClick = onOpenRoutine) {
                         Text(stringResource(R.string.session_open_routine))
+                    }
+                    // Bodyweight lives beside the routine rather than inside a session: it is
+                    // recorded on mornings there is no session to put it in, and it is not
+                    // training when there is.
+                    TextButton(onClick = onOpenBodyweight) {
+                        Text(stringResource(R.string.session_open_bodyweight))
                     }
                     if (state.session != null) {
                         TextButton(onClick = onFinish) { Text(stringResource(R.string.session_finish)) }
@@ -432,39 +444,16 @@ private fun SkipDayDialog(day: RoutineDay, onConfirm: () -> Unit, onCancel: () -
 /**
  * Which day this session should be filed on.
  *
- * Material's picker speaks in UTC milliseconds, so both directions convert against UTC rather than
- * the device's zone: mixing the two files a late evening session on the following day, which is the
- * exact error the session's own midnight rule exists to avoid.
+ * The picker itself is shared, because reading a calendar day out of it correctly is one rule and
+ * the session is not the only thing filed on a day — see [DayPickerDialog].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RefileSessionDialog(
     date: LocalDate,
     onRefileOn: (LocalDate) -> Unit,
     onCancel: () -> Unit,
 ) {
-    val picker = rememberDatePickerState(
-        initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-    )
-
-    DatePickerDialog(
-        onDismissRequest = onCancel,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    picker.selectedDateMillis?.let {
-                        onRefileOn(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate())
-                    }
-                },
-                enabled = picker.selectedDateMillis != null,
-            ) {
-                Text(stringResource(R.string.session_save))
-            }
-        },
-        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) } },
-    ) {
-        DatePicker(state = picker)
-    }
+    DayPickerDialog(date = date, onPick = onRefileOn, onDismiss = onCancel)
 }
 
 /**
@@ -712,22 +701,12 @@ private fun WeightControls(
         // A row of its own rather than trailing the steppers: "This set only" is the whole of the
         // override and is useless half off the edge of a phone.
         unitChoice?.let { choice ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            WeightUnitChips(
+                selected = draft.displayUnit,
+                // A reading, not a value: the number in the field is rewritten and what it weighs
+                // is untouched, whichever of the two this settles.
+                onReadIn = choice.onReadIn,
             ) {
-                WeightUnit.entries.forEach { candidate ->
-                    FilterChip(
-                        selected = candidate == draft.displayUnit,
-                        // A reading, not a value: the number in the field is rewritten and what it
-                        // weighs is untouched, whichever of the two this settles.
-                        onClick = { choice.onReadIn(candidate) },
-                        label = { Text(stringResource(candidate.label)) },
-                    )
-                }
                 choice.overriding?.let { overriding ->
                     FilterChip(
                         selected = overriding,

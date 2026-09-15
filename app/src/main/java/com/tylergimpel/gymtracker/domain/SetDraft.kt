@@ -55,10 +55,23 @@ data class SetDraft(
     fun stepWeight(steps: Int): SetDraft =
         copy(weightText = displayUnit.stepped(amount ?: 0.0, steps).asWeightText())
 
-    /** The number typed, read in [displayUnit] and before it is turned into a weight. */
-    private val amount: Double?
-        get() = weightText.trim()
-            .replace(',', '.')
-            .toDoubleOrNull()
-            ?.takeIf { it.isFinite() && it >= 0.0 }
+    /**
+     * The number typed, read in [displayUnit] and before it is turned into a weight.
+     *
+     * Zero is kept, unlike a bodyweight: an unloaded bar and a bodyweight dip both genuinely weigh
+     * nothing added, and that is the only thing that differs between the two readings.
+     */
+    private val amount: Double? get() = weightText.asEnteredAmount()?.takeIf { it >= 0.0 }
 }
+
+/**
+ * A typed number read as an amount of whatever unit the field is labelled in, or null where it does
+ * not read as one at all.
+ *
+ * Shared by every field a weight is entered into, because what counts as a number is not a property
+ * of what is being weighed: a comma is a decimal point to half the world, a stray space is a slip
+ * rather than an answer, and infinity is not a reading. What each field then does with the number —
+ * a set allows zero, a bodyweight does not — is the field's own rule and stays with it.
+ */
+internal fun String.asEnteredAmount(): Double? =
+    trim().replace(',', '.').toDoubleOrNull()?.takeIf(Double::isFinite)

@@ -12,6 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.ui.bank.ExerciseBankScreen
+import com.tylergimpel.gymtracker.ui.bodyweight.BodyweightScreen
 import com.tylergimpel.gymtracker.ui.routine.RoutineScreen
 import com.tylergimpel.gymtracker.ui.routine.RoutineViewModel
 import com.tylergimpel.gymtracker.ui.session.SessionScreen
@@ -31,13 +32,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Destination { SESSION, EXERCISE_PICKER, ROUTINE }
+private enum class Destination { SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT }
 
 /**
- * Three destinations, switched by hand.
+ * Four destinations, switched by hand.
  *
  * A navigation library would earn its place once there is a back stack worth modelling; with a
- * session, a picker and an editor it would be more machinery than the app has behaviour.
+ * session, a picker, an editor and a weigh-in list it would be more machinery than the app has
+ * behaviour.
  */
 @Composable
 private fun GymTracker(
@@ -63,6 +65,7 @@ private fun GymTracker(
         Destination.SESSION -> SessionScreen(
             onPickExercise = { destination = Destination.EXERCISE_PICKER },
             onOpenRoutine = { destination = Destination.ROUTINE },
+            onOpenBodyweight = { destination = Destination.BODYWEIGHT },
             viewModel = viewModel,
         )
 
@@ -73,6 +76,10 @@ private fun GymTracker(
                 else routineViewModel.addExerciseToDay(day, exercise)
                 leavePicker()
             },
+        )
+
+        Destination.BODYWEIGHT -> BodyweightScreen(
+            onBack = { destination = Destination.SESSION },
         )
 
         Destination.ROUTINE -> RoutineScreen(

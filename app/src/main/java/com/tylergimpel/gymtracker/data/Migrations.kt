@@ -257,6 +257,27 @@ internal val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+/**
+ * Version 10 gives the lifter somewhere to record what they weigh.
+ *
+ * A table of its own with no foreign key and no session column, which is the point: a weigh-in
+ * shares the calendar with training and nothing else, so there is nothing here for a set or a
+ * volume query to reach.
+ *
+ * It arrives empty, which is the truth about an installed copy — nobody has weighed themselves in
+ * an app that had nowhere to put it. `date` is unique, because a day holds one weight.
+ */
+internal val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `bodyweight_entry` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `weight_kg` REAL NOT NULL)",
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_bodyweight_entry_date` ON `bodyweight_entry` (`date`)",
+        )
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -266,4 +287,5 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_6_7,
     MIGRATION_7_8,
     MIGRATION_8_9,
+    MIGRATION_9_10,
 )
