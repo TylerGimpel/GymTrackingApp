@@ -90,6 +90,33 @@ class ExerciseSearchTest {
     }
 
     @Test
+    fun `a renamed exercise is found under the lifter's name for it`() {
+        val bank = listOf(exercise("Butterfly", "Butterfly").copy(userName = "Pec Deck"))
+
+        assertEquals(listOf("Pec Deck"), bank.search("pec deck").map { it.name })
+    }
+
+    @Test
+    fun `a renamed exercise is still found under the name the bank shipped`() {
+        val bank = listOf(exercise("Butterfly", "Butterfly").copy(userName = "Pec Deck"))
+
+        assertEquals(1, bank.search("butterfly").size)
+    }
+
+    @Test
+    fun `renaming an exercise does not break the shorthand pointing at it`() {
+        // Aliases target the bank's names. If a rename hid that, "pec deck" would stop finding
+        // Butterfly the moment someone renamed it to something else entirely — the silent failure
+        // the build-time alias check exists to prevent.
+        val bank = listOf(exercise("Butterfly", "Butterfly").copy(userName = "Chest Machine"))
+
+        assertEquals(
+            listOf("Chest Machine"),
+            bank.search("pec deck", mapOf("pec deck" to listOf("Butterfly"))).map { it.name },
+        )
+    }
+
+    @Test
     fun `filtering by muscle finds what works it, what targets it first`() {
         assertEquals(
             listOf("Triceps Pushdown", "Barbell Bench Press - Medium Grip"),
@@ -127,7 +154,7 @@ class ExerciseSearchTest {
         secondary: List<String> = emptyList(),
     ) = Exercise(
         id = name.replace(' ', '_'),
-        name = name,
+        bankName = name,
         primaryMuscles = listOf(primary),
         secondaryMuscles = secondary,
         equipment = "barbell",

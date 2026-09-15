@@ -2,6 +2,7 @@ package com.tylergimpel.gymtracker.ui.bank
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,12 +14,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.NewExerciseDraft
 import com.tylergimpel.gymtracker.ui.theme.GymTrackerTheme
 
 @Composable
@@ -45,6 +49,10 @@ fun ExerciseBankScreen(
         onSelect = onSelect,
         onSearch = viewModel::search,
         onFilterBy = viewModel::filterBy,
+        onStartAdding = viewModel::startAdding,
+        onAddingChange = viewModel::changeAdding,
+        onSaveAdding = viewModel::saveAdding,
+        onCancelAdding = viewModel::cancelAdding,
     )
 }
 
@@ -55,6 +63,10 @@ fun ExerciseBankScreen(
     onSelect: (Exercise) -> Unit = {},
     onSearch: (String) -> Unit = {},
     onFilterBy: (String) -> Unit = {},
+    onStartAdding: () -> Unit = {},
+    onAddingChange: (NewExerciseDraft) -> Unit = {},
+    onSaveAdding: () -> Unit = {},
+    onCancelAdding: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -73,6 +85,11 @@ fun ExerciseBankScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onStartAdding) {
+                        Text(stringResource(R.string.exercise_new))
                     }
                 },
             )
@@ -99,6 +116,17 @@ fun ExerciseBankScreen(
                 }
             }
         }
+    }
+
+    state.adding?.let { draft ->
+        NewExerciseDialog(
+            draft = draft,
+            vocabulary = state.vocabulary,
+            nameTaken = state.nameTaken,
+            onChange = onAddingChange,
+            onSave = onSaveAdding,
+            onCancel = onCancelAdding,
+        )
     }
 }
 
@@ -173,7 +201,7 @@ private fun ExerciseBankPreview() {
                 exercises = listOf(
                     Exercise(
                         id = "Butterfly",
-                        name = "Butterfly",
+                        bankName = "Butterfly",
                         primaryMuscles = listOf("chest"),
                         secondaryMuscles = listOf("shoulders"),
                         equipment = "machine",
@@ -190,5 +218,137 @@ private fun ExerciseBankPreview() {
                 total = 896,
             ),
         )
+    }
+}
+
+/**
+ * Writing down the machine a gym has that the app has never heard of.
+ *
+ * Every vocabulary here comes from the bank rather than from a list in the app, so an exercise a
+ * lifter adds can only take values the shipped rows already use — which is what "first-class" has
+ * to mean if it is to be searched, filtered and counted alongside them.
+ */
+@Composable
+private fun NewExerciseDialog(
+    draft: NewExerciseDraft,
+    vocabulary: BankVocabulary,
+    nameTaken: Boolean,
+    onChange: (NewExerciseDraft) -> Unit,
+    onSave: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.exercise_new)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedTextField(
+                    value = draft.name,
+                    onValueChange = { onChange(draft.copy(name = it)) },
+                    label = { Text(stringResource(R.string.exercise_name)) },
+                    singleLine = true,
+                    isError = nameTaken,
+                    supportingText = if (nameTaken) {
+                        { Text(stringResource(R.string.exercise_name_taken)) }
+                    } else {
+                        null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                ChipRow(
+                    label = stringResource(R.string.exercise_primary_muscles),
+                    options = vocabulary.muscles,
+                    isSelected = { it in draft.primaryMuscles },
+                    onClick = { onChange(draft.togglePrimary(it)) },
+                )
+                ChipRow(
+                    label = stringResource(R.string.exercise_secondary_muscles),
+                    options = vocabulary.muscles,
+                    isSelected = { it in draft.secondaryMuscles },
+                    onClick = { onChange(draft.toggleSecondary(it)) },
+                )
+                ChipRow(
+                    label = stringResource(R.string.exercise_equipment),
+                    options = vocabulary.equipment,
+                    isSelected = { it == draft.equipment },
+                    onClick = { onChange(draft.copy(equipment = it.takeIf { v -> v != draft.equipment })) },
+                )
+                ChipRow(
+                    label = stringResource(R.string.exercise_mechanic),
+                    options = vocabulary.mechanics,
+                    isSelected = { it == draft.mechanic },
+                    onClick = { onChange(draft.copy(mechanic = it.takeIf { v -> v != draft.mechanic })) },
+                )
+                ChipRow(
+                    label = stringResource(R.string.exercise_force),
+                    options = vocabulary.forces,
+                    isSelected = { it == draft.force },
+                    onClick = { onChange(draft.copy(force = it.takeIf { v -> v != draft.force })) },
+                )
+                ChipRow(
+                    label = stringResource(R.string.exercise_category),
+                    options = vocabulary.categories,
+                    isSelected = { it == draft.category },
+                    onClick = { onChange(draft.copy(category = it)) },
+                )
+                ChipRow(
+                    label = stringResource(R.string.exercise_level),
+                    options = vocabulary.levels,
+                    isSelected = { it == draft.level },
+                    onClick = { onChange(draft.copy(level = it)) },
+                )
+                ChipRow(
+                    label = stringResource(R.string.exercise_logging_type),
+                    options = LoggingType.entries.map(LoggingType::stored),
+                    isSelected = { it == draft.loggingType.stored },
+                    onClick = { onChange(draft.copy(loggingType = LoggingType.fromStored(it))) },
+                )
+
+                // Offered as a plain question because it changes how the exercise is logged rather
+                // than what it is: a unilateral one expands to per-side on demand.
+                FilterChip(
+                    selected = draft.unilateral,
+                    onClick = { onChange(draft.copy(unilateral = !draft.unilateral)) },
+                    label = { Text(stringResource(R.string.exercise_unilateral)) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSave, enabled = draft.isComplete && !nameTaken) {
+                Text(stringResource(R.string.exercise_add))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+/** One closed vocabulary, as a scrolling row of chips. */
+@Composable
+private fun ChipRow(
+    label: String,
+    options: List<String>,
+    isSelected: (String) -> Boolean,
+    onClick: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            options.forEach { option ->
+                FilterChip(
+                    selected = isSelected(option),
+                    onClick = { onClick(option) },
+                    label = { Text(option) },
+                )
+            }
+        }
     }
 }

@@ -56,7 +56,7 @@ class SessionExerciseTest {
         id = 1,
         exercise = Exercise(
             id = "Barbell_Bench_Press",
-            name = "Barbell Bench Press",
+            bankName = "Barbell Bench Press",
             primaryMuscles = listOf("chest"),
             secondaryMuscles = listOf("shoulders", "triceps"),
             equipment = "barbell",

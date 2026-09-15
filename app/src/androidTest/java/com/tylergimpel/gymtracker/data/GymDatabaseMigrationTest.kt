@@ -336,6 +336,51 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToLifterOwnedFieldsWithNothingDroppedRenamedOrAnnotatedYet() {
+        helper.createDatabase(EIGHTH_DATABASE, 8).use { version8 ->
+            version8.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source) VALUES " +
+                    "('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', 'compound', " +
+                    "'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream')",
+            )
+            version8.execSQL(
+                "INSERT INTO exercise_preference (exercise_id, display_unit) " +
+                    "VALUES ('Test_Exercise', 'lb')",
+            )
+        }
+
+        val version9 = helper.runMigrationsAndValidate(EIGHTH_DATABASE, 9, true, MIGRATION_8_9)
+
+        version9.use { db ->
+            // The unit the lifter had already chosen is still there, and the three new answers are
+            // the truth about an installed copy: nothing dropped, renamed or annotated yet.
+            db.query("SELECT display_unit, name, note FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+                assertTrue(it.isNull(1))
+                assertTrue(it.isNull(2))
+            }
+            db.query("SELECT tombstoned FROM exercise").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+            // And a lifter's own exercise can now live beside the shipped ones.
+            db.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source, " +
+                    "tombstoned) VALUES ('8f14e45f-ceea-467a-9c2b-27e8a1d4f9b0', " +
+                    "'Pendulum Squat', 'quadriceps', '', 'machine', 'compound', 'push', " +
+                    "'strength', 'beginner', 'weight_reps', 0, 'user', 0)",
+            )
+            db.query("SELECT COUNT(*) FROM exercise WHERE source = 'user'").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -344,5 +389,6 @@ class GymDatabaseMigrationTest {
         const val FIFTH_DATABASE = "gym-migration-test-5.db"
         const val SIXTH_DATABASE = "gym-migration-test-6.db"
         const val SEVENTH_DATABASE = "gym-migration-test-7.db"
+        const val EIGHTH_DATABASE = "gym-migration-test-8.db"
     }
 }

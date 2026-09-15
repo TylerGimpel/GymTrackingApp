@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.ExerciseSource
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 
@@ -54,20 +55,34 @@ data class ExerciseEntity(
     @ColumnInfo(name = "unilateral")
     val unilateral: Boolean,
 
-    /** `upstream` or `authored` — which source shipped the row, not whether a user created it. */
+    /**
+     * `upstream`, `authored` or `user`.
+     *
+     * The first two ship inside the APK and are a bank update's to correct; the third is the
+     * lifter's own and is never an update's to touch.
+     */
     @ColumnInfo(name = "source")
     val source: String,
+
+    /**
+     * Set when a bank update dropped this exercise while a lifter had already trained it.
+     *
+     * The alternative is deleting a row that logged sets point at, which a training log does not
+     * get to do. Tombstoned rows stop being offered and stay readable for ever.
+     */
+    @ColumnInfo(name = "tombstoned", defaultValue = "0")
+    val tombstoned: Boolean = false,
 )
 
 /**
- * The bank's own fields as a domain exercise.
+ * The bank's own fields together with whatever the lifter decided about them.
  *
- * [displayUnit] is passed in rather than read from a column: it is a choice the lifter made, held in
- * `exercise_preference` so a bank update cannot overwrite it.
+ * [preference] is passed in rather than read from this row: a rename, a note and a unit are choices
+ * the lifter made, held in `exercise_preference` so a bank update cannot overwrite them (ADR 0009).
  */
-fun ExerciseEntity.toDomain(displayUnit: WeightUnit) = Exercise(
+fun ExerciseEntity.toDomain(preference: ExercisePreferenceEntity?) = Exercise(
     id = id,
-    name = name,
+    bankName = name,
     primaryMuscles = primaryMuscles,
     secondaryMuscles = secondaryMuscles,
     equipment = equipment,
@@ -77,5 +92,26 @@ fun ExerciseEntity.toDomain(displayUnit: WeightUnit) = Exercise(
     level = level,
     loggingType = LoggingType.fromStored(loggingType),
     unilateral = unilateral,
-    displayUnit = displayUnit,
+    displayUnit = WeightUnit.fromStored(preference?.displayUnit) ?: WeightUnit.DEFAULT,
+    userName = preference?.name,
+    note = preference?.note,
+    source = ExerciseSource.fromStored(source),
+    isTombstoned = tombstoned,
+)
+
+/** The row a lifter's own exercise is stored as, with a UUID in its own id space. */
+fun Exercise.toEntity() = ExerciseEntity(
+    id = id,
+    name = bankName,
+    primaryMuscles = primaryMuscles,
+    secondaryMuscles = secondaryMuscles,
+    equipment = equipment,
+    mechanic = mechanic,
+    force = force,
+    category = category,
+    level = level,
+    loggingType = loggingType.stored,
+    unilateral = unilateral,
+    source = source.stored,
+    tombstoned = isTombstoned,
 )

@@ -3,7 +3,6 @@ package com.tylergimpel.gymtracker.data
 import androidx.room.Embedded
 import androidx.room.Relation
 import com.tylergimpel.gymtracker.domain.Exercise
-import com.tylergimpel.gymtracker.domain.WeightUnit
 
 /**
  * A bank row together with whatever the lifter has decided about it.
@@ -20,6 +19,4 @@ data class ExerciseWithPreference(
     val preference: ExercisePreferenceEntity?,
 )
 
-fun ExerciseWithPreference.toDomain(): Exercise = exercise.toDomain(
-    displayUnit = WeightUnit.fromStored(preference?.displayUnit) ?: WeightUnit.DEFAULT,
-)
+fun ExerciseWithPreference.toDomain(): Exercise = exercise.toDomain(preference)

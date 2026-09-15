@@ -88,7 +88,7 @@ class DisplayUnitTest {
         id = 1,
         exercise = Exercise(
             id = "Lat_Pulldown",
-            name = "Lat Pulldown",
+            bankName = "Lat Pulldown",
             primaryMuscles = listOf("lats"),
             secondaryMuscles = listOf("biceps"),
             equipment = "cable",

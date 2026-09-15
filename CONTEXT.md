@@ -38,10 +38,20 @@ Sets per muscle, counted directly and indirectly, over a stated period. The quan
 ### Exercises
 
 **Exercise**:
-One movement that can be logged, such as "Barbell Bench Press". The unit that progression is tracked against — history follows the exercise, not the routine it appeared in.
+One movement that can be logged, such as "Barbell Bench Press". The unit that progression is tracked against — history follows the exercise, not the routine it appeared in. Carries the name the bank shipped and, where the lifter has renamed it, the name they call it; the shipped name stays, because the search shorthand resolves against it. A standing note can be attached to it, and is shown wherever the exercise is used.
 
 **Exercise bank**:
 The full set of exercises available in the app: those shipped preloaded, plus any the user has added.
+
+**User-authored exercise**:
+One the lifter added, for a machine their gym has and the app has never heard of. Not to be confused with the bank's own `authored` rows, which are hand-written for this project and ship inside the APK (`data/README.md`); the distinction an update turns on is shipped against the lifter's, not upstream against authored. First-class — it appears in search, in filtering and in a routine exactly as a shipped one does — and it takes a UUID in an id space of its own, so a **Bank update** matching on the shipped string ids can never find it.
+
+**Bank update**:
+An app release improving the shipped exercises. It matches on the shipped id, never touches a user-authored exercise, and never deletes one with logged history — it **tombstones** it instead. What the lifter decided about an exercise is held apart from it (`docs/adr/0009-user-choices-live-apart-from-the-shipped-bank.md`) and survives.
+
+**Tombstone**:
+What a bank update does to a shipped exercise it has dropped that somebody has already trained. It stops being offered and stays exactly where it is, because the sets logged against it are a record of training that happened.
+_Avoid_: delete, archive — one is what tombstoning exists to prevent and the other suggests the lifter did it.
 
 **Logging type**:
 What a set of a given exercise records — one of `weight_reps`, `bodyweight_reps`, `assisted`, `time`, `distance_time`. Determines which inputs the logging screen shows.

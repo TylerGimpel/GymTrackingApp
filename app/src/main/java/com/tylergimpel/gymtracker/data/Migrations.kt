@@ -225,6 +225,38 @@ internal val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+/**
+ * Version 9 lets a lifter own part of the exercise bank.
+ *
+ * `exercise.tombstoned` marks a shipped row an update dropped that something still points at.
+ * `exercise_preference` gains a name and a note — what the lifter calls an exercise and what they
+ * wrote about it — and is rebuilt rather than altered so its unit can become nullable: this row
+ * holds only what has actually been chosen, and a lifter who renamed an exercise and said nothing
+ * about its unit has not chosen kilograms.
+ *
+ * The rename lives beside the unit rather than on the bank row, for the reason ADR 0009 gives: the
+ * bank row is a bank update's to correct, and what the lifter decided is not. It also keeps the
+ * name the bank shipped, which is what the search aliases resolve against.
+ *
+ * Every existing row takes `tombstoned = 0` and a null name and note, which is the truth about an
+ * installed copy: nothing has been dropped, renamed or annotated yet.
+ */
+internal val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `exercise` ADD COLUMN `tombstoned` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `_new_exercise_preference` (`exercise_id` TEXT NOT NULL, `display_unit` TEXT, `name` TEXT, `note` TEXT, PRIMARY KEY(`exercise_id`), FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "INSERT INTO `_new_exercise_preference` (`exercise_id`, `display_unit`) " +
+                "SELECT `exercise_id`, `display_unit` FROM `exercise_preference`",
+        )
+        db.execSQL("DROP TABLE `exercise_preference`")
+        db.execSQL("ALTER TABLE `_new_exercise_preference` RENAME TO `exercise_preference`")
+        db.execSQL("PRAGMA foreign_key_check(`exercise_preference`)")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -233,4 +265,5 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_5_6,
     MIGRATION_6_7,
     MIGRATION_7_8,
+    MIGRATION_8_9,
 )

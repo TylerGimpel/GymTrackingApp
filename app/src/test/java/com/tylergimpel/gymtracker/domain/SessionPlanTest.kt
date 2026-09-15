@@ -117,7 +117,7 @@ class SessionPlanTest {
 
         fun exercise(id: String, name: String, muscle: String) = Exercise(
             id = id,
-            name = name,
+            bankName = name,
             primaryMuscles = listOf(muscle),
             secondaryMuscles = emptyList(),
             equipment = "barbell",

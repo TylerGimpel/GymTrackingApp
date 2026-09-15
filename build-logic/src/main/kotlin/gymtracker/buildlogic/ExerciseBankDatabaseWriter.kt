@@ -91,6 +91,9 @@ object ExerciseBankDatabaseWriter {
         "logging_type" -> loggingType
         "unilateral" -> if (unilateral) 1 else 0
         "source" -> source
+        // Nothing ships tombstoned: a tombstone is what happens to a row on a lifter's phone when
+        // an update drops an exercise they have already trained.
+        "tombstoned" -> 0
         else -> error(
             "The Room schema declares `$TABLE`.`$column`, which the bank generator does not know " +
                 "how to fill. Add it to ExerciseBankDatabaseWriter.valueFor."

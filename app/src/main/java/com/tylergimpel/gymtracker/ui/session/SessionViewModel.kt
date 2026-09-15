@@ -61,6 +61,18 @@ data class AddingDrop(val effortId: Long, val draft: SetDraft)
 data class Refiling(val sessionId: Long, val date: LocalDate)
 
 /**
+ * What the lifter calls an exercise and what they wrote about it, while they are editing them.
+ *
+ * Both at once, because they are the same conversation: this is the machine in the corner, and
+ * here is what you need to remember about it.
+ */
+data class ExerciseDetails(
+    val exerciseId: String,
+    val name: String,
+    val note: String,
+)
+
+/**
  * Everything on this screen that is not read from the database.
  *
  * Held as one object rather than as a flow each, because `combine` runs out of typed overloads at
@@ -77,6 +89,7 @@ private data class ScreenState(
     val finishing: Boolean = false,
     val refiling: Refiling? = null,
     val skipping: RoutineDay? = null,
+    val editingExercise: ExerciseDetails? = null,
 )
 
 data class SessionUiState(
@@ -124,6 +137,8 @@ data class SessionUiState(
     val refiling: Refiling? = null,
     /** The routine day the screen is asking about skipping, if it is asking. */
     val skipping: RoutineDay? = null,
+    /** The name and note being edited on the selected exercise, if they are. */
+    val editingExercise: ExerciseDetails? = null,
 )
 
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
@@ -179,6 +194,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 finishing = screen.finishing,
                 refiling = screen.refiling,
                 skipping = screen.skipping,
+                editingExercise = screen.editingExercise,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
@@ -380,6 +396,55 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun startCursorDay() {
         val day = state.value.routine?.cursor ?: return
         viewModelScope.launch { repository.startSession(SessionPlan(day.exercises)) }
+    }
+
+    /** Opens what the lifter calls the selected exercise, and the note they keep on it. */
+    fun startEditingExercise() {
+        val exercise = screen.value.selected ?: return
+        screen.update {
+            it.copy(
+                editingExercise = ExerciseDetails(
+                    exerciseId = exercise.id,
+                    name = exercise.name,
+                    note = exercise.note.orEmpty(),
+                ),
+            )
+        }
+    }
+
+    fun changeExerciseDetails(details: ExerciseDetails) =
+        screen.update { it.copy(editingExercise = details) }
+
+    fun cancelEditingExercise() = screen.update { it.copy(editingExercise = null) }
+
+    /**
+     * Records the lifter's name for the exercise and their note on it.
+     *
+     * A name matching what the bank already calls it is stored as no name at all, so that the row
+     * says "renamed" only when it was — and a later update correcting the shipped name is then free
+     * to take effect rather than being shadowed by a copy of the old one.
+     */
+    fun saveExerciseDetails() {
+        val open = screen.value.editingExercise ?: return
+        // The exercise the dialog was opened on, which is not necessarily the one selected now.
+        val exercise = screen.value.selected?.takeIf { it.id == open.exerciseId } ?: return
+        val renamed = open.name.trim().takeIf { it.isNotBlank() && it != exercise.bankName }
+        viewModelScope.launch {
+            exercises.rename(open.exerciseId, renamed)
+            exercises.note(open.exerciseId, open.note)
+            screen.update {
+                it.copy(
+                    editingExercise = null,
+                    // Carried across rather than re-read, for the reason the unit is: this view
+                    // model is the only thing that writes these, and the controls should not sit
+                    // showing the old name while the write lands.
+                    selected = it.selected?.copy(
+                        userName = renamed,
+                        note = open.note.takeIf(String::isNotBlank),
+                    ),
+                )
+            }
+        }
     }
 
     /** Opens the question of skipping the day the cursor points at. */

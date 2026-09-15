@@ -7,6 +7,9 @@ import com.tylergimpel.gymtracker.data.ExerciseAliasStore
 import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.NewExerciseDraft
+import com.tylergimpel.gymtracker.domain.hasNameLike
+import kotlinx.coroutines.flow.map
 import com.tylergimpel.gymtracker.domain.ExerciseAliases
 import com.tylergimpel.gymtracker.domain.search
 import com.tylergimpel.gymtracker.domain.workingMuscle
@@ -28,10 +31,36 @@ data class ExerciseBankUiState(
     /** The muscles the bank actually uses, offered as filters. */
     val muscles: List<String> = emptyList(),
     val total: Int = 0,
+    /** The draft of a new exercise, while one is being written. */
+    val adding: NewExerciseDraft? = null,
+    /** Whether what is being written names something the bank already has. */
+    val nameTaken: Boolean = false,
+    /**
+     * The vocabularies a new exercise chooses from, read out of the bank.
+     *
+     * Not restated in the app: `data/README.md` is where the closed sets are written down and the
+     * build step is what enforces them, so offering anything else here would be inventing a value
+     * the bank would reject.
+     */
+    val vocabulary: BankVocabulary = BankVocabulary(),
+)
+
+/** The closed sets a shipped exercise draws on, as the shipped rows actually use them. */
+data class BankVocabulary(
+    val muscles: List<String> = emptyList(),
+    val equipment: List<String> = emptyList(),
+    val mechanics: List<String> = emptyList(),
+    val forces: List<String> = emptyList(),
+    val categories: List<String> = emptyList(),
+    val levels: List<String> = emptyList(),
 )
 
 /** What the screen has typed and chosen, as opposed to what the bank holds. */
-private data class ScreenState(val query: String = "", val muscle: String? = null)
+private data class ScreenState(
+    val query: String = "",
+    val muscle: String? = null,
+    val adding: NewExerciseDraft? = null,
+)
 
 class ExerciseBankViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -48,8 +77,24 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch { aliases.value = aliasStore.load() }
     }
 
+    /**
+     * The vocabularies, derived from the bank alone.
+     *
+     * Its own flow rather than part of the combine below, which re-runs on every keystroke: six
+     * passes over 896 rows per typed character, to produce a list that only changes when the bank
+     * does.
+     */
+    private val vocabulary = repository.observeBank()
+        .map { it.vocabulary() }
+        .flowOn(Dispatchers.Default)
+
     val state: StateFlow<ExerciseBankUiState> =
-        combine(repository.observeBank(), screen, aliases) { bank, screen, aliases ->
+        combine(
+            repository.observeBank(),
+            screen,
+            aliases,
+            vocabulary,
+        ) { bank, screen, aliases, vocabulary ->
             // Muscle first, then what was typed: the muscle answers "what is there for this body
             // part" and the query narrows that, rather than the other way round.
             val forMuscle = screen.muscle?.let(bank::workingMuscle) ?: bank
@@ -65,6 +110,13 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
                     .distinct()
                     .sorted(),
                 total = bank.size,
+                vocabulary = vocabulary,
+                adding = screen.adding,
+                nameTaken = screen.adding
+                    ?.takeIf { it.name.isNotBlank() }
+                    ?.let(NewExerciseDraft::name)
+                    ?.let(bank::hasNameLike)
+                    ?: false,
             )
         }
             // Matching runs over the whole bank on every keystroke, so it does not run on the
@@ -78,6 +130,21 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
 
     fun search(query: String) = screen.update { it.copy(query = query) }
 
+    fun startAdding() = screen.update { it.copy(adding = NewExerciseDraft()) }
+
+    fun changeAdding(draft: NewExerciseDraft) = screen.update { it.copy(adding = draft) }
+
+    fun cancelAdding() = screen.update { it.copy(adding = null) }
+
+    /** Adds the exercise being written, giving it a UUID in the lifter's own id space. */
+    fun saveAdding() {
+        val draft = screen.value.adding?.takeIf(NewExerciseDraft::isComplete) ?: return
+        viewModelScope.launch {
+            repository.createExercise(draft)
+            screen.update { it.copy(adding = null) }
+        }
+    }
+
     /** Selecting the muscle already chosen clears the filter. */
     fun filterBy(muscle: String) =
         screen.update { it.copy(muscle = if (it.muscle == muscle) null else muscle) }
@@ -86,3 +153,18 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
         const val STOP_TIMEOUT_MILLIS = 5_000L
     }
 }
+
+/**
+ * The closed vocabularies as the shipped rows actually use them.
+ *
+ * Read from the bank rather than restated, so a new exercise can only ever choose a value the build
+ * step would accept — the same reason the equipment checklist is read from it.
+ */
+private fun List<Exercise>.vocabulary() = BankVocabulary(
+    muscles = flatMap { it.primaryMuscles + it.secondaryMuscles }.distinct().sorted(),
+    equipment = mapNotNull(Exercise::equipment).distinct().sorted(),
+    mechanics = mapNotNull(Exercise::mechanic).distinct().sorted(),
+    forces = mapNotNull(Exercise::force).distinct().sorted(),
+    categories = map(Exercise::category).distinct().sorted(),
+    levels = map(Exercise::level).distinct().sorted(),
+)

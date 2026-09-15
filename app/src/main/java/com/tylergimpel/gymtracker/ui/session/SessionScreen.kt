@@ -100,6 +100,10 @@ fun SessionScreen(
         onSetAutoJump = viewModel::setAutoJump,
         onSessionNoteChange = viewModel::noteSession,
         onStartDay = viewModel::startCursorDay,
+        onEditExercise = viewModel::startEditingExercise,
+        onExerciseDetailsChange = viewModel::changeExerciseDetails,
+        onSaveExerciseDetails = viewModel::saveExerciseDetails,
+        onCancelExerciseDetails = viewModel::cancelEditingExercise,
         onSkipDay = viewModel::startSkipping,
         onConfirmSkip = viewModel::skipDay,
         onCancelSkip = viewModel::cancelSkipping,
@@ -138,6 +142,10 @@ fun SessionScreen(
     onSetAutoJump: (Long, Boolean) -> Unit = { _, _ -> },
     onSessionNoteChange: (String) -> Unit = {},
     onStartDay: () -> Unit = {},
+    onEditExercise: () -> Unit = {},
+    onExerciseDetailsChange: (ExerciseDetails) -> Unit = {},
+    onSaveExerciseDetails: () -> Unit = {},
+    onCancelExerciseDetails: () -> Unit = {},
     onSkipDay: () -> Unit = {},
     onConfirmSkip: () -> Unit = {},
     onCancelSkip: () -> Unit = {},
@@ -228,6 +236,7 @@ fun SessionScreen(
                         onDraftChange = onDraftChange,
                         onRightDraftChange = onRightDraftChange,
                         onTogglePerSide = onTogglePerSide,
+                        onEditExercise = onEditExercise,
                         onReadIn = onReadIn,
                         onToggleDisplayUnitOverride = onToggleDisplayUnitOverride,
                         onLogSet = onLogSet,
@@ -290,6 +299,15 @@ fun SessionScreen(
     state.refiling?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
 
     state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
+
+    state.editingExercise?.let { details ->
+        ExerciseDetailsDialog(
+            details = details,
+            onChange = onExerciseDetailsChange,
+            onSave = onSaveExerciseDetails,
+            onCancel = onCancelExerciseDetails,
+        )
+    }
 }
 
 /**
@@ -346,6 +364,48 @@ private fun NextUp(
             }
         }
     }
+}
+
+/**
+ * What the lifter calls this exercise, and what they need to remember about it.
+ *
+ * Both live apart from the bank row, so an app update that corrects what the bank ships cannot
+ * reach either (ADR 0009).
+ */
+@Composable
+private fun ExerciseDetailsDialog(
+    details: ExerciseDetails,
+    onChange: (ExerciseDetails) -> Unit,
+    onSave: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.exercise_edit)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = details.name,
+                    onValueChange = { onChange(details.copy(name = it)) },
+                    label = { Text(stringResource(R.string.exercise_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = details.note,
+                    onValueChange = { onChange(details.copy(note = it)) },
+                    label = { Text(stringResource(R.string.exercise_note)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSave) { Text(stringResource(R.string.session_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 /**
@@ -467,12 +527,32 @@ private fun SetEntryControls(
     onDraftChange: (SetDraft) -> Unit,
     onRightDraftChange: (SetDraft) -> Unit,
     onTogglePerSide: () -> Unit,
+    onEditExercise: () -> Unit,
     onReadIn: (WeightUnit) -> Unit,
     onToggleDisplayUnitOverride: () -> Unit,
     onLogSet: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(exercise.name, style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(exercise.name, style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = onEditExercise) {
+                Text(stringResource(R.string.exercise_edit))
+            }
+        }
+
+        // In front of the lifter every time they train it, which is the whole point of writing it
+        // down: "seat notch 3, use the long bar" is no use on a screen nobody opens in a gym.
+        exercise.note?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         if (perSide) {
             Text(
@@ -783,6 +863,13 @@ private fun LoggedExercise(
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         Text(performed.exercise.name, style = MaterialTheme.typography.titleMedium)
+        performed.exercise.note?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         performed.sets.forEachIndexed { position, set ->
             LoggedSetRows(
                 // Numbered at render rather than by the stored set index, per ADR 0003: the index

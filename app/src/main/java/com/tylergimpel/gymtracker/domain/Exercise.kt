@@ -1,15 +1,53 @@
 package com.tylergimpel.gymtracker.domain
 
 /**
+ * Where a row of the exercise bank came from.
+ *
+ * The distinction the update rules turn on is not upstream against authored — both of those ship
+ * inside the APK and are the bank's to correct — but shipped against [USER], which is the lifter's
+ * and is never an update's to touch.
+ */
+enum class ExerciseSource(val stored: String) {
+    /** From the public dataset the bank is built on. */
+    UPSTREAM("upstream"),
+
+    /** Hand-written for this project, filling a gap the dataset has. Still shipped. */
+    AUTHORED("authored"),
+
+    /** Added by the lifter, for a machine their gym has and the app has never heard of. */
+    USER("user"),
+    ;
+
+    companion object {
+        private val BY_STORED = entries.associateBy(ExerciseSource::stored)
+
+        fun fromStored(value: String): ExerciseSource = requireNotNull(BY_STORED[value]) {
+            "Unknown exercise source `$value`"
+        }
+    }
+}
+
+/**
  * One movement that can be logged, such as "Barbell Bench Press".
  *
  * This is the unit progression is tracked against: history follows the exercise, not the routine it
  * appeared in. Muscles and equipment are plain strings drawn from closed vocabularies that the build
  * step enforces — see `data/README.md`.
+ *
+ * Carries both what the bank shipped and what the lifter has decided, because almost everything
+ * wants them together. They are stored apart (ADR 0009), which is what lets a bank update correct
+ * the one without reaching the other.
  */
 data class Exercise(
     val id: String,
-    val name: String,
+    /**
+     * What the bank calls this movement.
+     *
+     * Kept even after a rename, because it is what aliases resolve against: `aliases.json` targets
+     * names, and a lifter renaming Butterfly would otherwise silently break "pec deck" — the exact
+     * failure the build-time alias check exists to prevent.
+     */
+    val bankName: String,
     val primaryMuscles: List<String>,
     val secondaryMuscles: List<String>,
     val equipment: String?,
@@ -28,7 +66,31 @@ data class Exercise(
      * stored, so a gym with both kinds of machine still has one continuous progress graph.
      */
     val displayUnit: WeightUnit = WeightUnit.DEFAULT,
+    /** What the lifter calls this, where they have renamed it. */
+    val userName: String? = null,
+    /** A standing note — "seat notch 3, use the long bar" — shown wherever the exercise is used. */
+    val note: String? = null,
+    val source: ExerciseSource = ExerciseSource.UPSTREAM,
+    /**
+     * Whether a bank update dropped this exercise while a lifter had already trained it.
+     *
+     * Stops it being suggested and leaves every set logged against it exactly where it was. The
+     * alternative is deleting a row that history points at, which is not an option a training log
+     * gets to take.
+     */
+    val isTombstoned: Boolean = false,
 ) {
+    /**
+     * What to call this exercise: the lifter's name for it where they have given one.
+     *
+     * Derived rather than stored, so that nothing can show the bank's name to someone who has
+     * renamed it by reading the wrong field.
+     */
+    val name: String get() = userName ?: bankName
+
+    /** Added by the lifter rather than shipped. Never an update's to modify or remove. */
+    val isUserAuthored: Boolean get() = source == ExerciseSource.USER
+
     /**
      * The muscle to list this exercise under, which is the first of its primary muscles.
      *
@@ -37,4 +99,17 @@ data class Exercise(
      * statement about what it trains.
      */
     val primaryMuscle: String? get() = primaryMuscles.firstOrNull()
+
+    /**
+     * This exercise as the bank now has it, carrying forward everything [chosen] decided about it.
+     *
+     * Those fields are stored apart and an update never writes them, so this is not what keeps them
+     * safe — it is what makes "has this row actually changed" answerable, by comparing like with
+     * like rather than reporting a correction every time a lifter had renamed something.
+     */
+    fun keepingChoicesOf(chosen: Exercise): Exercise = copy(
+        displayUnit = chosen.displayUnit,
+        userName = chosen.userName,
+        note = chosen.note,
+    )
 }

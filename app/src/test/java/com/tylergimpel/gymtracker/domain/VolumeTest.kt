@@ -186,7 +186,7 @@ class VolumeTest {
 
     private fun exercise(id: String, primary: List<String>, secondary: List<String>) = Exercise(
         id = id,
-        name = id.replace('_', ' '),
+        bankName = id.replace('_', ' '),
         primaryMuscles = primary,
         secondaryMuscles = secondary,
         equipment = "barbell",

@@ -35,7 +35,13 @@ fun List<Exercise>.search(
         .mapTo(mutableSetOf(), String::lowercase)
 
     return filter { exercise ->
-        typed.allMatch(exercise.name.tokenise()) || exercise.name.lowercase() in namedByAlias
+        typed.allMatch(exercise.name.tokenise()) ||
+            // What the bank calls it, too: a lifter who renamed Butterfly to "Pec Deck" should
+            // still find it by typing either, and the shorthand targets the bank's names — so
+            // resolving an alias against a renamed exercise has to look at the name it shipped
+            // with, or renaming one would silently break the shorthand pointing at it.
+            typed.allMatch(exercise.bankName.tokenise()) ||
+            exercise.bankName.lowercase() in namedByAlias
     }
 }
 

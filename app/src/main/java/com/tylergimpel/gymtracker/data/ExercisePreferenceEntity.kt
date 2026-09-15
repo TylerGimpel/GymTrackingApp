@@ -4,8 +4,6 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
-import com.tylergimpel.gymtracker.domain.WeightUnit
-
 /**
  * What a lifter has decided about one exercise, as opposed to what the bank says about it.
  *
@@ -30,12 +28,27 @@ data class ExercisePreferenceEntity(
     @ColumnInfo(name = "exercise_id")
     val exerciseId: String,
 
-    /** `kg` or `lb` — how this exercise is read. Never what its weights are stored in. */
+    /**
+     * `kg` or `lb` — how this exercise is read. Never what its weights are stored in.
+     *
+     * Nullable, like the other two, because this row holds only what has actually been chosen: a
+     * lifter who renamed an exercise and said nothing about its unit has not chosen kilograms, they
+     * have said nothing, and the default answers for them.
+     */
     @ColumnInfo(name = "display_unit")
-    val displayUnit: String,
-) {
-    companion object {
-        fun of(exerciseId: String, displayUnit: WeightUnit) =
-            ExercisePreferenceEntity(exerciseId = exerciseId, displayUnit = displayUnit.stored)
-    }
-}
+    val displayUnit: String? = null,
+
+    /**
+     * What the lifter calls this exercise, where they have renamed it.
+     *
+     * Here rather than on the bank row so that a rename survives an update correcting the name the
+     * bank shipped — and so that "pec deck" keeps finding Butterfly, because aliases resolve
+     * against the bank's name and the bank's name is still there.
+     */
+    @ColumnInfo(name = "name")
+    val name: String? = null,
+
+    /** "Seat notch 3, use the long bar" — in front of the lifter every time they train it. */
+    @ColumnInfo(name = "note")
+    val note: String? = null,
+)
