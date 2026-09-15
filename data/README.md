@@ -1,8 +1,8 @@
 # Exercise bank source data
 
-Build-time input for the preloaded exercise bank. A build step merges these with the upstream dataset and emits the prepopulated SQLite file that Room opens via `createFromAsset()`.
+Build-time input for the preloaded exercise bank. A build step merges these and emits two things into the APK: the prepopulated SQLite file that Room opens via `createFromAsset()`, and `exercise-aliases.json`, the validated search shorthand.
 
-Nothing here is loaded at runtime, and nothing here is fetched over a network.
+None of these files is read at runtime and nothing here is fetched over a network. The emitted alias asset **is** read at runtime, by search — it is generated from `aliases.json` rather than copied from it, so what ships is what the build checked.
 
 ## The four files
 
@@ -14,6 +14,12 @@ Nothing here is loaded at runtime, and nothing here is fetched over a network.
 | `aliases.json` | **133 search aliases** covering 160 alias→exercise pairs |
 
 Upstream is [`yuhonas/free-exercise-db`](https://github.com/yuhonas/free-exercise-db) — Unlicense, 876 rows. **Take its structured fields only.** Its `instructions` and `images` are excluded on provenance grounds and must not be reintroduced; see `docs/adr/0002-exercise-bank-source-and-omissions.md`.
+
+### Why the aliases ship beside the database rather than inside it
+
+Aliases carry no user-specific state: they are shorthand for names the bank already has. Putting them in the database would mean a schema version and a migration every time the list improved, and an upgrading install would sit with an empty alias table until the bank-update path exists — search would quietly lose its shorthand, which is the failure this file's rule 4 exists to prevent.
+
+As an asset they arrive with the APK and are replaced wholesale by the next one. Nothing to migrate, and nothing to reconcile against what a lifter has done.
 
 ### Why upstream is vendored rather than downloaded
 
@@ -58,7 +64,7 @@ The shipped SQLite file is generated from **Room's own exported schema**, never 
 1. **No id or name may collide with upstream**, case-insensitively. This caught a real error during authoring — `Air Bike` was already taken by an unrelated ab exercise.
 2. **Every vocabulary value must be in the closed sets above.**
 3. **No row may carry `instructions` or `images`.**
-4. **Every alias target must name an exercise that exists** after the merge. An alias pointing at a missing name fails silently, which is the worst kind of failure for a search feature.
+4. **Every alias target must name an exercise that exists** after the merge, and must be a name rather than some other JSON value. An alias pointing at a missing name fails silently, which is the worst kind of failure for a search feature — and a malformed target quietly shipped one exercise short is the same failure wearing a different hat.
 5. **No brand names.** "Hammer Strength Iso-Lateral Row" is wrong at every gym with a different manufacturer. Generic names plus user-authored exercises cover gym specifics.
 
 ## Two things worth knowing when editing

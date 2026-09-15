@@ -13,7 +13,9 @@ import com.tylergimpel.gymtracker.domain.workingMuscle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -55,10 +57,18 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
                 exercises = matching,
                 query = screen.query,
                 muscle = screen.muscle,
-                muscles = bank.flatMap(Exercise::primaryMuscles).distinct().sorted(),
+                // Every muscle the filter could match on, so nothing is filterable but unoffered.
+                muscles = bank
+                    .flatMap { it.primaryMuscles + it.secondaryMuscles }
+                    .distinct()
+                    .sorted(),
                 total = bank.size,
             )
-        }.stateIn(
+        }
+            // Matching runs over the whole bank on every keystroke, so it does not run on the
+            // thread drawing the results.
+            .flowOn(Dispatchers.Default)
+            .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
             ExerciseBankUiState(),

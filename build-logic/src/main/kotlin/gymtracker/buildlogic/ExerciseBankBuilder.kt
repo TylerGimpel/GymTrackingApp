@@ -121,11 +121,15 @@ object ExerciseBankBuilder {
         val byName = exercises.associateBy { it.name.lowercase() }
 
         return parsed.asJsonObject.entrySet().associate { (alias, value) ->
-            val targets = when {
-                value.isJsonArray -> value.asJsonArray.mapNotNull { it.stringOrNull() }
-                else -> listOfNotNull(value.stringOrNull())
+            val entries = if (value.isJsonArray) value.asJsonArray.toList() else listOf(value)
+            val targets = entries.mapNotNull { entry ->
+                entry.stringOrNull().also {
+                    // Dropping a malformed target would ship the alias one exercise short and say
+                    // nothing, which is the same silent failure the whole check exists to stop.
+                    if (it == null) problems += "aliases.json: `$alias` names `$entry`, which is not a name"
+                }
             }
-            if (targets.isEmpty()) {
+            if (targets.isEmpty() && entries.isEmpty()) {
                 problems += "aliases.json: `$alias` names no exercise at all"
             }
             targets.forEach { target ->
