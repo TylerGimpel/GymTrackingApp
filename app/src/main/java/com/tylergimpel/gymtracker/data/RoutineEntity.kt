@@ -74,12 +74,18 @@ fun RoutineDayEntity.toDomain() = RoutineDay(
     name = name,
 )
 
-fun RoutineEntity.toDomain(days: List<RoutineDayEntity>) = Routine(
+fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
     id = id,
     name = name,
     goal = RoutineGoal.valueOf(goal),
     cadence = cadence,
     equipment = equipment.toSet(),
     repPreference = RepPreference.valueOf(repPreference),
-    days = days.map(RoutineDayEntity::toDomain),
+    days = days.map(RoutineDayWithExercises::toDomain),
+)
+
+fun RoutineDayWithExercises.toDomain() = day.toDomain().copy(
+    exercises = exercises
+        .sortedBy { it.entry.orderIndex }
+        .map { it.exercise.toDomain() },
 )

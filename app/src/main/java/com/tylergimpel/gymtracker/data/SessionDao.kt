@@ -24,8 +24,19 @@ interface SessionDao {
      * is to be the session a lifter has just closed and is about to realise they misdated — and
      * refiling is exactly the operation that would move it out of its own way.
      */
+    @Transaction
     @Query("SELECT * FROM session WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1")
-    fun observeLastFinished(): Flow<SessionEntity?>
+    fun observeLastFinished(): Flow<SessionWithContent?>
+
+    /**
+     * The most recent finished sessions, newest first.
+     *
+     * What the revealed-preference counts are derived from: an exercise avoided once is nothing,
+     * and the same exercise unperformed across most of the sessions that asked for it is a signal.
+     */
+    @Transaction
+    @Query("SELECT * FROM session WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<SessionWithContent>>
 
     @Transaction
     @Query("SELECT * FROM session WHERE id = :sessionId")
@@ -60,6 +71,13 @@ interface SessionDao {
 
     @Insert
     suspend fun insert(sessionExercise: SessionExerciseEntity): Long
+
+    @Insert
+    suspend fun insert(planned: SessionPlanEntity): Long
+
+    /** Whether this session has already been planned. A session is planned once, when it begins. */
+    @Query("SELECT COUNT(*) FROM session_plan WHERE session_id = :sessionId")
+    suspend fun plannedCount(sessionId: Long): Int
 
     @Transaction
     @Query("SELECT * FROM set_entry WHERE session_exercise_id = :sessionExerciseId ORDER BY set_index")

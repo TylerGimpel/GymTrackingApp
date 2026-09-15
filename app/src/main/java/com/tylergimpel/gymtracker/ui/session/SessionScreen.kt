@@ -46,6 +46,7 @@ import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.Drop
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -93,6 +94,7 @@ fun SessionScreen(
         onSaveDrop = viewModel::saveDrop,
         onCancelDrop = viewModel::cancelAddingDrop,
         onSessionNoteChange = viewModel::noteSession,
+        onStartDay = viewModel::startCursorDay,
         onSkipDay = viewModel::startSkipping,
         onConfirmSkip = viewModel::skipDay,
         onCancelSkip = viewModel::cancelSkipping,
@@ -127,6 +129,7 @@ fun SessionScreen(
     onSaveDrop: () -> Unit = {},
     onCancelDrop: () -> Unit = {},
     onSessionNoteChange: (String) -> Unit = {},
+    onStartDay: () -> Unit = {},
     onSkipDay: () -> Unit = {},
     onConfirmSkip: () -> Unit = {},
     onCancelSkip: () -> Unit = {},
@@ -197,7 +200,14 @@ fun SessionScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = insets,
         ) {
-            item { NextUp(state.routine, onSkipDay) }
+            item {
+                NextUp(
+                    progress = state.routine,
+                    canStart = state.session == null,
+                    onStartDay = onStartDay,
+                    onSkipDay = onSkipDay,
+                )
+            }
 
             state.selected?.let { selected ->
                 item {
@@ -233,6 +243,13 @@ fun SessionScreen(
                 HorizontalDivider()
             }
 
+            if (state.unperformed.isNotEmpty()) {
+                item {
+                    Unperformed(state.unperformed)
+                    HorizontalDivider()
+                }
+            }
+
             state.session?.let { session ->
                 item { SessionNote(session.id, session.note, onSessionNoteChange) }
             }
@@ -265,7 +282,12 @@ fun SessionScreen(
  * day they are declining.
  */
 @Composable
-private fun NextUp(progress: RoutineProgress?, onSkipDay: () -> Unit) {
+private fun NextUp(
+    progress: RoutineProgress?,
+    canStart: Boolean,
+    onStartDay: () -> Unit,
+    onSkipDay: () -> Unit,
+) {
     val cursor = progress?.cursor
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
@@ -290,10 +312,19 @@ private fun NextUp(progress: RoutineProgress?, onSkipDay: () -> Unit) {
             }
         }
 
-        // The way past a day nobody is going to train as written. Offered beside the day itself,
-        // because that is the moment a lifter decides they are not doing it.
-        if (cursor != null) {
-            TextButton(onClick = onSkipDay) { Text(stringResource(R.string.session_skip_day)) }
+        Row {
+            // Starting here is what takes the copy of the day's exercises. Logging a set without
+            // it is still a session — just one that was not for anything in particular.
+            if (cursor != null && canStart) {
+                TextButton(onClick = onStartDay) {
+                    Text(stringResource(R.string.session_start_day))
+                }
+            }
+            // The way past a day nobody is going to train as written. Offered beside the day
+            // itself, because that is the moment a lifter decides they are not doing it.
+            if (cursor != null) {
+                TextButton(onClick = onSkipDay) { Text(stringResource(R.string.session_skip_day)) }
+            }
         }
     }
 }
@@ -367,7 +398,7 @@ private fun RefileSessionDialog(
 @Composable
 private fun EmptySession(
     hasSelection: Boolean,
-    lastFinished: Session?,
+    lastFinished: LoggedSession?,
     onStartRefiling: (Session) -> Unit,
 ) {
     Column(
@@ -381,18 +412,28 @@ private fun EmptySession(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        lastFinished?.let { session ->
+        lastFinished?.let { logged ->
             Text(
-                text = stringResource(R.string.session_last, session.date.toString()),
+                text = stringResource(R.string.session_last, logged.session.date.toString()),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .clickable(
                         onClickLabel = stringResource(R.string.session_refile),
-                        onClick = { onStartRefiling(session) },
+                        onClick = { onStartRefiling(logged.session) },
                     )
                     .padding(vertical = 4.dp),
             )
+            // How much of what it was for got done — the question the plan exists to answer, and
+            // the one a lifter asks the moment a session is over.
+            if (!logged.plan.isEmpty) {
+                val (done, planned) = logged.plan.progress(logged.exercises)
+                Text(
+                    text = stringResource(R.string.session_plan_progress, done, planned),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -624,6 +665,31 @@ private fun SetTypeChooser(selected: SetType, onSelect: (SetType) -> Unit) {
                     label = { Text(stringResource(type.label)) },
                 )
             }
+        }
+    }
+}
+
+/**
+ * What this session was for and did not get to.
+ *
+ * The whole reason a plan is recorded: without this list an exercise nobody trained reads exactly
+ * like one nobody prescribed, and a partial session cannot be told from a complete one.
+ */
+@Composable
+private fun Unperformed(exercises: List<Exercise>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(
+            text = stringResource(R.string.session_unperformed),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        exercises.forEach { exercise ->
+            Text(
+                text = exercise.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
         }
     }
 }

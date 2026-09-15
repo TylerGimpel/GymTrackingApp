@@ -6,16 +6,17 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.data.GymDatabase
-import com.tylergimpel.gymtracker.data.LoggedSession
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.SessionRepository
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
@@ -95,6 +96,11 @@ data class SessionUiState(
     val rightDraft: SetDraft = SetDraft(),
     val editing: EditingEffort? = null,
     val addingDrop: AddingDrop? = null,
+    /**
+     * What the session was supposed to contain and did not — what makes "I did four of six"
+     * answerable, and a prescribed exercise that went untrained visible rather than absent.
+     */
+    val unperformed: List<Exercise> = emptyList(),
     /** The routine and where it has got to, so the screen can say what comes next. */
     val routine: RoutineProgress? = null,
     /** Set while the screen is asking which routine day the finishing session realised. */
@@ -105,7 +111,7 @@ data class SessionUiState(
      * There so that a date noticed to be wrong after pressing Finish is still fixable. Deliberately
      * one session rather than a list: this is a way back to what was just done, not history.
      */
-    val lastFinished: Session? = null,
+    val lastFinished: LoggedSession? = null,
     /** The session whose date the screen is asking about, if it is asking. */
     val refiling: Refiling? = null,
     /** The routine day the screen is asking about skipping, if it is asking. */
@@ -150,6 +156,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         ) { logged, lastFinished, routine, screen ->
             SessionUiState(
                 session = logged?.session,
+                unperformed = logged?.unperformed.orEmpty(),
                 lastFinished = lastFinished,
                 exercises = logged?.exercises.orEmpty(),
                 selected = screen.selected,
@@ -338,6 +345,17 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun noteSession(text: String) {
         val session = logged.value?.session ?: return
         viewModelScope.launch { repository.noteSession(session.id, text) }
+    }
+
+    /**
+     * Opens a session for the day the cursor points at, copying what that day holds onto it.
+     *
+     * The only moment a plan is taken. A session started by simply logging a set has none, which is
+     * what training with no routine looks like and is not a lesser session for it.
+     */
+    fun startCursorDay() {
+        val day = state.value.routine?.cursor ?: return
+        viewModelScope.launch { repository.startSession(SessionPlan(day.exercises)) }
     }
 
     /** Opens the question of skipping the day the cursor points at. */

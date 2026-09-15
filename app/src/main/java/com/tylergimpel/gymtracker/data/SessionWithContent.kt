@@ -6,6 +6,7 @@ import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -46,6 +47,23 @@ data class SessionWithContent(
         entityColumn = "session_id",
     )
     val exercises: List<SessionExerciseWithSets>,
+
+    @Relation(
+        entity = SessionPlanEntity::class,
+        parentColumn = "id",
+        entityColumn = "session_id",
+    )
+    val plan: List<SessionPlanWithExercise>,
+)
+
+/**
+ * What the session was for, in the order its routine day held it.
+ *
+ * Empty for a session trained with no routine, which reads back as a plan of nothing rather than as
+ * anything missing.
+ */
+fun List<SessionPlanWithExercise>.toSessionPlan() = SessionPlan(
+    exercises = sortedBy { it.entry.orderIndex }.map { it.exercise.toDomain() },
 )
 
 fun SessionExerciseWithSets.toDomain() = SessionExercise(

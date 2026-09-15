@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
+import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineGoal
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +62,16 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     fun renameDay(dayId: Long, name: String) {
         viewModelScope.launch { repository.renameDay(dayId, name) }
+    }
+
+    /** Adds an exercise to a day. Not a revision, so the cycle and the cursor are untouched. */
+    fun addExerciseToDay(dayId: Long, exercise: Exercise) {
+        viewModelScope.launch { repository.addExerciseToDay(dayId, exercise.id) }
+    }
+
+    /** Takes an exercise out of a day. Not a revision either, for the same reason. */
+    fun removeExerciseFromDay(dayId: Long, exerciseId: String) {
+        viewModelScope.launch { repository.removeExerciseFromDay(dayId, exerciseId) }
     }
 
     fun removeDay(dayId: Long) {

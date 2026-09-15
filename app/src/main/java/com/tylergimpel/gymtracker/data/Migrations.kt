@@ -147,5 +147,45 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
-internal val MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+/**
+ * Version 7 gives a routine day its exercises, and a session a record of what it was for.
+ *
+ * Both tables arrive empty, which reads correctly on an installed copy: every routine day holds
+ * nothing until a lifter fills it in, and every session already logged was for whatever it turned
+ * out to contain. A plan cannot be reconstructed after the fact, and inventing one would put words
+ * in the lifter's mouth about sessions they have already finished.
+ *
+ * `session_plan` has no foreign key to `routine_day` on purpose: the plan is a copy, so revising a
+ * routine cannot reach it.
+ */
+internal val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `routine_day_exercise` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `routine_day_id` INTEGER NOT NULL, `exercise_id` TEXT NOT NULL, `order_index` INTEGER NOT NULL, FOREIGN KEY(`routine_day_id`) REFERENCES `routine_day`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_routine_day_exercise_routine_day_id_exercise_id` ON `routine_day_exercise` (`routine_day_id`, `exercise_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_routine_day_exercise_exercise_id` ON `routine_day_exercise` (`exercise_id`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `session_plan` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `session_id` INTEGER NOT NULL, `exercise_id` TEXT NOT NULL, `order_index` INTEGER NOT NULL, FOREIGN KEY(`session_id`) REFERENCES `session`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_session_plan_session_id` ON `session_plan` (`session_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_session_plan_exercise_id` ON `session_plan` (`exercise_id`)",
+        )
+    }
+}
+
+internal val MIGRATIONS: Array<Migration> = arrayOf(
+    MIGRATION_1_2,
+    MIGRATION_2_3,
+    MIGRATION_3_4,
+    MIGRATION_4_5,
+    MIGRATION_5_6,
+    MIGRATION_6_7,
+)

@@ -229,11 +229,63 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToPlansLeavingEverySessionAlreadyLoggedWithoutOne() {
+        helper.createDatabase(SIXTH_DATABASE, 6).use { version6 ->
+            version6.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source) VALUES " +
+                    "('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', 'compound', " +
+                    "'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream')",
+            )
+            version6.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            version6.execSQL(
+                "INSERT INTO routine (name, goal, cadence, equipment, rep_preference) " +
+                    "VALUES ('Push / Pull / Legs', 'HYPERTROPHY', 4, 'barbell', 'MODERATE')",
+            )
+            version6.execSQL(
+                "INSERT INTO routine_day (routine_id, order_index, name) VALUES (1, 1, 'Push')",
+            )
+        }
+
+        val version7 = helper.runMigrationsAndValidate(SIXTH_DATABASE, 7, true, MIGRATION_6_7)
+
+        version7.use { db ->
+            // Both tables arrive empty, which is the truth about an installed copy: no day held
+            // anything yet, and a plan cannot be reconstructed for a session already logged.
+            db.query("SELECT COUNT(*) FROM routine_day_exercise").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+            db.query("SELECT COUNT(*) FROM session_plan").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+            // And both can now be written to.
+            db.execSQL(
+                "INSERT INTO routine_day_exercise (routine_day_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            db.execSQL(
+                "INSERT INTO session_plan (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            db.query("SELECT exercise_id FROM session_plan").use {
+                it.moveToFirst()
+                assertEquals("Test_Exercise", it.getString(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
         const val SECOND_DATABASE = "gym-migration-test-2.db"
         const val THIRD_DATABASE = "gym-migration-test-3.db"
         const val FIFTH_DATABASE = "gym-migration-test-5.db"
+        const val SIXTH_DATABASE = "gym-migration-test-6.db"
     }
 }

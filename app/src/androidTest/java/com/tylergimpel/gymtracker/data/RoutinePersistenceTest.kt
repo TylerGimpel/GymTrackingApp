@@ -6,12 +6,15 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.SessionPlan
+import com.tylergimpel.gymtracker.domain.unperformedExerciseCounts
 import com.tylergimpel.gymtracker.domain.SetDraft
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -223,6 +226,177 @@ class RoutinePersistenceTest {
     }
 
     @Test
+    fun startingASessionFromARoutineDayCopiesWhatThatDayHolds() = runBlocking {
+        val routine = pushPullLegs()
+        val push = routine.rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+        routines.addExerciseToDay(push.id, SQUAT)
+
+        sessions.startSession(SessionPlan(dayNow(push).exercises))
+
+        // What the session is for, in the order the day holds it.
+        assertEquals(listOf(BENCH, SQUAT), planOf(currentSessionId()))
+    }
+
+    @Test
+    fun aSessionStartedWithNoRoutineDayHasNoPlanAndThatIsNotAnError() = runBlocking {
+        pushPullLegs()
+
+        // Logging a set is enough to start training; nothing about it is missing.
+        sessions.logSet(BENCH, SetDraft("60", "5"))
+
+        val logged = sessions.observeSession(currentSessionId()).first()!!
+        assertTrue(logged.plan.isEmpty)
+        assertTrue(logged.unperformed.isEmpty())
+    }
+
+    @Test
+    fun aPartialSessionReportsWhatItWasForAgainstWhatItDid() = runBlocking {
+        val routine = pushPullLegs()
+        val push = routine.rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+        routines.addExerciseToDay(push.id, SQUAT)
+        sessions.startSession(SessionPlan(dayNow(push).exercises))
+
+        sessions.logSet(BENCH, SetDraft("60", "5"))
+
+        // Two planned, one trained — and the one that was not is named rather than absent.
+        val logged = sessions.observeSession(currentSessionId()).first()!!
+        assertEquals(2, logged.plan.exercises.size)
+        assertEquals(listOf(SQUAT), logged.unperformed.map { it.id })
+    }
+
+    @Test
+    fun changingADaysExercisesAfterwardsLeavesAnExistingPlanAlone() = runBlocking {
+        val routine = pushPullLegs()
+        val push = routine.rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+        sessions.startSession(SessionPlan(dayNow(push).exercises))
+        val session = currentSessionId()
+
+        // The routine moves on: the day loses what it had and gains something else.
+        routines.removeExerciseFromDay(push.id, BENCH)
+        routines.addExerciseToDay(push.id, SQUAT)
+
+        // The session is still a record of what it was for at the time.
+        assertEquals(listOf(BENCH), planOf(session))
+    }
+
+    @Test
+    fun deletingTheRoutineLeavesEverySessionPlanIntact() = runBlocking {
+        val routine = pushPullLegs()
+        val push = routine.rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+        sessions.startSession(SessionPlan(dayNow(push).exercises))
+        val session = currentSessionId()
+
+        routines.deleteRoutine()
+
+        // The seam this table exists on: the plan is a copy, so nothing about revising or throwing
+        // away a routine can reach it.
+        assertNull(routines.observeProgress().first())
+        assertEquals(0, countOf("routine_day_exercise"))
+        assertEquals(listOf(BENCH), planOf(session))
+    }
+
+    @Test
+    fun aSessionThatNamesItsDayOnlyAtTheEndIsPlannedFromThatDay() = runBlocking {
+        val routine = pushPullLegs()
+        val push = routine.rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+        routines.addExerciseToDay(push.id, SQUAT)
+
+        // Walked in and trained without announcing anything, which is the ordinary path.
+        sessions.logSet(BENCH, SetDraft("60", "5"))
+        val session = sessions.observeActiveSession().first()!!
+        assertTrue(sessions.observeSession(session.id).first()!!.plan.isEmpty)
+
+        sessions.finishSession(session.id, routine, dayNow(push))
+
+        // ADR 0006 leans on every session that realised a day carrying that day's contents, so the
+        // snapshot cannot wait for a lifter who never pressed Start.
+        assertEquals(listOf(BENCH, SQUAT), planOf(session.id))
+        val logged = sessions.observeSession(session.id).first()!!
+        assertEquals(listOf(SQUAT), logged.unperformed.map { it.id })
+    }
+
+    @Test
+    fun aSessionTrainedOutOfOrderIsPlannedFromTheDayItSaysItRealised() = runBlocking {
+        val routine = pushPullLegs()
+        routines.addExerciseToDay(routine.rotation[0].id, BENCH)
+        routines.addExerciseToDay(routine.rotation[2].id, SQUAT)
+
+        // The rack was busy, so Legs got trained while the cursor still pointed at Push.
+        sessions.logSet(SQUAT, SetDraft("100", "5"))
+        val session = sessions.observeActiveSession().first()!!
+        sessions.finishSession(session.id, routine, dayNow(routine.rotation[2]))
+
+        assertEquals(listOf(SQUAT), planOf(session.id))
+    }
+
+    @Test
+    fun aSessionAlreadyPlannedKeepsWhatItSetOutToDo() = runBlocking {
+        val routine = pushPullLegs()
+        routines.addExerciseToDay(routine.rotation[0].id, BENCH)
+        routines.addExerciseToDay(routine.rotation[2].id, SQUAT)
+        sessions.startSession(SessionPlan(dayNow(routine.rotation[0]).exercises))
+        val session = sessions.observeActiveSession().first()!!
+
+        // Started as Push and finished saying it realised Legs. A session is planned once: what it
+        // was for is what the lifter was looking at when they began.
+        sessions.finishSession(session.id, routine, dayNow(routine.rotation[2]))
+
+        assertEquals(listOf(BENCH), planOf(session.id))
+    }
+
+    @Test
+    fun whatHasBeenPlannedAndLeftUntrainedLatelyIsDerivable() = runBlocking {
+        val routine = pushPullLegs()
+        val push = routine.rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+        routines.addExerciseToDay(push.id, SQUAT)
+
+        repeat(2) {
+            sessions.startSession(SessionPlan(dayNow(push).exercises))
+            sessions.logSet(BENCH, SetDraft("60", "5"))
+            val session = sessions.observeActiveSession().first()!!
+            sessions.finishSession(session.id, routine, dayNow(push))
+        }
+
+        // Asked for twice, trained never — the shape swap and dislike are meant to read, derived
+        // from stored sessions rather than only from objects built in a test.
+        assertEquals(
+            mapOf(SQUAT to 2),
+            unperformedExerciseCounts(sessions.observeRecent().first()),
+        )
+    }
+
+    @Test
+    fun aDayHoldsEachExerciseOnceHoweverOftenItIsAdded() = runBlocking {
+        val push = pushPullLegs().rotation.first()
+
+        routines.addExerciseToDay(push.id, BENCH)
+        routines.addExerciseToDay(push.id, BENCH)
+
+        assertEquals(listOf(BENCH), dayNow(push).exercises.map { it.id })
+    }
+
+    @Test
+    fun fillingInADayIsNotARevisionAndLeavesTheCycleAlone() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation.first())
+        assertEquals("Pull", routines.observeProgress().first()!!.cursor?.name)
+
+        routines.addExerciseToDay(routine.rotation[1].id, BENCH)
+
+        // The rotation still holds the same days in the same order, so nothing about the cycle
+        // changed — losing your place for filling in a day would be absurd.
+        val after = routines.observeProgress().first()!!
+        assertEquals("Pull", after.cursor?.name)
+        assertEquals(1, after.cycle?.ordinal)
+    }
+
+    @Test
     fun deletingTheSessionThatCompletedADayMakesItUndoneAgain() = runBlocking {
         val routine = pushPullLegs()
         val sessionId = complete(routine.rotation.first())
@@ -353,6 +527,16 @@ class RoutinePersistenceTest {
         return session.id
     }
 
+    /** The day as it stands now, since [pushPullLegs] returned it before it held anything. */
+    private suspend fun dayNow(day: RoutineDay): RoutineDay =
+        routines.observeProgress().first()!!.routine.rotation.single { it.id == day.id }
+
+    private suspend fun currentSessionId(): Long =
+        sessions.observeActiveSession().first()!!.id
+
+    private suspend fun planOf(sessionId: Long): List<String> =
+        sessions.observeSession(sessionId).first()!!.plan.exercises.map { it.id }
+
     private fun countOf(table: String): Int =
         database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use {
             it.moveToFirst()
@@ -365,5 +549,6 @@ class RoutinePersistenceTest {
     private companion object {
         const val TEST_DATABASE = "routine-persistence-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
+        const val SQUAT = "Barbell_Squat"
     }
 }

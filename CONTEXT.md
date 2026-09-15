@@ -11,7 +11,7 @@ The whole repeating training plan a user follows.
 _Avoid_: program, plan
 
 **Routine day**:
-One ordered position within a routine, such as "Push". Never a calendar day, and never a day of the week.
+One ordered position within a routine, such as "Push". Never a calendar day, and never a day of the week. Holds an ordered list of exercises — what a session started from it copies as its **Plan**. Changing that list is not a **Revision**: the rotation still holds the same days in the same order.
 _Avoid_: workout day, training day
 
 **Cycle**:
@@ -75,7 +75,11 @@ Filing a session on a day other than the one it was trained on — training on S
 A routine position carrying cardio instead of resistance work. It takes its turn in the cycle like any other routine day, but contributes no training volume and is excluded when translating volume targets.
 
 **Plan**:
-The list of exercises a session was supposed to contain, copied from its routine day when the session begins. What makes a skipped exercise visible rather than merely absent.
+The list of exercises a session was supposed to contain, copied from its routine day. Taken when the session begins, or when it names its routine day at the end if it did not start from one — either way a snapshot, with nothing pointing back at the live routine. What makes an unperformed exercise visible rather than merely absent.
+
+**Unperformed**:
+An exercise a session's plan asked for and the session did not contain. Deliberately not a **Skip**, which is a routine *day* dealt with on purpose: this is what quietly did not happen, and counting it across recent sessions is the signal swap and dislike read.
+_Avoid_: skipped exercise, which borrows a word that already means something else here.
 
 **Revision**:
 A change to which days are in the active routine, or to their order. Revising ends the current cycle and starts a new one; it can never affect logged history. Renaming a day, or editing the routine's goal, cadence, equipment or rep preference, is not a revision and leaves the cycle alone — see `docs/adr/0006-routines-are-not-versioned.md`.

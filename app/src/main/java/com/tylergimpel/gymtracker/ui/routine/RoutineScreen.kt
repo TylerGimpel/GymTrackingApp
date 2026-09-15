@@ -51,6 +51,7 @@ import com.tylergimpel.gymtracker.domain.RoutineGoal
 @Composable
 fun RoutineScreen(
     onBack: () -> Unit,
+    onAddExercise: (Long) -> Unit,
     viewModel: RoutineViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -93,6 +94,8 @@ fun RoutineScreen(
                     onRename = { viewModel.renameDay(day.id, it) },
                     onMove = { viewModel.moveDay(day.id, it) },
                     onRemove = { viewModel.removeDay(day.id) },
+                    onAddExercise = { onAddExercise(day.id) },
+                    onRemoveExercise = { viewModel.removeExerciseFromDay(day.id, it) },
                 )
                 HorizontalDivider()
             }
@@ -246,6 +249,8 @@ private fun RoutineDayRow(
     onRename: (String) -> Unit,
     onMove: (Int) -> Unit,
     onRemove: () -> Unit,
+    onAddExercise: () -> Unit,
+    onRemoveExercise: (String) -> Unit,
 ) {
     var name by rememberSaveable(day.id) { mutableStateOf(day.name) }
 
@@ -278,6 +283,31 @@ private fun RoutineDayRow(
             TextButton(onClick = { onMove(-1) }) { Text(stringResource(R.string.routine_move_up)) }
             TextButton(onClick = { onMove(1) }) { Text(stringResource(R.string.routine_move_down)) }
             TextButton(onClick = onRemove) { Text(stringResource(R.string.routine_remove)) }
+        }
+
+        // What the day holds, which is what a session started from it will copy. Editing this is
+        // not a revision: the rotation is unchanged, so the cycle carries on.
+        if (day.exercises.isEmpty()) {
+            Text(
+                text = stringResource(R.string.routine_day_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        day.exercises.forEach { exercise ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(exercise.name, style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = { onRemoveExercise(exercise.id) }) {
+                    Text(stringResource(R.string.routine_remove_exercise))
+                }
+            }
+        }
+        TextButton(onClick = onAddExercise) {
+            Text(stringResource(R.string.routine_add_exercise))
         }
     }
 }

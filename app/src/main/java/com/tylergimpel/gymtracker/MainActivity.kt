@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.ui.bank.ExerciseBankScreen
 import com.tylergimpel.gymtracker.ui.routine.RoutineScreen
+import com.tylergimpel.gymtracker.ui.routine.RoutineViewModel
 import com.tylergimpel.gymtracker.ui.session.SessionScreen
 import com.tylergimpel.gymtracker.ui.session.SessionViewModel
 import com.tylergimpel.gymtracker.ui.theme.GymTrackerTheme
@@ -39,11 +40,23 @@ private enum class Destination { SESSION, EXERCISE_PICKER, ROUTINE }
  * session, a picker and an editor it would be more machinery than the app has behaviour.
  */
 @Composable
-private fun GymTracker(viewModel: SessionViewModel = viewModel()) {
+private fun GymTracker(
+    viewModel: SessionViewModel = viewModel(),
+    routineViewModel: RoutineViewModel = viewModel(),
+) {
     var destination by rememberSaveable { mutableStateOf(Destination.SESSION) }
 
+    // Which routine day the picker was opened for, if it was opened for one. The picker is the
+    // same screen either way; only where the chosen exercise lands differs.
+    var pickingForDay by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    fun leavePicker() {
+        destination = if (pickingForDay == null) Destination.SESSION else Destination.ROUTINE
+        pickingForDay = null
+    }
+
     if (destination != Destination.SESSION) {
-        BackHandler { destination = Destination.SESSION }
+        BackHandler { leavePicker() }
     }
 
     when (destination) {
@@ -55,13 +68,20 @@ private fun GymTracker(viewModel: SessionViewModel = viewModel()) {
 
         Destination.EXERCISE_PICKER -> ExerciseBankScreen(
             onSelect = { exercise ->
-                viewModel.select(exercise)
-                destination = Destination.SESSION
+                val day = pickingForDay
+                if (day == null) viewModel.select(exercise)
+                else routineViewModel.addExerciseToDay(day, exercise)
+                leavePicker()
             },
         )
 
         Destination.ROUTINE -> RoutineScreen(
             onBack = { destination = Destination.SESSION },
+            onAddExercise = { dayId ->
+                pickingForDay = dayId
+                destination = Destination.EXERCISE_PICKER
+            },
+            viewModel = routineViewModel,
         )
     }
 }

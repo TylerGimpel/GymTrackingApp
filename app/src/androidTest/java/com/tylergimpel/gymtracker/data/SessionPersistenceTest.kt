@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
@@ -507,7 +508,7 @@ class SessionPersistenceTest {
         repository.finishSession(thursday.id)
 
         // The one just finished is the one a lifter is about to realise they misdated.
-        assertEquals(thursday.id, repository.observeLastFinished().first()!!.id)
+        assertEquals(thursday.id, repository.observeLastFinished().first()!!.session.id)
     }
 
     @Test
@@ -518,7 +519,7 @@ class SessionPersistenceTest {
 
         repository.refile(session.id, LocalDate.of(2026, 9, 12))
 
-        val corrected = repository.observeLastFinished().first()!!
+        val corrected = repository.observeLastFinished().first()!!.session
         assertEquals(LocalDate.of(2026, 9, 12), corrected.date)
         // Refiling moves where the session is filed and nothing else: it stays finished, and when
         // it was actually trained is untouched.

@@ -161,6 +161,27 @@ class RoutineRepository(
         revise(routineId)
     }
 
+    /**
+     * Adds [exerciseId] to the end of [dayId]'s list, or leaves it where it is if already there.
+     *
+     * Not a revision: the rotation still holds the same days in the same order, so the cycle and
+     * the cursor are untouched (ADR 0006). Filling in a day mid-cycle is ordinary, and costing a
+     * lifter their place for it would be absurd.
+     */
+    suspend fun addExerciseToDay(dayId: Long, exerciseId: String) = database.withTransaction {
+        routines.insert(
+            RoutineDayExerciseEntity(
+                routineDayId = dayId,
+                exerciseId = exerciseId,
+                orderIndex = routines.highestDayExerciseOrder(dayId) + 1,
+            ),
+        )
+    }
+
+    /** Takes [exerciseId] out of [dayId]'s list. Not a revision, for the same reason. */
+    suspend fun removeExerciseFromDay(dayId: Long, exerciseId: String) =
+        routines.deleteDayExercise(dayId, exerciseId)
+
     suspend fun deleteRoutine() {
         routines.routine()?.let { routines.delete(it) }
     }
@@ -215,7 +236,7 @@ class RoutineRepository(
      * so stored state says what the cursor says: the cycle showing is the one being trained.
      */
     private suspend fun openNextCycleIfComplete(routineId: Long, cycle: CycleEntity) {
-        val routine = routines.routine()?.toDomain(routines.days(routineId)) ?: return
+        val routine = routines.routine()?.toDomain(routines.daysWithExercises(routineId)) ?: return
         val outcomes = cycle.toDomain(routines.completions(cycle.id), routines.skips(cycle.id))
         if (outcomes.isComplete(routine)) openCycle(routineId, cycle.ordinal + 1)
     }

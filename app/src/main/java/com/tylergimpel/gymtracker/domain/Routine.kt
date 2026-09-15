@@ -30,6 +30,13 @@ data class RoutineDay(
     /** Where this day sits in the rotation, from 1. */
     val orderIndex: Int,
     val name: String,
+    /**
+     * What this day holds, in the order it is to be trained.
+     *
+     * The plan side of the model: what a lifter intends, which a session copies rather than points
+     * at. Empty is ordinary — a day is named before it is filled.
+     */
+    val exercises: List<Exercise> = emptyList(),
 )
 
 /**

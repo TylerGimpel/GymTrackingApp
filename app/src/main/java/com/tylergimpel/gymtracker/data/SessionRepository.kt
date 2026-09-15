@@ -2,10 +2,12 @@ package com.tylergimpel.gymtracker.data
 
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -15,12 +17,6 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-
-/** A session and everything logged in it, ready to show. */
-data class LoggedSession(
-    val session: Session,
-    val exercises: List<SessionExercise>,
-)
 
 /**
  * Records what was actually lifted.
@@ -45,19 +41,35 @@ class SessionRepository(
      * a lifter who has to wait for a history screen to fix it will simply live with a session
      * filed on the wrong day.
      */
-    fun observeLastFinished(): Flow<Session?> =
-        sessions.observeLastFinished().map { it?.toDomain() }
+    fun observeLastFinished(): Flow<LoggedSession?> =
+        sessions.observeLastFinished().map { it?.toLoggedSession() }
+
+    /**
+     * The most recent finished sessions, newest first — what [unperformedExerciseCounts] reads.
+     *
+     * A window rather than everything: what a lifter has been avoiding lately is the question, and
+     * a routine they abandoned a year ago should not answer it.
+     */
+    fun observeRecent(limit: Int = RECENT_SESSIONS): Flow<List<LoggedSession>> =
+        sessions.observeRecent(limit).map { sessions -> sessions.map { it.toLoggedSession() } }
 
     fun observeSession(sessionId: Long): Flow<LoggedSession?> =
-        sessions.observeContent(sessionId).map { content ->
-            content?.let {
-                LoggedSession(
-                    session = it.session.toDomain(),
-                    exercises = it.exercises.map(SessionExerciseWithSets::toDomain)
-                        .sortedBy(SessionExercise::orderIndex),
-                )
-            }
-        }
+        sessions.observeContent(sessionId).map { it?.toLoggedSession() }
+
+    /**
+     * Opens a session for a routine day, recording [plan] as what it is for.
+     *
+     * The plan is a copy taken here and never a reference: what the routine day holds today is what
+     * this session was for, whatever the routine becomes afterwards.
+     *
+     * Reuses the session already being logged if there is one, and leaves its plan alone — a
+     * session is planned once, and starting again is not re-planning it.
+     */
+    suspend fun startSession(plan: SessionPlan): Long = database.withTransaction {
+        val session = currentSession()
+        plan(session.id, plan)
+        session.id
+    }
 
     /**
      * Records a set against [exerciseId], opening a session and an entry for the exercise if this
@@ -196,12 +208,40 @@ class SessionRepository(
      * ordinary session rather than an incomplete one.
      */
     suspend fun finishSession(sessionId: Long, routine: Routine? = null, day: RoutineDay? = null) {
-        val session = sessions.session(sessionId) ?: return
-        val finished = session.toDomain().finish(clock.instant())
-        sessions.update(
-            (if (routine != null && day != null) finished.realising(routine, day) else finished)
-                .toEntity(),
-        )
+        database.withTransaction {
+            val session = sessions.session(sessionId) ?: return@withTransaction
+            val finished = session.toDomain().finish(clock.instant())
+            sessions.update(
+                (if (routine != null && day != null) finished.realising(routine, day) else finished)
+                    .toEntity(),
+            )
+            // A session that names its day only at the end is planned here instead. ADR 0006 leans
+            // on every session that realised a day carrying that day's contents — it is what makes
+            // a past routine recoverable from the log — so the snapshot cannot depend on the lifter
+            // having pressed Start. Later than "when it begins", and the same list unless the
+            // routine changed mid-session, which is the best that can honestly be had for a session
+            // that did not say what it was for until it was over.
+            if (day != null) plan(sessionId, SessionPlan(day.exercises))
+        }
+    }
+
+    /**
+     * Records [plan] as what a session was for, unless it already carries one.
+     *
+     * A session is planned once. Whichever moment gets there first — starting from a day, or naming
+     * one at the end — is the one that took the snapshot, and the other leaves it alone.
+     */
+    private suspend fun plan(sessionId: Long, plan: SessionPlan) {
+        if (sessions.plannedCount(sessionId) > 0) return
+        plan.exercises.forEachIndexed { index, exercise ->
+            sessions.insert(
+                SessionPlanEntity(
+                    sessionId = sessionId,
+                    exerciseId = exercise.id,
+                    orderIndex = index + 1,
+                ),
+            )
+        }
     }
 
     suspend fun noteSession(sessionId: Long, note: String?) {
@@ -234,8 +274,20 @@ class SessionRepository(
         return session.copy(id = sessions.insert(session))
     }
 
+    private companion object {
+        /** How far back the revealed-preference counts look. Recent enough to be about now. */
+        const val RECENT_SESSIONS = 8
+    }
+
     private suspend fun nextSetIndexFor(sessionExerciseId: Long): Int =
         SessionExercise.nextSetIndex(sessions.setsFor(sessionExerciseId).toPerformedSets())
+
+    private fun SessionWithContent.toLoggedSession() = LoggedSession(
+        session = session.toDomain(),
+        exercises = exercises.map(SessionExerciseWithSets::toDomain)
+            .sortedBy(SessionExercise::orderIndex),
+        plan = plan.toSessionPlan(),
+    )
 
     private suspend fun openSessionExercise(sessionId: Long, exerciseId: String): SessionExerciseEntity {
         val performed = SessionExerciseEntity(
