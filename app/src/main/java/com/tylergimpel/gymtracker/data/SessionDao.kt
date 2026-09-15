@@ -72,6 +72,45 @@ interface SessionDao {
     @Insert
     suspend fun insert(sessionExercise: SessionExerciseEntity): Long
 
+    @Update
+    suspend fun update(sessionExercise: SessionExerciseEntity)
+
+    @Query("SELECT * FROM session_exercise WHERE id = :id")
+    suspend fun sessionExercise(id: Long): SessionExerciseEntity?
+
+    /** The exercise performed after [after] in this session, which is the one a group reaches for. */
+    @Query(
+        """
+        SELECT * FROM session_exercise
+        WHERE session_id = :sessionId AND order_index > :after
+        ORDER BY order_index LIMIT 1
+        """,
+    )
+    suspend fun exerciseAfter(sessionId: Long, after: Int): SessionExerciseEntity?
+
+    @Insert
+    suspend fun insert(superset: SupersetGroupEntity): Long
+
+    @Query("SELECT COALESCE(MAX(order_index), 0) FROM superset_group WHERE session_id = :sessionId")
+    suspend fun highestSupersetOrder(sessionId: Long): Int
+
+    /**
+     * Breaks a group up.
+     *
+     * Its members are released by the foreign key rather than by anything here, and nothing it
+     * touches is a logged set: grouping was only ever a statement about rest.
+     */
+    @Query("DELETE FROM superset_group WHERE id = :supersetId")
+    suspend fun deleteSuperset(supersetId: Long)
+
+    /** Moves every member of one group into another, which is how two groups become one. */
+    @Query("UPDATE session_exercise SET superset_group_id = :to WHERE superset_group_id = :from")
+    suspend fun moveSupersetMembers(from: Long, to: Long)
+
+    /** Whether a group is on by default when formed, and what it is set to afterwards. */
+    @Query("UPDATE superset_group SET auto_jump = :autoJump WHERE id = :supersetId")
+    suspend fun setAutoJump(supersetId: Long, autoJump: Boolean)
+
     @Insert
     suspend fun insert(planned: SessionPlanEntity): Long
 

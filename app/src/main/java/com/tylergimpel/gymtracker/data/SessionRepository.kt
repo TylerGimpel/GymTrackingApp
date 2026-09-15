@@ -150,6 +150,60 @@ class SessionRepository(
         return true
     }
 
+    /**
+     * Puts the exercise after [sessionExerciseId] into a superset with it, forming one if needed.
+     *
+     * Grows a group a member at a time, which is how a triple or a quintuple gets built: group the
+     * first with the second, then the second with the third.
+     *
+     * Where either exercise is already grouped, that group is the one they end up in, and two
+     * different groups **merge**. Overwriting the next exercise's group instead would take a member
+     * out of it and leave whatever remained behind alone in a superset of one, which is not a
+     * superset.
+     *
+     * Returns false where there is no exercise after this one to alternate with.
+     */
+    suspend fun groupWithNext(sessionExerciseId: Long): Boolean = database.withTransaction {
+        val performed = sessions.sessionExercise(sessionExerciseId)
+            ?: return@withTransaction false
+        val next = sessions.exerciseAfter(performed.sessionId, performed.orderIndex)
+            ?: return@withTransaction false
+
+        val target = performed.supersetGroupId
+            ?: next.supersetGroupId
+            ?: sessions.insert(
+                SupersetGroupEntity(
+                    sessionId = performed.sessionId,
+                    orderIndex = sessions.highestSupersetOrder(performed.sessionId) + 1,
+                    // On by default: the point of a superset is not stopping, and being asked to
+                    // pick the next exercise between members is the stopping.
+                    autoJump = true,
+                    restSeconds = null,
+                ),
+            )
+
+        next.supersetGroupId?.takeIf { it != target }?.let { merged ->
+            sessions.moveSupersetMembers(from = merged, to = target)
+            sessions.deleteSuperset(merged)
+        }
+
+        sessions.update(performed.copy(supersetGroupId = target))
+        sessions.update(next.copy(supersetGroupId = target))
+        true
+    }
+
+    /** Breaks a group up, leaving every set logged against its members exactly as it was. */
+    suspend fun ungroup(supersetId: Long) = sessions.deleteSuperset(supersetId)
+
+    /**
+     * Says whether this group moves to its next member on its own after a set is logged.
+     *
+     * A real choice rather than an assumption: alternating without being asked is the point for
+     * most lifters, and walking between two machines across a gym is the case where it is not.
+     */
+    suspend fun setAutoJump(supersetId: Long, autoJump: Boolean) =
+        sessions.setAutoJump(supersetId, autoJump)
+
     /** Continues an effort at a reduced weight, with no rest. Never a set of its own. */
     suspend fun addDrop(effortId: Long, weight: Kilograms, reps: Int): Long =
         database.withTransaction {
@@ -287,6 +341,7 @@ class SessionRepository(
         exercises = exercises.map(SessionExerciseWithSets::toDomain)
             .sortedBy(SessionExercise::orderIndex),
         plan = plan.toSessionPlan(),
+        supersets = supersets.map(SupersetGroupEntity::toDomain),
     )
 
     private suspend fun openSessionExercise(sessionId: Long, exerciseId: String): SessionExerciseEntity {

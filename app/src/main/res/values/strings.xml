@@ -71,6 +71,10 @@
     <string name="session_start_day">Start</string>
     <string name="session_skip_day">Skip</string>
     <string name="session_unperformed">Planned, not trained</string>
+    <string name="session_superset">Superset · %1$d exercises</string>
+    <string name="session_ungroup">Ungroup</string>
+    <string name="session_auto_jump">Jump to the next automatically</string>
+    <string name="session_group_with_next">+ superset with next</string>
     <string name="session_plan_progress">%1$d of %2$d planned</string>
     <string name="session_refile">Change the date</string>
     <string name="session_last">Last session: %1$s — tap to fix the date</string>

@@ -109,7 +109,13 @@ A set performed to find out what the user can lift, rather than to train. Produc
 A continuation of the same set at reduced weight with no rest. Belongs to the set it continues; never counted as a set of its own.
 
 **Superset**:
-Two or more exercises within a session performed alternately with no rest between them. Rest is taken after the group, not between its members.
+Two or more exercises within a session performed alternately with no rest between them. Rest is taken after the group, not between its members, so the group carries its own rest value and a member has nowhere to put one. Groups **across** exercises, where a **Drop** groups **within** one set — two structures rather than one, because collapsing them makes counting ambiguous again. Grouping says nothing about work: the sets are the same sets whether or not they were alternated.
+
+**Auto-jump**:
+Whether a superset moves to its next member on its own once a set is logged. A property of the group, because the point of a superset is not stopping — and off is a real answer for two machines at opposite ends of a gym.
+
+**Grouping** / **Ungrouping**:
+Forming a superset from neighbouring exercises, and breaking one up. Both are statements about rest and neither touches a logged set: ungrouping releases the members and leaves the training exactly as it was.
 
 **Prescription**:
 What the app tells the user to do for a given set — weight, reps and rest, where the reps of a working set are a rep range rather than a single count. Recorded alongside what they actually did, so the two can be compared.

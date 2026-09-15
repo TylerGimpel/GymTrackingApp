@@ -181,6 +181,50 @@ internal val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+/**
+ * Version 8 lets a session group exercises performed alternately.
+ *
+ * `session_exercise` is rebuilt rather than altered, because the new column carries a foreign key
+ * and SQLite cannot add one to an existing table. This is the shape Room's own generated migrations
+ * take: build the table as version 8 declares it, copy every row across, swap the names. Every set
+ * stays where it was — `set_entry` points at `session_exercise.id`, and the ids are carried over
+ * unchanged.
+ *
+ * Existing rows take a null group, which is the truth about them: nothing was grouped before there
+ * was a way to group it.
+ */
+internal val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `superset_group` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `session_id` INTEGER NOT NULL, `order_index` INTEGER NOT NULL, `auto_jump` INTEGER NOT NULL, `rest_seconds` INTEGER, FOREIGN KEY(`session_id`) REFERENCES `session`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_superset_group_session_id` ON `superset_group` (`session_id`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `_new_session_exercise` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `session_id` INTEGER NOT NULL, `exercise_id` TEXT NOT NULL, `order_index` INTEGER NOT NULL, `superset_group_id` INTEGER, FOREIGN KEY(`session_id`) REFERENCES `session`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`superset_group_id`) REFERENCES `superset_group`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        )
+        db.execSQL(
+            "INSERT INTO `_new_session_exercise` (`id`, `session_id`, `exercise_id`, `order_index`) " +
+                "SELECT `id`, `session_id`, `exercise_id`, `order_index` FROM `session_exercise`",
+        )
+        db.execSQL("DROP TABLE `session_exercise`")
+        db.execSQL("ALTER TABLE `_new_session_exercise` RENAME TO `session_exercise`")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_session_exercise_session_id` ON `session_exercise` (`session_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_session_exercise_exercise_id` ON `session_exercise` (`exercise_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_session_exercise_superset_group_id` ON `session_exercise` (`superset_group_id`)",
+        )
+        // As Room's own generated rebuilds do: a copy that broke a reference should say so here,
+        // rather than surface later as a session missing its sets.
+        db.execSQL("PRAGMA foreign_key_check(`session_exercise`)")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -188,4 +232,5 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_4_5,
     MIGRATION_5_6,
     MIGRATION_6_7,
+    MIGRATION_7_8,
 )

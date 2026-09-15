@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -50,6 +51,7 @@ import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
+import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
@@ -93,6 +95,9 @@ fun SessionScreen(
         onDropDraftChange = viewModel::changeDropDraft,
         onSaveDrop = viewModel::saveDrop,
         onCancelDrop = viewModel::cancelAddingDrop,
+        onGroupWithNext = viewModel::groupWithNext,
+        onUngroup = viewModel::ungroup,
+        onSetAutoJump = viewModel::setAutoJump,
         onSessionNoteChange = viewModel::noteSession,
         onStartDay = viewModel::startCursorDay,
         onSkipDay = viewModel::startSkipping,
@@ -128,6 +133,9 @@ fun SessionScreen(
     onDropDraftChange: (SetDraft) -> Unit = {},
     onSaveDrop: () -> Unit = {},
     onCancelDrop: () -> Unit = {},
+    onGroupWithNext: (Long) -> Unit = {},
+    onUngroup: (Long) -> Unit = {},
+    onSetAutoJump: (Long, Boolean) -> Unit = { _, _ -> },
     onSessionNoteChange: (String) -> Unit = {},
     onStartDay: () -> Unit = {},
     onSkipDay: () -> Unit = {},
@@ -238,8 +246,19 @@ fun SessionScreen(
                 }
             }
 
-            items(state.exercises, key = SessionExercise::id) { performed ->
-                LoggedExercise(performed, onEditEffort, onAddDrop)
+            itemsIndexed(
+                items = state.positions,
+                key = { _, position -> position.exercises.first().id },
+            ) { index, position ->
+                SessionPositionRows(
+                    position = position,
+                    isLast = index == state.positions.lastIndex,
+                    onEditEffort = onEditEffort,
+                    onAddDrop = onAddDrop,
+                    onGroupWithNext = onGroupWithNext,
+                    onUngroup = onUngroup,
+                    onSetAutoJump = onSetAutoJump,
+                )
                 HorizontalDivider()
             }
 
@@ -690,6 +709,68 @@ private fun Unperformed(exercises: List<Exercise>) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
+        }
+    }
+}
+
+/**
+ * One position in the session: an exercise on its own, or a superset and its members.
+ *
+ * A group is drawn as one thing with its members inside it, because that is what it is — two or
+ * more exercises alternated with no rest between them, resting only after the group.
+ */
+@Composable
+private fun SessionPositionRows(
+    position: SessionPosition,
+    isLast: Boolean,
+    onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit,
+    onAddDrop: (WeightUnit, Effort) -> Unit,
+    onGroupWithNext: (Long) -> Unit,
+    onUngroup: (Long) -> Unit,
+    onSetAutoJump: (Long, Boolean) -> Unit,
+) {
+    Column {
+        if (position is SessionPosition.Grouped) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.session_superset, position.exercises.size),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                TextButton(onClick = { onUngroup(position.superset.id) }) {
+                    Text(stringResource(R.string.session_ungroup))
+                }
+            }
+            // A real choice rather than an assumption: alternating without being asked is the
+            // point for most lifters, and two machines at opposite ends of a gym is where it is
+            // not.
+            FilterChip(
+                selected = position.superset.autoJump,
+                onClick = { onSetAutoJump(position.superset.id, !position.superset.autoJump) },
+                label = { Text(stringResource(R.string.session_auto_jump)) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
+
+        position.exercises.forEach { performed ->
+            LoggedExercise(performed, onEditEffort, onAddDrop)
+        }
+
+        // Offered on the last exercise of the position, because grouping reaches forward: this is
+        // the one with something after it to alternate with.
+        if (!isLast) {
+            TextButton(
+                onClick = { onGroupWithNext(position.exercises.last().id) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                Text(stringResource(R.string.session_group_with_next))
+            }
         }
     }
 }

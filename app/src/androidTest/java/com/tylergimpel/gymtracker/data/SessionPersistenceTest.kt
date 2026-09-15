@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
@@ -527,6 +528,156 @@ class SessionPersistenceTest {
         assertFalse(corrected.isActive)
     }
 
+    @Test
+    fun twoExercisesAlternatedReadBackAsOneGroup() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+
+        repository.groupWithNext(currentSession().exercises.first().id)
+
+        // One position in the session holding both, rather than two positions that happen to be
+        // next to each other.
+        val positions = currentSession().positions
+        assertEquals(1, positions.size)
+        assertTrue(positions.single() is SessionPosition.Grouped)
+        assertEquals(listOf(BENCH, SQUAT), positions.single().exercises.map { it.exercise.id })
+    }
+
+    @Test
+    fun aGroupGrowsOneMemberAtATimeToAsManyAsWereAlternated() = runBlocking {
+        val everything = listOf(BENCH, SQUAT, CURL, ROW, DEADLIFT)
+        everything.forEach { repository.logSet(it, SetDraft("60", "5")) }
+
+        // Group the first with the second, then the second with the third, and so on: seven
+        // triples, two quads and a quintuple exist in the author's own history.
+        repeat(everything.size - 1) {
+            val performed = currentSession().exercises
+            repository.groupWithNext(performed[it].id)
+        }
+
+        val positions = currentSession().positions
+        assertEquals(1, positions.size)
+        assertEquals(everything, positions.single().exercises.map { it.exercise.id })
+    }
+
+    @Test
+    fun groupingIntoAGroupThatAlreadyExistsJoinsItRatherThanStealingFromIt() = runBlocking {
+        listOf(BENCH, SQUAT, CURL).forEach { repository.logSet(it, SetDraft("60", "5")) }
+        // The squat and the curl are already alternated.
+        repository.groupWithNext(currentSession().exercises[1].id)
+
+        // Now the bench joins them from the front.
+        repository.groupWithNext(currentSession().exercises[0].id)
+
+        // One group of three. Overwriting the squat's group instead would have left the curl on
+        // its own in a superset of one, which is not a superset.
+        val positions = currentSession().positions
+        assertEquals(1, positions.size)
+        assertEquals(listOf(BENCH, SQUAT, CURL), positions.single().exercises.map { it.exercise.id })
+        assertEquals(1, countOf("superset_group"))
+    }
+
+    @Test
+    fun reachingFromOneGroupIntoAnotherMergesThemRatherThanStrandingAMember() = runBlocking {
+        listOf(BENCH, SQUAT, CURL, ROW).forEach { repository.logSet(it, SetDraft("60", "5")) }
+        val performed = currentSession().exercises
+        repository.groupWithNext(performed[0].id)
+        repository.groupWithNext(performed[2].id)
+        assertEquals(2, countOf("superset_group"))
+
+        // Alternating the squat with the curl joins the two groups end to end.
+        repository.groupWithNext(currentSession().exercises[1].id)
+
+        val positions = currentSession().positions
+        assertEquals(1, positions.size)
+        assertEquals(
+            listOf(BENCH, SQUAT, CURL, ROW),
+            positions.single().exercises.map { it.exercise.id },
+        )
+        // The emptied group goes with it rather than lingering with nothing in it.
+        assertEquals(1, countOf("superset_group"))
+    }
+
+    @Test
+    fun aGroupCanBeToldNotToJumpToItsNextMember() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+        repository.groupWithNext(currentSession().exercises.first().id)
+        val superset = (currentSession().positions.single() as SessionPosition.Grouped).superset
+        assertTrue(superset.autoJump)
+
+        repository.setAutoJump(superset.id, false)
+
+        // Two machines at opposite ends of a gym is the case where alternating unasked is wrong.
+        val after = currentSession().positions.single() as SessionPosition.Grouped
+        assertFalse(after.superset.autoJump)
+    }
+
+    @Test
+    fun ungroupingLeavesEverySetExactlyAsItWas() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        repository.logSet(BENCH, SetDraft("62.5", "5"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+        repository.groupWithNext(currentSession().exercises.first().id)
+        val superset = (currentSession().positions.single() as SessionPosition.Grouped).superset
+
+        repository.ungroup(superset.id)
+
+        // The group is gone and the training is not: grouping was only ever a statement about rest.
+        val after = currentSession()
+        assertEquals(2, after.positions.size)
+        assertTrue(after.positions.all { it is SessionPosition.Alone })
+        assertEquals(listOf(60.0, 62.5), after.exercises[0].sets.map { it.leadingEffort.weight.value })
+        assertEquals(listOf(100.0), after.exercises[1].sets.map { it.leadingEffort.weight.value })
+        assertEquals(0, countOf("superset_group"))
+    }
+
+    @Test
+    fun groupingChangesNoSetsContributionToVolume() = runBlocking {
+        repeat(3) { repository.logSet(BENCH, SetDraft("60", "5")) }
+        repeat(2) { repository.logSet(SQUAT, SetDraft("100", "5")) }
+        val apart = volumeByMuscle(currentSession().exercises)
+
+        repository.groupWithNext(currentSession().exercises.first().id)
+
+        assertEquals(apart, volumeByMuscle(currentSession().exercises))
+    }
+
+    @Test
+    fun aGroupCarriesItsOrderAutoJumpAndOwnRest() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+
+        repository.groupWithNext(currentSession().exercises.first().id)
+
+        val superset = (currentSession().positions.single() as SessionPosition.Grouped).superset
+        assertEquals(1, superset.orderIndex)
+        // On by default: the point of a superset is not stopping between its members.
+        assertTrue(superset.autoJump)
+        // No rest of its own yet, which means "whatever the app would rest for anyway".
+        assertNull(superset.restSeconds)
+    }
+
+    @Test
+    fun thereIsNothingToGroupTheLastExerciseWith() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+
+        assertFalse(repository.groupWithNext(currentSession().exercises.single().id))
+        assertEquals(0, countOf("superset_group"))
+    }
+
+    @Test
+    fun deletingASessionTakesItsGroupsWithIt() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+        repository.groupWithNext(currentSession().exercises.first().id)
+        val session = repository.observeActiveSession().first()!!
+
+        database.openHelper.writableDatabase.execSQL("DELETE FROM session WHERE id = ${session.id}")
+
+        assertEquals(0, countOf("superset_group"))
+    }
+
     private fun storedWeights(): List<Double> =
         database.openHelper.readableDatabase
             .query("SELECT weight_kg FROM set_entry ORDER BY id")
@@ -563,5 +714,8 @@ class SessionPersistenceTest {
         const val TEST_DATABASE = "session-persistence-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val SQUAT = "Barbell_Squat"
+        const val CURL = "Barbell_Curl"
+        const val ROW = "Seated_Cable_Rows"
+        const val DEADLIFT = "Barbell_Deadlift"
     }
 }

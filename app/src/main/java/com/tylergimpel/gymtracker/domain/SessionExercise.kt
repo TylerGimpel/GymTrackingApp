@@ -14,6 +14,13 @@ data class SessionExercise(
     /** Where this exercise sits among the others in the session. Unrelated to any set's index. */
     val orderIndex: Int,
     val sets: List<PerformedSet>,
+    /**
+     * The superset this exercise was performed as part of, or null where it was performed alone.
+     *
+     * A reference rather than a copy, because a group is a live thing a lifter forms and breaks
+     * mid-session — unlike the routine, which history only ever snapshots.
+     */
+    val supersetId: Long? = null,
 ) {
     /**
      * The index the next set logged against this exercise will take.

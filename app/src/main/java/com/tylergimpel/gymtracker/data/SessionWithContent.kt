@@ -54,6 +54,9 @@ data class SessionWithContent(
         entityColumn = "session_id",
     )
     val plan: List<SessionPlanWithExercise>,
+
+    @Relation(parentColumn = "id", entityColumn = "session_id")
+    val supersets: List<SupersetGroupEntity>,
 )
 
 /**
@@ -71,6 +74,7 @@ fun SessionExerciseWithSets.toDomain() = SessionExercise(
     exercise = exercise.toDomain(),
     orderIndex = sessionExercise.orderIndex,
     sets = sets.toPerformedSets(),
+    supersetId = sessionExercise.supersetGroupId,
 )
 
 /**

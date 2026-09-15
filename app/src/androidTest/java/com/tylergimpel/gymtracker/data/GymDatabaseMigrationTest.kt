@@ -280,6 +280,62 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToSupersetsCarryingEveryLoggedSetAcrossTheRebuiltTable() {
+        helper.createDatabase(SEVENTH_DATABASE, 7).use { version7 ->
+            version7.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source) VALUES " +
+                    "('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', 'compound', " +
+                    "'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream')",
+            )
+            version7.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            version7.execSQL(
+                "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            version7.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps, " +
+                    "note, side, display_unit) VALUES (1, 1, 'working', 60.0, 5, NULL, NULL, NULL)",
+            )
+        }
+
+        val version8 = helper.runMigrationsAndValidate(SEVENTH_DATABASE, 8, true, MIGRATION_7_8)
+
+        version8.use { db ->
+            // `session_exercise` is rebuilt rather than altered, so the thing to prove is that the
+            // rows came across with their ids intact — a set points at one, and a set that lost its
+            // exercise is a set lost.
+            db.query("SELECT id, exercise_id, superset_group_id FROM session_exercise").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+                assertEquals("Test_Exercise", it.getString(1))
+                // Nothing was grouped before there was a way to group it.
+                assertTrue(it.isNull(2))
+            }
+            db.query("SELECT session_exercise_id, weight_kg FROM set_entry").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+                assertEquals(60.0, it.getDouble(1), 0.0)
+            }
+            // And a group can now be formed against the rebuilt table. What happens when one is
+            // deleted is not asked here: foreign keys are not enforced on a migration helper's
+            // database, so `SET_NULL` is proved against a real Room instance instead.
+            db.execSQL(
+                "INSERT INTO superset_group (session_id, order_index, auto_jump, rest_seconds) " +
+                    "VALUES (1, 1, 1, NULL)",
+            )
+            db.execSQL("UPDATE session_exercise SET superset_group_id = 1 WHERE id = 1")
+            db.query("SELECT superset_group_id FROM session_exercise").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -287,5 +343,6 @@ class GymDatabaseMigrationTest {
         const val THIRD_DATABASE = "gym-migration-test-3.db"
         const val FIFTH_DATABASE = "gym-migration-test-5.db"
         const val SIXTH_DATABASE = "gym-migration-test-6.db"
+        const val SEVENTH_DATABASE = "gym-migration-test-7.db"
     }
 }

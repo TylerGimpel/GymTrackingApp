@@ -28,8 +28,16 @@ import androidx.room.PrimaryKey
             childColumns = ["exercise_id"],
             onDelete = ForeignKey.RESTRICT,
         ),
+        // `SET_NULL` is what makes ungrouping structural: deleting the group releases its members
+        // and can reach nothing else. Nothing has to remember to tidy up after it.
+        ForeignKey(
+            entity = SupersetGroupEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["superset_group_id"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
-    indices = [Index("session_id"), Index("exercise_id")],
+    indices = [Index("session_id"), Index("exercise_id"), Index("superset_group_id")],
 )
 data class SessionExerciseEntity(
     @PrimaryKey(autoGenerate = true)
@@ -49,4 +57,12 @@ data class SessionExerciseEntity(
      */
     @ColumnInfo(name = "order_index")
     val orderIndex: Int,
+
+    /**
+     * The superset this exercise was performed as part of, or null where it was performed alone.
+     *
+     * Null is the ordinary case, and is also what a member becomes the moment its group is deleted.
+     */
+    @ColumnInfo(name = "superset_group_id")
+    val supersetGroupId: Long? = null,
 )

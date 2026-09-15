@@ -15,6 +15,7 @@ import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
+import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
@@ -81,6 +82,13 @@ private data class ScreenState(
 data class SessionUiState(
     val session: Session? = null,
     val exercises: List<SessionExercise> = emptyList(),
+    /**
+     * The session laid out as it was performed, with superset members gathered.
+     *
+     * The list the screen renders. [exercises] stays as the flat record, because volume and
+     * progression read the work and have no interest in how it was grouped.
+     */
+    val positions: List<SessionPosition> = emptyList(),
     val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
     /** Whether the entry controls are expanded to record each side separately. */
@@ -159,6 +167,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 unperformed = logged?.unperformed.orEmpty(),
                 lastFinished = lastFinished,
                 exercises = logged?.exercises.orEmpty(),
+                positions = logged?.positions.orEmpty(),
                 selected = screen.selected,
                 draft = screen.draft,
                 perSide = screen.perSide,
@@ -340,6 +349,21 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             repository.addDrop(open.effortId, weight, reps)
             screen.update { it.copy(addingDrop = null) }
         }
+    }
+
+    /** Puts the exercise after [sessionExerciseId] into a superset with it. */
+    fun groupWithNext(sessionExerciseId: Long) {
+        viewModelScope.launch { repository.groupWithNext(sessionExerciseId) }
+    }
+
+    /** Breaks a group up. The sets logged against its members are untouched. */
+    fun ungroup(supersetId: Long) {
+        viewModelScope.launch { repository.ungroup(supersetId) }
+    }
+
+    /** Whether this group moves to its next member on its own after a set is logged. */
+    fun setAutoJump(supersetId: Long, autoJump: Boolean) {
+        viewModelScope.launch { repository.setAutoJump(supersetId, autoJump) }
     }
 
     fun noteSession(text: String) {
