@@ -42,7 +42,14 @@
     <string name="set_unit_this_set_only">This set only</string>
     <string name="set_reps">Reps</string>
     <string name="set_seconds">Seconds</string>
+    <string name="set_added_weight">Added (%1$s)</string>
+    <string name="set_assistance">Assistance (%1$s)</string>
     <string name="set_note">Set note</string>
+    <string name="set_rpe">RPE</string>
+    <string name="set_heart_rate">Heart rate</string>
+    <string name="set_rest_taken">Rest (s)</string>
+    <string name="set_rpe_range">1 to 10</string>
+    <string name="set_heart_rate_range">30 to 250</string>
     <string name="set_type">Set type</string>
     <string name="set_type_warmup">warm-up</string>
     <string name="set_type_working">working</string>
@@ -57,6 +64,9 @@
     <string name="set_drop_summary">drop %1$d: %2$s %3$s × %4$d</string>
     <string name="set_summary">%1$s %2$s × %3$d</string>
     <string name="set_distance_summary">%1$s %2$s in %3$s</string>
+    <string name="set_added_weight_summary">+%1$s %2$s × %3$d</string>
+    <string name="set_assisted_summary">−%1$s %2$s × %3$d</string>
+    <string name="set_reps_summary">× %1$d</string>
 
     <string name="routine_title">Routine</string>
     <string name="routine_done">Done</string>

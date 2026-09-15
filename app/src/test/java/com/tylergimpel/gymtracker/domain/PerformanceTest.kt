@@ -101,13 +101,62 @@ class PerformanceTest {
     }
 
     @Test
-    fun `the types whose own shape has not arrived yet still record a weight and reps`() {
-        // Added weight and assistance arrive with their own ticket. Until then these record what
-        // they always have, so nothing a lifter has already logged changes meaning.
-        listOf(LoggingType.BODYWEIGHT_REPS, LoggingType.ASSISTED).forEach { type ->
-            assertTrue("$type", type.recordsWeight && type.recordsReps)
-            assertFalse("$type", type.recordsDuration)
-        }
+    fun `a bodyweight exercise counts reps and may carry a belt`() {
+        val unweighted = Performance.BodyweightReps(addedWeight = null, reps = 8)
+        val belted = Performance.BodyweightReps(Kilograms(20.0), reps = 8)
+
+        assertEquals(8, unweighted.repsOrNull)
+        assertNull(unweighted.addedWeight)
+        assertEquals(20.0, belted.addedWeight!!.value, 0.0)
+        // Neither is a weight that was lifted off a rack: what was lifted is a body.
+        assertNull(belted.weightOrNull)
+    }
+
+    @Test
+    fun `an assisted exercise records the help it was given`() {
+        val performance = Performance.Assisted(Kilograms(20.0), reps = 8)
+
+        assertEquals(20.0, performance.assistance.value, 0.0)
+        assertEquals(8, performance.repsOrNull)
+        assertNull(performance.weightOrNull)
+    }
+
+    @Test
+    fun `more added weight is progress, and less assistance is progress`() {
+        // ADR 0004: for an assisted exercise less is more, and getting it the wrong way round means
+        // confidently coaching somebody to get weaker. The load is signed so that the comparison
+        // never has to be remembered — more is more, on every shape that has one.
+        val unweighted = Performance.BodyweightReps(addedWeight = null, reps = 8).loadOrNull!!
+        val belted = Performance.BodyweightReps(Kilograms(20.0), reps = 8).loadOrNull!!
+        val heavilyAssisted = Performance.Assisted(Kilograms(30.0), reps = 8).loadOrNull!!
+        val lightlyAssisted = Performance.Assisted(Kilograms(10.0), reps = 8).loadOrNull!!
+
+        assertTrue(belted.value > unweighted.value)
+        assertTrue(lightlyAssisted.value > heavilyAssisted.value)
+        // And needing no help at all outranks any amount of it.
+        assertTrue(unweighted.value > lightlyAssisted.value)
+    }
+
+    @Test
+    fun `a barbell load is read straight off, and a hold has none to read`() {
+        assertEquals(60.0, Performance.WeightAndReps(Kilograms(60.0), 5).loadOrNull!!.value, 0.0)
+        assertNull(Performance.Timed(Duration.ofSeconds(90)).loadOrNull)
+        assertNull(Performance.DistanceAndTime(Metres(5000.0), Duration.ofMinutes(28)).loadOrNull)
+    }
+
+    @Test
+    fun `a bodyweight exercise records reps and a belt, and an assisted one records help`() {
+        assertEquals(
+            setOf(Measurement.ADDED_WEIGHT, Measurement.REPS),
+            LoggingType.BODYWEIGHT_REPS.records,
+        )
+        assertEquals(
+            setOf(Measurement.ASSISTANCE, Measurement.REPS),
+            LoggingType.ASSISTED.records,
+        )
+        // Neither is a weight lifted off a rack, so neither offers the field for one.
+        assertFalse(LoggingType.BODYWEIGHT_REPS.recordsWeight)
+        assertFalse(LoggingType.ASSISTED.recordsWeight)
     }
 
     @Test

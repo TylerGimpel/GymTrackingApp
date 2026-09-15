@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.Duration
+
 /** Which side of the body an effort was performed on. */
 enum class Side(val stored: String) {
     LEFT("left"),
@@ -76,6 +78,15 @@ data class PerformedSet(
      * the weights below are canonical kilograms whatever this says.
      */
     val displayUnit: WeightUnit? = null,
+    /**
+     * What the app told the lifter to do for this set, where anything told them.
+     *
+     * Belongs to the set rather than to an effort, like the type and the unit do: a per-side set is
+     * given one prescription and answers it with two efforts.
+     */
+    val prescription: Prescription = Prescription(),
+    /** What the lifter measured about the set, beyond the work itself. */
+    val measurements: SetMeasurements = SetMeasurements(),
 ) {
     /** What progression reads: the first effort, before any drop. */
     val leadingEffort: Effort get() = efforts.first()
@@ -83,4 +94,12 @@ data class PerformedSet(
     val isPerSide: Boolean get() = efforts.size > 1
 
     val hasDrops: Boolean get() = efforts.any { it.drops.isNotEmpty() }
+
+    /**
+     * How this set answered what it was asked, or null where nothing asked anything.
+     *
+     * Read from the leading effort, which is what progression reads: a drop is a continuation the
+     * prescription never mentioned, and the second side of a per-side set is the same set.
+     */
+    val outcome: SetOutcome? get() = prescription.outcomeOf(leadingEffort.performance)
 }

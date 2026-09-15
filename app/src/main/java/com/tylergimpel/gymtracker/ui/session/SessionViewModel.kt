@@ -24,6 +24,7 @@ import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.distanceOrNull
 import com.tylergimpel.gymtracker.domain.durationOrNull
@@ -354,10 +355,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     weightText = effort.performance.weightOrNull?.asTextIn(displayUnit).orEmpty(),
                     repsText = effort.performance.repsOrNull?.toString().orEmpty(),
                     durationText = effort.performance.durationOrNull?.seconds?.toString().orEmpty(),
+                    addedWeightText = effort.performance.beltOrAssistanceText(displayUnit),
                     distanceText = effort.performance.distanceOrNull
                         ?.asTextIn(DistanceUnit.alongside(lifterUnit)).orEmpty(),
                     lifterUnit = lifterUnit,
                     note = effort.note,
+                    rpeText = set.measurements.rpe?.asAmountText().orEmpty(),
+                    heartRateText = set.measurements.heartRate?.toString().orEmpty(),
+                    restTakenText = set.measurements.restTaken?.seconds?.toString().orEmpty(),
                     type = set.type,
                     displayUnit = displayUnit,
                 ),
@@ -575,6 +580,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private fun Performance.beltOrAssistanceText(displayUnit: WeightUnit): String = when (this) {
+        // Both are typed as a plain magnitude: the field says whether it is help or load, and the
+        // sign belongs to storage rather than to anything a lifter types.
+        is Performance.BodyweightReps -> addedWeight?.asTextIn(displayUnit).orEmpty()
+        is Performance.Assisted -> assistance.asTextIn(displayUnit)
+        is Performance.WeightAndReps, is Performance.Timed, is Performance.DistanceAndTime -> ""
+    }
+
     /**
      * The logging type whose fields can restate this performance.
      *
@@ -585,6 +598,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         is Performance.WeightAndReps ->
             recorded.takeIf { it.recordsWeight && it.recordsReps } ?: LoggingType.WEIGHT_REPS
 
+        is Performance.BodyweightReps -> LoggingType.BODYWEIGHT_REPS
+        is Performance.Assisted -> LoggingType.ASSISTED
         is Performance.Timed -> LoggingType.TIME
         is Performance.DistanceAndTime -> LoggingType.DISTANCE_TIME
     }

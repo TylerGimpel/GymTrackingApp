@@ -6,6 +6,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.tylergimpel.gymtracker.domain.Performance
+import com.tylergimpel.gymtracker.domain.SetMeasurements
 import com.tylergimpel.gymtracker.domain.SetType
 
 /**
@@ -70,6 +71,17 @@ data class SetEntryEntity(
     val durationSeconds: Int? = null,
 
     /**
+     * A belt, or a machine's help, in canonical kilograms — and **signed**.
+     *
+     * Positive is weight hung off a lifter, negative is weight taken off them. One column because
+     * they are one measurement read two ways, and signed because that is what makes the row say
+     * which it was without asking the exercise: an exercise retagged by a bank update must not be
+     * able to turn somebody's assisted sets into weighted ones. Null for a set that had neither.
+     */
+    @ColumnInfo(name = "added_weight_kg")
+    val addedWeightKg: Double? = null,
+
+    /**
      * Canonical metres, always — the same rule the weight follows.
      *
      * A treadmill labelled in miles and a track measured in kilometres are the same running, so
@@ -99,6 +111,39 @@ data class SetEntryEntity(
      */
     @ColumnInfo(name = "display_unit")
     val displayUnit: String?,
+
+    /**
+     * What the app told the lifter to do for this set, where anything told them.
+     *
+     * Recorded beside what they did, which is the only way overriding a recommendation and falling
+     * short of one can ever be told apart — they are identical in a log that records only the
+     * actual. Nothing fills these until the recommendation engine arrives; they are here so it does
+     * not have to migrate the log on its way in (ADR 0007's precedent).
+     *
+     * On the row like the type and the unit are, and belonging to the set: every row of a per-side
+     * set carries the one prescription that set was given.
+     */
+    @ColumnInfo(name = "recommended_weight_kg")
+    val recommendedWeightKg: Double? = null,
+
+    @ColumnInfo(name = "recommended_reps")
+    val recommendedReps: Int? = null,
+
+    @ColumnInfo(name = "recommended_rest_seconds")
+    val recommendedRestSeconds: Int? = null,
+
+    /** How long the lifter actually rested after this set. */
+    @ColumnInfo(name = "actual_rest_seconds")
+    val actualRestSeconds: Int? = null,
+
+    /** How hard it felt, 1 to 10. The lifter's own reading rather than anything derived. */
+    @ColumnInfo(name = "rpe")
+    val rpe: Double? = null,
+
+    /** Beats per minute, typed in: this app integrates with no wearable and never will. */
+    @ColumnInfo(name = "heart_rate")
+    val heartRate: Int? = null,
+
 ) {
     companion object {
         /**
@@ -114,17 +159,47 @@ data class SetEntryEntity(
 }
 
 /**
+ * The same row, carrying what the lifter measured about the set.
+ *
+ * Theirs rather than the app's: an effort rating is a judgement nobody else can make for them, and
+ * a heart rate is typed in because this project integrates with no wearable.
+ */
+fun SetEntryEntity.measured(measurements: SetMeasurements): SetEntryEntity = copy(
+    rpe = measurements.rpe,
+    heartRate = measurements.heartRate,
+    actualRestSeconds = measurements.restTaken?.seconds?.toInt(),
+)
+
+/**
  * The same row, recording [performance] and nothing else.
  *
  * Every shape's columns are cleared and only its own filled, so a set corrected from a weight and
  * reps to a duration cannot keep a weight it no longer has. That is one rule in one place rather
- * than a nulling-out every caller has to remember — and the reason the three measurement columns
- * default to null: a row is built empty and then told what it records, never filled field by field.
+ * than a nulling-out every caller has to remember — and the reason every measurement column
+ * defaults to null: a row is built empty and then told what it records, never filled field by field.
  */
 fun SetEntryEntity.recording(performance: Performance): SetEntryEntity = when (performance) {
     is Performance.WeightAndReps -> copy(
         weightKg = performance.weight.value,
         reps = performance.reps,
+        addedWeightKg = null,
+        durationSeconds = null,
+        distanceM = null,
+    )
+
+    is Performance.BodyweightReps -> copy(
+        weightKg = null,
+        reps = performance.reps,
+        addedWeightKg = performance.addedWeight?.value,
+        durationSeconds = null,
+        distanceM = null,
+    )
+
+    is Performance.Assisted -> copy(
+        weightKg = null,
+        reps = performance.reps,
+        // Negative: help is weight taken off the lifter.
+        addedWeightKg = -performance.assistance.value,
         durationSeconds = null,
         distanceM = null,
     )
@@ -132,6 +207,7 @@ fun SetEntryEntity.recording(performance: Performance): SetEntryEntity = when (p
     is Performance.Timed -> copy(
         weightKg = null,
         reps = null,
+        addedWeightKg = null,
         durationSeconds = performance.duration.seconds.toInt(),
         distanceM = null,
     )
@@ -139,6 +215,7 @@ fun SetEntryEntity.recording(performance: Performance): SetEntryEntity = when (p
     is Performance.DistanceAndTime -> copy(
         weightKg = null,
         reps = null,
+        addedWeightKg = null,
         durationSeconds = performance.duration.seconds.toInt(),
         distanceM = performance.distance.value,
     )

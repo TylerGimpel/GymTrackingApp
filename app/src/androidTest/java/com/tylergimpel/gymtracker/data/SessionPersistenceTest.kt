@@ -12,9 +12,11 @@ import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.domain.SetOutcome
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.loadOrNull
 import com.tylergimpel.gymtracker.domain.repsOrNull
 import com.tylergimpel.gymtracker.domain.volumeByMuscle
 import com.tylergimpel.gymtracker.domain.weightOrNull
@@ -838,6 +840,163 @@ class SessionPersistenceTest {
         assertEquals(listOf<Double?>(null), storedDistances())
     }
 
+    @Test
+    fun aPullUpRecordsItsRepsAndNoWeightAtAll() = runBlocking {
+        repository.logSet(PULL_UP, SetDraft(repsText = "8", loggingType = LoggingType.BODYWEIGHT_REPS))
+
+        val effort = currentSession().exercises.single().sets.single().leadingEffort
+        assertEquals(Performance.BodyweightReps(addedWeight = null, reps = 8), effort.performance)
+        assertEquals(listOf<Double?>(null), storedWeights())
+    }
+
+    @Test
+    fun aBeltIsLoggedAgainstTheSameExerciseAsAnUnweightedSetOfIt() = runBlocking {
+        repository.logSet(PULL_UP, SetDraft(repsText = "8", loggingType = LoggingType.BODYWEIGHT_REPS))
+        repository.logSet(
+            PULL_UP,
+            SetDraft(repsText = "6", addedWeightText = "20", loggingType = LoggingType.BODYWEIGHT_REPS),
+        )
+
+        // One exercise and one history: putting a belt on does not start a second one.
+        val performed = currentSession().exercises.single()
+        assertEquals(PULL_UP, performed.exercise.id)
+        assertEquals(
+            listOf(
+                Performance.BodyweightReps(addedWeight = null, reps = 8),
+                Performance.BodyweightReps(Kilograms(20.0), reps = 6),
+            ),
+            performed.sets.map { it.leadingEffort.performance },
+        )
+    }
+
+    @Test
+    fun assistanceIsStoredAsWeightTakenOffTheLifter() = runBlocking {
+        repository.logSet(
+            ASSISTED_PULL_UP,
+            SetDraft(repsText = "8", addedWeightText = "20", loggingType = LoggingType.ASSISTED),
+        )
+
+        // Negative in the row, so the row says which way the help went without asking the exercise.
+        assertEquals(listOf(-20.0), storedAddedWeights())
+        assertEquals(
+            Performance.Assisted(Kilograms(20.0), reps = 8),
+            currentSession().exercises.single().sets.single().leadingEffort.performance,
+        )
+    }
+
+    @Test
+    fun anAssistedSetReadsBackAsProgressWhenTheHelpComesDown() = runBlocking {
+        repository.logSet(
+            ASSISTED_PULL_UP,
+            SetDraft(repsText = "8", addedWeightText = "30", loggingType = LoggingType.ASSISTED),
+        )
+        repository.logSet(
+            ASSISTED_PULL_UP,
+            SetDraft(repsText = "8", addedWeightText = "20", loggingType = LoggingType.ASSISTED),
+        )
+
+        // ADR 0004: less help is more progress. Read back, the second set outranks the first.
+        val loads = currentSession().exercises.single().sets.map { it.leadingEffort.performance.loadOrNull!!.value }
+        assertTrue("$loads should be increasing", loads[1] > loads[0])
+    }
+
+    @Test
+    fun aBodyweightSetIsCorrectedAndDeletedLikeAnyOther() = runBlocking {
+        repository.logSet(
+            PULL_UP,
+            SetDraft(repsText = "8", addedWeightText = "20", loggingType = LoggingType.BODYWEIGHT_REPS),
+        )
+        val logged = currentSession().exercises.single()
+
+        repository.editSet(
+            logged.sets.single().leadingEffort.id,
+            SetDraft(repsText = "6", loggingType = LoggingType.BODYWEIGHT_REPS),
+        )
+
+        // The belt came off, and the row no longer claims one.
+        assertEquals(
+            Performance.BodyweightReps(addedWeight = null, reps = 6),
+            currentSession().exercises.single().sets.single().leadingEffort.performance,
+        )
+        assertEquals(listOf<Double?>(null), storedAddedWeights())
+
+        repository.deleteSet(logged.id, logged.sets.single().setIndex)
+        assertEquals(emptyList<PerformedSet>(), currentSession().exercises.single().sets)
+    }
+
+    @Test
+    fun aBodyweightSetIsOneSetTowardVolumeLikeAnyOther() = runBlocking {
+        repository.logSet(PULL_UP, SetDraft(repsText = "8", loggingType = LoggingType.BODYWEIGHT_REPS))
+
+        assertEquals(1, currentSession().exercises.single().sets.size)
+        assertTrue(volumeByMuscle(currentSession().exercises).isNotEmpty())
+    }
+
+    @Test
+    fun aSetRecordsWhatTheLifterMeasuredAboutIt() = runBlocking {
+        repository.logSet(
+            BENCH,
+            SetDraft("60", "5", rpeText = "8.5", heartRateText = "142", restTakenText = "145"),
+        )
+
+        val logged = currentSession().exercises.single().sets.single()
+        assertEquals(8.5, logged.measurements.rpe!!, 0.0)
+        assertEquals(142, logged.measurements.heartRate)
+        assertEquals(Duration.ofSeconds(145), logged.measurements.restTaken)
+    }
+
+    @Test
+    fun anImplausibleReadingIsNotRecordedAsOne() = runBlocking {
+        // A rep count typed into the heart rate field, and an effort rating off its own scale.
+        repository.logSet(BENCH, SetDraft("60", "5", rpeText = "12", heartRateText = "8"))
+
+        val logged = currentSession().exercises.single().sets.single()
+        assertNull(logged.measurements.rpe)
+        assertNull(logged.measurements.heartRate)
+    }
+
+    @Test
+    fun aSetNothingPrescribedAnsweredNothing() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+
+        // Every set logged before there is an engine to prescribe one.
+        val logged = currentSession().exercises.single().sets.single()
+        assertTrue(logged.prescription.isEmpty)
+        assertNull(logged.outcome)
+        assertNull(logged.measurements.restTaken)
+    }
+
+    @Test
+    fun aPrescriptionIsReadBackBesideWhatWasActuallyDone() = runBlocking {
+        repository.logSet(BENCH, SetDraft("60", "5"))
+        val effortId = currentSession().exercises.single().sets.single().leadingEffort.id
+
+        // Written straight to the row: nothing prescribes yet, and this is the schema the engine
+        // will write into rather than a guess at its API.
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE set_entry SET recommended_weight_kg = 60.0, recommended_reps = 8, " +
+                "recommended_rest_seconds = 120 WHERE id = $effortId",
+        )
+
+        val logged = currentSession().exercises.single().sets.single()
+        assertEquals(60.0, logged.prescription.load!!.value, 0.0)
+        assertEquals(8, logged.prescription.reps)
+        assertEquals(Duration.ofMinutes(2), logged.prescription.rest)
+        // Asked for eight at sixty and given five at sixty: not an override, a miss.
+        assertEquals(SetOutcome.FELL_SHORT, logged.outcome)
+    }
+
+    private fun storedAddedWeights(): List<Double?> =
+        database.openHelper.readableDatabase
+            .query("SELECT added_weight_kg FROM set_entry ORDER BY id")
+            .use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(if (cursor.isNull(0)) null else cursor.getDouble(0))
+                    }
+                }
+            }
+
     private fun storedDistances(): List<Double?> =
         database.openHelper.readableDatabase
             .query("SELECT distance_m FROM set_entry ORDER BY id")
@@ -901,6 +1060,8 @@ class SessionPersistenceTest {
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val HAMSTRING_STRETCH = "90_90_Hamstring"
         const val TREADMILL = "Jogging_Treadmill"
+        const val PULL_UP = "Pullups"
+        const val ASSISTED_PULL_UP = "Assisted_Pull_Up_Machine"
         const val SQUAT = "Barbell_Squat"
         const val CURL = "Barbell_Curl"
         const val ROW = "Seated_Cable_Rows"

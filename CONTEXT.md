@@ -54,7 +54,13 @@ What a bank update does to a shipped exercise it has dropped that somebody has a
 _Avoid_: delete, archive — one is what tombstoning exists to prevent and the other suggests the lifter did it.
 
 **Logging type**:
-What a set of a given exercise records — one of `weight_reps`, `bodyweight_reps`, `assisted`, `time`, `distance_time`. It is the type that says what it records, so the screen asks rather than deciding: a plank is offered seconds and no weight, because a weight field on a hold asks for a number that means nothing and one that reached storage would be read later as something the lifter lifted.
+What a set of a given exercise records — one of `weight_reps`, `bodyweight_reps`, `assisted`, `time`, `distance_time`. Held as the set of measurements it takes rather than a flag apiece, so the screen asks it what to show rather than deciding: a plank is offered seconds and no weight, because a weight field on a hold asks for a number that means nothing and one that reached storage would be read later as something the lifter lifted.
+
+**Added weight**:
+A belt or a plate hung off a lifter whose own body is the load. Optional and usually absent — a pull-up and a weighted pull-up are one exercise, because putting a belt on must not split a history in two.
+
+**Assistance**:
+How much of the work a machine did for the lifter. The one measurement in this project where less is better, so it is stored as **Added weight** with the sign reversed: weight taken off the lifter rather than hung on them. That makes "more is progress" true of every exercise by arithmetic, rather than a rule each future reader has to remember to invert (ADR 0004).
 
 **Progression model**:
 How an exercise's recommendation advances over time, including `none` for exercises that are recorded but never prescribed.
@@ -138,7 +144,7 @@ Whether a superset moves to its next member on its own once a set is logged. A p
 Forming a superset from neighbouring exercises, and breaking one up. Both are statements about rest and neither touches a logged set: ungrouping releases the members and leaves the training exactly as it was.
 
 **Prescription**:
-What the app tells the user to do for a given set — weight, reps and rest, where the reps of a working set are a rep range rather than a single count. Recorded alongside what they actually did, so the two can be compared.
+What the app tells the user to do for a given set — weight, reps and rest, where the reps of a working set are a rep range rather than a single count. Recorded alongside what they actually did, which is the only way overriding a recommendation and falling short of one can ever be told apart: they are identical in a log that holds only the actual, and they want opposite responses. A set answers its prescription as **followed**, **overridden** — a different weight, which is a decision — or **fell short**, the weight asked for and fewer reps than it asked for.
 
 **Bodyweight entry**:
 What the lifter weighed, and when they weighed it. Profile data rather than training: it sits on the same calendar as the sessions and belongs to none of them, contributes nothing to **Volume** and is never a **Set** — it carries no session, no exercise and no set index, so there is nothing for a volume or set query to reach rather than something to filter out. Stored in canonical kilograms like every other weight, and read in the lifter's **Preferred unit**.

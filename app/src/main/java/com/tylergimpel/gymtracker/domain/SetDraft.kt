@@ -38,6 +38,25 @@ data class SetDraft(
     /** How far, for an exercise that covers ground. Read in [distanceUnit]. */
     val distanceText: String = "",
     /**
+     * A belt, or a machine's help, as a plain magnitude read in [displayUnit].
+     *
+     * One field for both, because a lifter types the number the belt or the machine says and the
+     * exercise already decides which of the two it is. Which way it counts is storage's business,
+     * not something anyone types.
+     */
+    val addedWeightText: String = "",
+    /** How hard it felt, 1 to 10, where the lifter says. Never inferred from the numbers. */
+    val rpeText: String = "",
+    /** Beats per minute, typed in by hand. */
+    val heartRateText: String = "",
+    /**
+     * Seconds rested after this set, typed in.
+     *
+     * By hand until the rest timer arrives with its own spec, which is what will fill this without
+     * anybody typing.
+     */
+    val restTakenText: String = "",
+    /**
      * What the exercise being logged records, which decides what this draft must hold before it is
      * a set and which fields the screen shows.
      *
@@ -61,6 +80,37 @@ data class SetDraft(
      * that the **Preferred unit** does not already answer.
      */
     val distanceUnit: DistanceUnit get() = DistanceUnit.alongside(lifterUnit)
+
+    /**
+     * The belt or the help entered, or null while it is blank or unreadable.
+     *
+     * Zero is rejected: a belt of nothing is an unweighted set, and help of nothing is not an
+     * assisted one. Either way the honest record is the set without the number.
+     */
+    val addedWeight: Kilograms?
+        get() = addedWeightText.asEnteredAmount()?.takeIf { it > 0.0 }?.let(displayUnit::toKilograms)
+
+    /** How hard it felt, or null until it reads as a rating between 1 and 10. */
+    val rpe: Double? get() = rpeText.asEnteredAmount()?.takeIf { it in RPE_RANGE }
+
+    /** The heart rate typed, or null until it reads as a plausible one. */
+    val heartRate: Int?
+        get() = heartRateText.trim().toIntOrNull()?.takeIf { it in HEART_RATE_RANGE }
+
+    /** The rest typed, or null until it reads as a length of time. */
+    val restTaken: Duration?
+        get() = restTakenText.trim().toIntOrNull()?.takeIf { it > 0 }
+            ?.let { Duration.ofSeconds(it.toLong()) }
+
+    /**
+     * Whether a field holds something that will not be recorded.
+     *
+     * A lifter who types 11 into a 1-to-10 field has said something the log cannot keep, and
+     * silently dropping it is worse than saying so: they would believe it was written down.
+     */
+    val rpeIsUnreadable: Boolean get() = rpeText.isNotBlank() && rpe == null
+
+    val heartRateIsUnreadable: Boolean get() = heartRateText.isNotBlank() && heartRate == null
 
     /** How far entered, or null while it is blank, unreadable, or nowhere at all. */
     val distance: Metres?
@@ -93,6 +143,15 @@ data class SetDraft(
             loggingType.recordsWeight && loggingType.recordsReps ->
                 weight?.let { weight -> reps?.let { Performance.WeightAndReps(weight, it) } }
 
+            // The belt is optional — a pull-up is a pull-up without one — so only the reps gate it.
+            loggingType.recordsAddedWeight ->
+                reps?.let { Performance.BodyweightReps(addedWeight, it) }
+
+            // The help is not optional: how much the machine took is the whole measurement, and an
+            // assisted set without it says nothing about whether it was hard.
+            loggingType.recordsAssistance ->
+                addedWeight?.let { help -> reps?.let { Performance.Assisted(help, it) } }
+
             // A type whose shape has no home here yet records nothing rather than being filed as
             // the nearest thing that fits. Silently writing a weight for an exercise that does not
             // record one is how a meaningless number ends up in a progression graph.
@@ -100,6 +159,23 @@ data class SetDraft(
         }
 
     val isLoggable: Boolean get() = performance != null
+
+    /** What the lifter measured about this set, as far as the fields read. */
+    val measurements: SetMeasurements
+        get() = SetMeasurements(rpe = rpe, heartRate = heartRate, restTaken = restTaken)
+
+    private companion object {
+        /** The Borg CR10 scale this project uses, so 11 is a mistyping rather than a hard set. */
+        val RPE_RANGE = 1.0..10.0
+
+        /**
+         * What a human heart can plausibly be doing in a gym.
+         *
+         * Wide on purpose: this is here to catch a mistyped rep count in the wrong field, not to
+         * judge anybody's conditioning.
+         */
+        val HEART_RATE_RANGE = 30..250
+    }
 
     /**
      * The same set read in [to]: the number is rewritten, what it weighs is not.
@@ -112,7 +188,13 @@ data class SetDraft(
         if (to == displayUnit) {
             this
         } else {
-            copy(displayUnit = to, weightText = weight?.asTextIn(to) ?: weightText)
+            copy(
+                displayUnit = to,
+                weightText = weight?.asTextIn(to) ?: weightText,
+                // The belt and the machine's help are weights too, and a field left reading in the
+                // old unit would silently reinterpret what the lifter typed.
+                addedWeightText = addedWeight?.asTextIn(to) ?: addedWeightText,
+            )
         }
 
     /**

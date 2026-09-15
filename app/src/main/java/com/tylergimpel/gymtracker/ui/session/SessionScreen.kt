@@ -581,6 +581,9 @@ private fun SetEntryControls(
                 rightDraft,
                 onRightDraftChange,
                 showType = false,
+                // One set, felt one way: what the lifter measured is taken from the left-hand side,
+                // so offering the fields again here would discard whatever was typed into them.
+                showMeasurements = false,
                 unitChoice = null,
             )
         }
@@ -631,6 +634,13 @@ private fun SetDraftFields(
     onChange: (SetDraft) -> Unit,
     showType: Boolean = true,
     showNote: Boolean = true,
+    /**
+     * Whether to offer what the lifter measured about the set.
+     *
+     * Off for the second side of a per-side set, which is one set and felt one way: offering fields
+     * there that the left-hand side's answers overwrite would discard what was typed into them.
+     */
+    showMeasurements: Boolean = showNote,
     unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -663,6 +673,26 @@ private fun SetDraftFields(
                     modifier = Modifier.weight(1f),
                 )
             }
+            if (draft.loggingType.recordsAddedWeight) {
+                OutlinedTextField(
+                    value = draft.addedWeightText,
+                    onValueChange = { onChange(draft.copy(addedWeightText = it)) },
+                    label = { Text(stringResource(R.string.set_added_weight, stringResource(draft.displayUnit.label))) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (draft.loggingType.recordsAssistance) {
+                OutlinedTextField(
+                    value = draft.addedWeightText,
+                    onValueChange = { onChange(draft.copy(addedWeightText = it)) },
+                    label = { Text(stringResource(R.string.set_assistance, stringResource(draft.displayUnit.label))) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+            }
             if (draft.loggingType.recordsDistance) {
                 OutlinedTextField(
                     value = draft.distanceText,
@@ -687,9 +717,58 @@ private fun SetDraftFields(
                 )
             }
         }
-        // The steppers and the unit chips are about a weight, so they follow the weight field.
-        if (draft.loggingType.recordsWeight) {
+        // The steppers and the unit chips are about a weight — and a belt and a machine's help are
+        // weights, read in the same unit and stepped by the same plates.
+        if (draft.loggingType.recordsAnyWeight) {
             WeightControls(draft, onChange, unitChoice)
+        }
+        if (showMeasurements) {
+            // All three optional and all three the lifter's own: an effort rating is a judgement
+            // nobody can make for them, a heart rate is typed because this app reads no wearable,
+            // and the rest is typed until the rest timer arrives to fill it.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = draft.rpeText,
+                    onValueChange = { onChange(draft.copy(rpeText = it)) },
+                    label = { Text(stringResource(R.string.set_rpe)) },
+                    // Said rather than swallowed: a number this field will not keep should not look
+                    // to the lifter as though it was written down.
+                    isError = draft.rpeIsUnreadable,
+                    supportingText = if (draft.rpeIsUnreadable) {
+                        { Text(stringResource(R.string.set_rpe_range)) }
+                    } else {
+                        null
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = draft.heartRateText,
+                    onValueChange = { onChange(draft.copy(heartRateText = it)) },
+                    label = { Text(stringResource(R.string.set_heart_rate)) },
+                    isError = draft.heartRateIsUnreadable,
+                    supportingText = if (draft.heartRateIsUnreadable) {
+                        { Text(stringResource(R.string.set_heart_rate_range)) }
+                    } else {
+                        null
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = draft.restTakenText,
+                    onValueChange = { onChange(draft.copy(restTakenText = it)) },
+                    label = { Text(stringResource(R.string.set_rest_taken)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
         if (showNote) {
             OutlinedTextField(
@@ -1124,6 +1203,22 @@ private fun Effort.summary(displayUnit: WeightUnit, lifterUnit: WeightUnit): Str
         is Performance.WeightAndReps -> stringResource(
             R.string.set_summary,
             done.weight.asTextIn(displayUnit),
+            stringResource(displayUnit.label),
+            done.reps,
+        )
+
+        is Performance.BodyweightReps -> done.addedWeight?.let { added ->
+            stringResource(
+                R.string.set_added_weight_summary,
+                added.asTextIn(displayUnit),
+                stringResource(displayUnit.label),
+                done.reps,
+            )
+        } ?: stringResource(R.string.set_reps_summary, done.reps)
+
+        is Performance.Assisted -> stringResource(
+            R.string.set_assisted_summary,
+            done.assistance.asTextIn(displayUnit),
             stringResource(displayUnit.label),
             done.reps,
         )

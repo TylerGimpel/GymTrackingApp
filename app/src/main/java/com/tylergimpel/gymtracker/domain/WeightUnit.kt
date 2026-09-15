@@ -105,6 +105,18 @@ enum class WeightUnit(
         /** The United States, Liberia and Myanmar. */
         private val POUND_COUNTRIES = setOf("US", "LR", "MM")
 
+        /**
+         * How far apart two weights can be and still be the same weight.
+         *
+         * A reading is rounded to a hundredth of the unit it is read in, so a weight entered in
+         * pounds comes back a few thousandths of a kilogram from where it started — 60 kg round
+         * trips to 60.0011. Anything comparing a stored weight against another has to allow for
+         * that, or a lifter who loaded exactly what they were asked reads as having done something
+         * else. Five grams: far coarser than the rounding, far finer than the smallest plate
+         * anybody owns.
+         */
+        const val SAME_WEIGHT_TOLERANCE_KG = 0.005
+
         private const val HUNDREDTHS = 100.0
 
         private val BY_STORED = entries.associateBy(WeightUnit::stored)

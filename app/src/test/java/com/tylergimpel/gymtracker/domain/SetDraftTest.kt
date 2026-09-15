@@ -239,4 +239,58 @@ class SetDraftTest {
                 .performance,
         )
     }
+
+    @Test
+    fun `a pull-up needs only its reps, and the belt is optional`() {
+        val draft = SetDraft(loggingType = LoggingType.BODYWEIGHT_REPS, repsText = "8")
+
+        assertTrue(draft.isLoggable)
+        assertEquals(Performance.BodyweightReps(addedWeight = null, reps = 8), draft.performance)
+    }
+
+    @Test
+    fun `a belt is recorded against the same exercise as an unweighted set of it`() {
+        // One exercise, not two: adding a belt must not split a history in half.
+        val draft = SetDraft(
+            loggingType = LoggingType.BODYWEIGHT_REPS,
+            repsText = "8",
+            addedWeightText = "20",
+        )
+
+        assertEquals(Performance.BodyweightReps(Kilograms(20.0), reps = 8), draft.performance)
+    }
+
+    @Test
+    fun `a belt typed in pounds is the kilograms it actually weighs`() {
+        val draft = SetDraft(
+            loggingType = LoggingType.BODYWEIGHT_REPS,
+            repsText = "8",
+            addedWeightText = "45",
+            displayUnit = WeightUnit.POUNDS,
+        )
+
+        assertEquals(
+            20.41,
+            (draft.performance as Performance.BodyweightReps).addedWeight!!.value,
+            0.01,
+        )
+    }
+
+    @Test
+    fun `an assisted set records the help it was set to`() {
+        val draft = SetDraft(
+            loggingType = LoggingType.ASSISTED,
+            repsText = "8",
+            addedWeightText = "20",
+        )
+
+        assertEquals(Performance.Assisted(Kilograms(20.0), reps = 8), draft.performance)
+    }
+
+    @Test
+    fun `an assisted set is not loggable until it says how much help it had`() {
+        // The machine was set to something, and how much is the whole measurement: an assisted
+        // pull-up with the number missing says nothing about whether it was hard.
+        assertFalse(SetDraft(loggingType = LoggingType.ASSISTED, repsText = "8").isLoggable)
+    }
 }

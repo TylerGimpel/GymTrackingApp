@@ -50,7 +50,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
 
     companion object {
-        const val VERSION = 14
+        const val VERSION = 16
 
         /** Path inside assets, written there at build time by `generate<Variant>ExerciseBank`. */
         const val ASSET_PATH = "databases/gym-bank.db"

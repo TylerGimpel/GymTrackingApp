@@ -372,6 +372,61 @@ internal val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
+/**
+ * Version 15 lets a set record a belt, or a machine's help.
+ *
+ * One nullable column for both, and **signed**: positive is weight hung off the lifter, negative is
+ * weight taken off them. One measurement read two ways, and the sign is what makes the row say
+ * which without asking the exercise — an exercise retagged by a later bank update must not be able
+ * to turn somebody's assisted sets into weighted ones.
+ *
+ * It also settles a direction. ADR 0004 records that an assisted exercise inverts every comparison,
+ * because less help is more progress, and that getting it wrong means confidently coaching somebody
+ * to get weaker. Storing the sign means nothing downstream has to invert anything: more is more, on
+ * every exercise, by arithmetic rather than by remembering.
+ *
+ * **Sets already logged against these exercises are moved, not left.** Until this version both types
+ * showed a plain weight field, because it was the only place a lifter had to put a belt or a
+ * machine's setting — so those numbers are sitting in `weight_kg`, where they now read as load
+ * lifted. On an assisted exercise that is the ADR's exact failure: 30 kg of help would outrank 20,
+ * and weaning off the machine would read as getting weaker. The logging type is the only record of
+ * what those numbers meant, so it is read here, once, to put them where they belong. A zero on a
+ * bodyweight set was "no belt" and becomes no belt.
+ */
+internal val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `added_weight_kg` REAL")
+
+        db.execSQL(
+            "UPDATE `set_entry` SET `added_weight_kg` = -`weight_kg`, `weight_kg` = NULL " +
+                "WHERE `weight_kg` IS NOT NULL AND `weight_kg` > 0 AND `session_exercise_id` IN (" +
+                "SELECT `se`.`id` FROM `session_exercise` `se` " +
+                "JOIN `exercise` `e` ON `e`.`id` = `se`.`exercise_id` " +
+                "WHERE `e`.`logging_type` = 'assisted')",
+        )
+        db.execSQL(
+            "UPDATE `set_entry` SET " +
+                "`added_weight_kg` = CASE WHEN `weight_kg` > 0 THEN `weight_kg` ELSE NULL END, " +
+                "`weight_kg` = NULL " +
+                "WHERE `weight_kg` IS NOT NULL AND `session_exercise_id` IN (" +
+                "SELECT `se`.`id` FROM `session_exercise` `se` " +
+                "JOIN `exercise` `e` ON `e`.`id` = `se`.`exercise_id` " +
+                "WHERE `e`.`logging_type` IN ('bodyweight_reps', 'assisted'))",
+        )
+    }
+}
+
+internal val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `recommended_weight_kg` REAL")
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `recommended_reps` INTEGER")
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `recommended_rest_seconds` INTEGER")
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `actual_rest_seconds` INTEGER")
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `rpe` REAL")
+        db.execSQL("ALTER TABLE `set_entry` ADD COLUMN `heart_rate` INTEGER")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -386,6 +441,8 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_11_12,
     MIGRATION_12_13,
     MIGRATION_13_14,
+    MIGRATION_14_15,
+    MIGRATION_15_16,
 )
 
 /**

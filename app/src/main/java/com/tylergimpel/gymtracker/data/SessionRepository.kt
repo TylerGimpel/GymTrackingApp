@@ -108,7 +108,7 @@ class SessionRepository(
                     note = draft.note,
                     side = null,
                     displayUnit = displayUnit?.stored,
-                ).recording(performance),
+                ).recording(performance).measured(draft.measurements),
             )
         }
         return true
@@ -146,7 +146,8 @@ class SessionRepository(
                         note = entered.note,
                         side = side.stored,
                         displayUnit = displayUnit?.stored,
-                    ).recording(requireNotNull(entered.performance)),
+                    ).recording(requireNotNull(entered.performance))
+                        .measured(left.measurements),
                 )
             }
         }
@@ -245,7 +246,9 @@ class SessionRepository(
 
         database.withTransaction {
             sessions.update(
-                existing.copy(note = draft.note).recording(performance),
+                existing.copy(note = draft.note)
+                    .recording(performance)
+                    .measured(draft.measurements),
             )
             sessions.retypeSet(existing.sessionExerciseId, existing.setIndex, draft.type.stored)
             sessions.redisplaySet(

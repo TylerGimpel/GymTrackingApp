@@ -608,6 +608,123 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToBeltsAndAssistanceMovingWhatWasAlreadyTypedIntoTheWeightField() {
+        helper.createDatabase(FOURTEENTH_DATABASE, 14).use { version14 ->
+            // Both types showed a plain weight field until version 15, so this is where a belt and
+            // a machine's setting were put: the only place a lifter had for them.
+            listOf(
+                "'Pullups', 'Pullups', 'lats', '', 'body only', 'compound', 'pull', 'strength', " +
+                    "'beginner', 'bodyweight_reps'",
+                "'Assisted_Pull_Up_Machine', 'Assisted Pull-Up Machine', 'lats', '', 'machine', " +
+                    "'compound', 'pull', 'strength', 'beginner', 'assisted'",
+                "'Barbell_Bench', 'Barbell Bench', 'chest', '', 'barbell', 'compound', 'push', " +
+                    "'strength', 'beginner', 'weight_reps'",
+            ).forEach { columns ->
+                version14.execSQL(
+                    "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, " +
+                        "equipment, mechanic, force, category, level, logging_type, unilateral, " +
+                        "source, tombstoned) VALUES ($columns, 0, 'upstream', 0)",
+                )
+            }
+            version14.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            listOf("Pullups", "Assisted_Pull_Up_Machine", "Barbell_Bench").forEachIndexed { index, id ->
+                version14.execSQL(
+                    "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                        "VALUES (1, '$id', ${index + 1})",
+                )
+            }
+            // A belted pull-up, an unweighted one, 20 kg of help, and an ordinary bench press.
+            version14.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps) " +
+                    "VALUES (1, 1, 'working', 20.0, 6), (1, 2, 'working', 0.0, 8), " +
+                    "(2, 1, 'working', 20.0, 8), (3, 1, 'working', 60.0, 5)",
+            )
+        }
+
+        val version15 = helper.runMigrationsAndValidate(FOURTEENTH_DATABASE, 15, true, MIGRATION_14_15)
+
+        version15.use { db ->
+            // The belt moves across as added weight, and reads as load added.
+            db.query("SELECT weight_kg, added_weight_kg, reps FROM set_entry WHERE session_exercise_id = 1 ORDER BY set_index").use {
+                it.moveToFirst()
+                assertTrue(it.isNull(0))
+                assertEquals(20.0, it.getDouble(1), 0.0)
+                assertEquals(6, it.getInt(2))
+                // A zero was "no belt", and becomes no belt rather than a belt of nothing.
+                it.moveToNext()
+                assertTrue(it.isNull(0))
+                assertTrue(it.isNull(1))
+            }
+            // The machine's help moves across negative, which is what stops 30 kg of it outranking
+            // 20 and reading as progress — ADR 0004's exact failure.
+            db.query("SELECT weight_kg, added_weight_kg FROM set_entry WHERE session_exercise_id = 2").use {
+                it.moveToFirst()
+                assertTrue(it.isNull(0))
+                assertEquals(-20.0, it.getDouble(1), 0.0)
+            }
+            // And a barbell set is untouched: it always did mean what it said.
+            db.query("SELECT weight_kg, added_weight_kg FROM set_entry WHERE session_exercise_id = 3").use {
+                it.moveToFirst()
+                assertEquals(60.0, it.getDouble(0), 0.0)
+                assertTrue(it.isNull(1))
+            }
+        }
+    }
+
+    @Test
+    fun migratesToPrescriptionsAndMeasurementsWithNeitherClaimedByAnythingAlreadyLogged() {
+        helper.createDatabase(FIFTEENTH_DATABASE, 15).use { version15 ->
+            version15.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "mechanic, force, category, level, logging_type, unilateral, source, " +
+                    "tombstoned) VALUES ('Test_Exercise', 'Test Exercise', 'chest', '', 'barbell', " +
+                    "'compound', 'push', 'strength', 'beginner', 'weight_reps', 0, 'upstream', 0)",
+            )
+            version15.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note, routine_name, " +
+                    "routine_day_name) VALUES (1757869200000, NULL, '2026-09-14', NULL, NULL, NULL)",
+            )
+            version15.execSQL(
+                "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Test_Exercise', 1)",
+            )
+            version15.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps) " +
+                    "VALUES (1, 1, 'working', 60.0, 5)",
+            )
+        }
+
+        val version16 = helper.runMigrationsAndValidate(FIFTEENTH_DATABASE, 16, true, MIGRATION_15_16)
+
+        version16.use { db ->
+            // Nothing already logged was prescribed anything: there was no engine to prescribe it.
+            db.query(
+                "SELECT weight_kg, recommended_weight_kg, recommended_reps, " +
+                    "recommended_rest_seconds, actual_rest_seconds, rpe, heart_rate FROM set_entry",
+            ).use {
+                it.moveToFirst()
+                assertEquals(60.0, it.getDouble(0), 0.0)
+                (1..6).forEach { column -> assertTrue(it.isNull(column)) }
+            }
+            // And a set can now carry what it was asked for beside what was done.
+            db.execSQL(
+                "UPDATE set_entry SET recommended_weight_kg = 62.5, recommended_reps = 8, " +
+                    "recommended_rest_seconds = 120, actual_rest_seconds = 145, rpe = 8.5, " +
+                    "heart_rate = 142 WHERE id = 1",
+            )
+            db.query("SELECT recommended_weight_kg, recommended_reps, rpe FROM set_entry").use {
+                it.moveToFirst()
+                assertEquals(62.5, it.getDouble(0), 0.0)
+                assertEquals(8, it.getInt(1))
+                assertEquals(8.5, it.getDouble(2), 0.0)
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -622,5 +739,7 @@ class GymDatabaseMigrationTest {
         const val ELEVENTH_DATABASE = "gym-migration-test-11.db"
         const val TWELFTH_DATABASE = "gym-migration-test-12.db"
         const val THIRTEENTH_DATABASE = "gym-migration-test-13.db"
+        const val FOURTEENTH_DATABASE = "gym-migration-test-14.db"
+        const val FIFTEENTH_DATABASE = "gym-migration-test-15.db"
     }
 }

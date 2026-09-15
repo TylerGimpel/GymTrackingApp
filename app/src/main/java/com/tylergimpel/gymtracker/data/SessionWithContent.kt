@@ -7,8 +7,10 @@ import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Metres
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SessionPlan
+import com.tylergimpel.gymtracker.domain.SetMeasurements
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -100,6 +102,8 @@ fun List<SetEntryWithDrops>.toPerformedSets(): List<PerformedSet> =
                 type = SetType.fromStored(rows.first().setEntry.type),
                 // As with the type: the unit belongs to the set, and each of its rows records it.
                 displayUnit = WeightUnit.fromStored(rows.first().setEntry.displayUnit),
+                prescription = rows.first().setEntry.toPrescription(),
+                measurements = rows.first().setEntry.toMeasurements(),
                 efforts = rows.sortedBy { it.setEntry.id }.map(SetEntryWithDrops::toEffort),
             )
         }
@@ -110,6 +114,20 @@ private fun SetEntryWithDrops.toEffort() = Effort(
     performance = setEntry.toPerformance(),
     note = setEntry.note,
     drops = drops.sortedBy(DropSegmentEntity::orderIndex).map(DropSegmentEntity::toDomain),
+)
+
+/** What the lifter measured about this set, where they measured anything. */
+private fun SetEntryEntity.toMeasurements() = SetMeasurements(
+    rpe = rpe,
+    heartRate = heartRate,
+    restTaken = actualRestSeconds?.let { Duration.ofSeconds(it.toLong()) },
+)
+
+/** What the app asked of this set, where anything asked. */
+private fun SetEntryEntity.toPrescription() = Prescription(
+    load = recommendedWeightKg?.let(::Kilograms),
+    reps = recommendedReps,
+    rest = recommendedRestSeconds?.let { Duration.ofSeconds(it.toLong()) },
 )
 
 /**
@@ -126,5 +144,12 @@ private fun SetEntryEntity.toPerformance(): Performance = when {
 
     durationSeconds != null -> Performance.Timed(Duration.ofSeconds(durationSeconds.toLong()))
     weightKg != null && reps != null -> Performance.WeightAndReps(Kilograms(weightKg), reps)
+
+    // The sign says which way the help went, so the row answers for itself rather than asking the
+    // exercise what it records today.
+    reps != null && addedWeightKg != null && addedWeightKg < 0.0 ->
+        Performance.Assisted(Kilograms(-addedWeightKg), reps)
+
+    reps != null -> Performance.BodyweightReps(addedWeightKg?.let(::Kilograms), reps)
     else -> error("Set entry $id records no shape at all: no duration, and no weight and reps")
 }
