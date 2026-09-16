@@ -38,7 +38,7 @@ abstract class GenerateExerciseBankTask : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val cardioRetag: RegularFileProperty
+    abstract val bankPatches: RegularFileProperty
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -66,7 +66,7 @@ abstract class GenerateExerciseBankTask : DefaultTask() {
         val bank = ExerciseBankBuilder.build(
             upstreamJson = upstreamExercises.get().asFile.readText(),
             authoredJson = authoredExercises.get().asFile.readText(),
-            cardioRetagJson = cardioRetag.get().asFile.readText(),
+            bankPatchesJson = bankPatches.get().asFile.readText(),
             aliasesJson = aliases.get().asFile.readText(),
         )
 

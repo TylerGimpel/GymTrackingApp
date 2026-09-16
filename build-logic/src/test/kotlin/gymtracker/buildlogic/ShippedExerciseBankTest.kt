@@ -16,14 +16,18 @@ class ShippedExerciseBankTest {
     private val bank = ExerciseBankBuilder.build(
         upstreamJson = data("upstream-exercises.json"),
         authoredJson = data("authored-exercises.json"),
-        cardioRetagJson = data("cardio-retag.json"),
+        bankPatchesJson = data("bank-patches.json"),
         aliasesJson = data("aliases.json"),
     )
 
     @Test
     fun `the shipped data merges into one bank`() {
-        assertEquals(896, bank.exercises.size)
-        assertEquals(133, bank.aliases.size)
+        // 876 upstream rows less the 3 superseded by a row that records the same movement with an
+        // optional added weight, plus the 20 authored ones.
+        assertEquals(893, bank.exercises.size)
+        // The 133 hand-written aliases, the 3 superseded rows' own names redirecting to what
+        // replaced them, and the assisted dip shorthand.
+        assertEquals(137, bank.aliases.size)
     }
 
     @Test

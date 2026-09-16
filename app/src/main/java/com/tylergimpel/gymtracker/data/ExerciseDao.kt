@@ -66,6 +66,16 @@ interface ExerciseDao {
     )
     suspend fun setNote(exerciseId: String, note: String?)
 
+    /** Records what the lifter decided an exercise advances by, or clears it back to the bank's. */
+    @Query(
+        """
+        INSERT INTO exercise_preference (exercise_id, progression_model)
+        VALUES (:exerciseId, :progressionModel)
+        ON CONFLICT(exercise_id) DO UPDATE SET progression_model = excluded.progression_model
+        """,
+    )
+    suspend fun setProgressionModel(exerciseId: String, progressionModel: String?)
+
     /**
      * Drops a preference row that no longer records a choice.
      *
@@ -78,6 +88,7 @@ interface ExerciseDao {
         DELETE FROM exercise_preference
         WHERE exercise_id = :exerciseId
           AND display_unit IS NULL AND name IS NULL AND note IS NULL
+          AND progression_model IS NULL
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)

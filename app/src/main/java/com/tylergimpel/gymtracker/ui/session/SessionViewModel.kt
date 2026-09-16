@@ -17,6 +17,7 @@ import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionPosition
@@ -79,6 +80,8 @@ data class ExerciseDetails(
     val exerciseId: String,
     val name: String,
     val note: String,
+    /** How the lifter wants this exercise coached, including not at all. */
+    val progressionModel: ProgressionModel,
 )
 
 /**
@@ -453,6 +456,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     exerciseId = exercise.id,
                     name = exercise.name,
                     note = exercise.note.orEmpty(),
+                    progressionModel = exercise.progressionModel,
                 ),
             )
         }
@@ -478,6 +482,13 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             exercises.rename(open.exerciseId, renamed)
             exercises.note(open.exerciseId, open.note)
+            // Recorded as a choice only where it departs from what the bank derived, the same move
+            // a display unit makes: agreeing with the derivation is not a decision, and a row that
+            // stored the agreement would be stranded there the day the derivation improved.
+            exercises.setProgressionModel(
+                open.exerciseId,
+                open.progressionModel.takeIf { it != exercise.bankProgressionModel },
+            )
             screen.update {
                 it.copy(
                     editingExercise = null,
@@ -487,6 +498,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     selected = it.selected?.copy(
                         userName = renamed,
                         note = open.note.takeIf(String::isNotBlank),
+                        chosenProgressionModel = open.progressionModel
+                            .takeIf { model -> model != exercise.bankProgressionModel },
                     ),
                 )
             }

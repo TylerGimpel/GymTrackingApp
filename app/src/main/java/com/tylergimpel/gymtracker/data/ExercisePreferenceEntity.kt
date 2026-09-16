@@ -51,4 +51,15 @@ data class ExercisePreferenceEntity(
     /** "Seat notch 3, use the long bar" — in front of the lifter every time they train it. */
     @ColumnInfo(name = "note")
     val note: String? = null,
+
+    /**
+     * What the lifter decided this exercise advances by, where they decided anything.
+     *
+     * Nullable like the rest: the bank's own derivation answers until somebody says otherwise, and a
+     * row here holds only what was actually chosen. Here rather than on the bank row so that an
+     * update improving what the bank derives cannot overrule a lifter who said they do not want this
+     * lift coached.
+     */
+    @ColumnInfo(name = "progression_model")
+    val progressionModel: String? = null,
 )

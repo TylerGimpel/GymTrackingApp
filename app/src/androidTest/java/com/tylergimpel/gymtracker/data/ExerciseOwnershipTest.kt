@@ -7,6 +7,7 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseSource
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.NewExerciseDraft
+import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -226,9 +227,55 @@ class ExerciseOwnershipTest {
         source = ExerciseSource.UPSTREAM,
     )
 
+    @Test
+    fun everyShippedExerciseCarriesAProgressionModelDerivedFromWhatItMeasures() = runBlocking {
+        val bank = bank().associateBy { it.id }
+
+        // Anything with a load advances by what ADR 0004 settles.
+        assertEquals(ProgressionModel.DOUBLE_PROGRESSION, bank.getValue(BENCH).progressionModel)
+        // A stretch is recorded and never prescribed: no load for a recommendation to move.
+        assertEquals(ProgressionModel.NONE, bank.getValue(HAMSTRING_STRETCH).progressionModel)
+        assertEquals(ProgressionModel.NONE, bank.getValue(TREADMILL).progressionModel)
+    }
+
+    @Test
+    fun aLifterCanSayTheyDoNotWantALiftCoached() = runBlocking {
+        exercises.setProgressionModel(BENCH, ProgressionModel.NONE)
+
+        val bench = bankExercise(BENCH)
+        assertEquals(ProgressionModel.NONE, bench.progressionModel)
+        // The bank still says what it derived; the lifter's answer is what anything reads.
+        assertEquals(ProgressionModel.DOUBLE_PROGRESSION, bench.bankProgressionModel)
+    }
+
+    @Test
+    fun clearingTheChoiceGoesBackToWhatTheBankDerived() = runBlocking {
+        exercises.setProgressionModel(BENCH, ProgressionModel.NONE)
+
+        exercises.setProgressionModel(BENCH, null)
+
+        assertEquals(ProgressionModel.DOUBLE_PROGRESSION, bankExercise(BENCH).progressionModel)
+        // And the row that recorded nothing else is gone: absence is how this table says "not
+        // chosen" (ADR 0009).
+        assertEquals(0, countOf("exercise_preference"))
+    }
+
+    @Test
+    fun aBankUpdateLeavesWhatTheLifterDecidedAboutCoaching() = runBlocking {
+        exercises.setProgressionModel(BENCH, ProgressionModel.NONE)
+        val incoming = bank().map { it.copy(chosenProgressionModel = null) }
+
+        exercises.applyBankUpdate(incoming)
+
+        // The same protection the rename, the note and the display unit have.
+        assertEquals(ProgressionModel.NONE, bankExercise(BENCH).progressionModel)
+    }
+
     private companion object {
         const val TEST_DATABASE = "exercise-ownership-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val SQUAT = "Barbell_Squat"
+        const val HAMSTRING_STRETCH = "90_90_Hamstring"
+        const val TREADMILL = "Jogging_Treadmill"
     }
 }

@@ -5,6 +5,7 @@ import com.tylergimpel.gymtracker.domain.BankChange
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseSource
 import com.tylergimpel.gymtracker.domain.NewExerciseDraft
+import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.planBankUpdate
 import kotlinx.coroutines.flow.Flow
@@ -66,6 +67,18 @@ class ExerciseRepository(
         exercises.setName(exerciseId, name?.takeIf(String::isNotBlank))
         exercises.forgetEmptyPreference(exerciseId)
     }
+
+    /**
+     * Records what the lifter decided [exerciseId] advances by, or clears it back to the bank's.
+     *
+     * Kept apart from the bank row, so an update improving what the bank derives cannot overrule a
+     * lifter who has said they do not want this lift coached (ADR 0009).
+     */
+    suspend fun setProgressionModel(exerciseId: String, model: ProgressionModel?) =
+        database.withTransaction {
+            exercises.setProgressionModel(exerciseId, model?.stored)
+            exercises.forgetEmptyPreference(exerciseId)
+        }
 
     /** Records the standing note on [exerciseId] — "seat notch 3, use the long bar". */
     suspend fun note(exerciseId: String, note: String?) = database.withTransaction {

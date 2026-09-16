@@ -89,6 +89,7 @@ object ExerciseBankDatabaseWriter {
         "category" -> category
         "level" -> level
         "logging_type" -> loggingType
+        "progression_model" -> progressionModel
         "unilateral" -> if (unilateral) 1 else 0
         "source" -> source
         // Nothing ships tombstoned: a tombstone is what happens to a row on a lifter's phone when

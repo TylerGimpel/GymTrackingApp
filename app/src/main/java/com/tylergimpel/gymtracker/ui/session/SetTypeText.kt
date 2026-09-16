@@ -2,6 +2,7 @@ package com.tylergimpel.gymtracker.ui.session
 
 import androidx.annotation.StringRes
 import com.tylergimpel.gymtracker.R
+import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
 
@@ -27,4 +28,17 @@ internal val Side.label: Int
     get() = when (this) {
         Side.LEFT -> R.string.set_side_left
         Side.RIGHT -> R.string.set_side_right
+    }
+
+/**
+ * How a progression model is written for a lifter.
+ *
+ * "Progress by reps, then weight" rather than the stored `double_progression`: a lifter is choosing
+ * what the app does for them, not naming a scheme.
+ */
+@get:StringRes
+internal val ProgressionModel.label: Int
+    get() = when (this) {
+        ProgressionModel.DOUBLE_PROGRESSION -> R.string.progression_double
+        ProgressionModel.NONE -> R.string.progression_none
     }

@@ -20,7 +20,7 @@ interface ExerciseBankExtension {
     /** The schema version to build the asset from. */
     val databaseVersion: Property<Int>
 
-    /** Directory holding `upstream-exercises.json`, `authored-exercises.json` and `cardio-retag.json`. */
+    /** Directory holding `upstream-exercises.json`, `authored-exercises.json` and `bank-patches.json`. */
     val sourceDataDirectory: DirectoryProperty
 
     /** Path inside assets, as Room's `createFromAsset()` will name it. */
@@ -69,7 +69,7 @@ class ExerciseBankPlugin : Plugin<Project> {
                     )
                     upstreamExercises.set(extension.sourceDataDirectory.file("upstream-exercises.json"))
                     authoredExercises.set(extension.sourceDataDirectory.file("authored-exercises.json"))
-                    cardioRetag.set(extension.sourceDataDirectory.file("cardio-retag.json"))
+                    bankPatches.set(extension.sourceDataDirectory.file("bank-patches.json"))
                     aliases.set(extension.sourceDataDirectory.file("aliases.json"))
                     assetPath.set(extension.assetPath)
                     aliasAssetPath.set(extension.aliasAssetPath)

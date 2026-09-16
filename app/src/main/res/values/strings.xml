@@ -21,6 +21,9 @@
     <string name="exercise_name_taken">Something is already called that.</string>
     <string name="exercise_edit">Rename / note</string>
     <string name="exercise_note">Note</string>
+    <string name="exercise_progression_model">Progression</string>
+    <string name="progression_double">Reps, then weight</string>
+    <string name="progression_none">Do not coach this</string>
     <string name="session_title">Session</string>
     <string name="session_finish">Finish</string>
     <string name="session_pick_exercise">Pick an exercise</string>

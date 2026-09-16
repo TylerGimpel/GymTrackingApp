@@ -51,6 +51,7 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionPosition
@@ -384,10 +385,11 @@ private fun NextUp(
 }
 
 /**
- * What the lifter calls this exercise, and what they need to remember about it.
+ * What the lifter calls this exercise, what they need to remember about it, and whether they want
+ * it coached at all.
  *
- * Both live apart from the bank row, so an app update that corrects what the bank ships cannot
- * reach either (ADR 0009).
+ * All three live apart from the bank row, so an app update that corrects what the bank ships cannot
+ * reach any of them (ADR 0009).
  */
 @Composable
 private fun ExerciseDetailsDialog(
@@ -414,6 +416,9 @@ private fun ExerciseDetailsDialog(
                     label = { Text(stringResource(R.string.exercise_note)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                ProgressionModelChooser(details.progressionModel) {
+                    onChange(details.copy(progressionModel = it))
+                }
             }
         },
         confirmButton = {
@@ -423,6 +428,38 @@ private fun ExerciseDetailsDialog(
             TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
         },
     )
+}
+
+/**
+ * How this exercise's recommendation advances, and the lifter's right to say "not this one".
+ *
+ * Offered here rather than buried, because the only value that means anything before the engine
+ * exists is the one that turns it off — a lift somebody does not want coached is their business, and
+ * the app has no way to work that out for itself.
+ */
+@Composable
+private fun ProgressionModelChooser(
+    selected: ProgressionModel,
+    onSelect: (ProgressionModel) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = stringResource(R.string.exercise_progression_model),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ProgressionModel.entries.forEach { model ->
+                FilterChip(
+                    selected = model == selected,
+                    onClick = { onSelect(model) },
+                    label = { Text(stringResource(model.label)) },
+                )
+            }
+        }
+    }
 }
 
 /**

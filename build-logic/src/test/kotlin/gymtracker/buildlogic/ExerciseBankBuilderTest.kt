@@ -1,6 +1,7 @@
 package gymtracker.buildlogic
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,7 +18,7 @@ class ExerciseBankBuilderTest {
         val bank = ExerciseBankBuilder.build(
             upstreamJson = upstream(row(id = "Bench_Press", name = "Bench Press")),
             authoredJson = authored(row(id = "Belt_Squat", name = "Belt Squat")),
-            cardioRetagJson = NO_PATCHES,
+            bankPatchesJson = NO_PATCHES,
             aliasesJson = NO_ALIASES,
         )
 
@@ -109,7 +110,7 @@ class ExerciseBankBuilderTest {
     @Test
     fun `rejects a cardio patch that names no upstream exercise`() {
         val problems = problemsFrom(
-            cardioRetagJson = patches("""{"Ski_Erg": {"equipment": "rower"}}"""),
+            bankPatchesJson = patches("""{"Ski_Erg": {"equipment": "rower"}}"""),
         )
 
         assertTrue(problems.toString(), problems.single().contains("`Ski_Erg`"))
@@ -155,7 +156,7 @@ class ExerciseBankBuilderTest {
                 row(id = "B", name = "Dumbbell Bicep Curl"),
             ),
             authoredJson = "[]",
-            cardioRetagJson = NO_PATCHES,
+            bankPatchesJson = NO_PATCHES,
             aliasesJson = """{"bicep curl": ["Barbell Curl", "Dumbbell Bicep Curl"]}""",
         )
 
@@ -184,7 +185,7 @@ class ExerciseBankBuilderTest {
                 row(id = "Running_Treadmill", name = "Running, Treadmill", extra = mapOf("category" to "cardio", "equipment" to "machine")),
             ),
             authoredJson = "[]",
-            cardioRetagJson = patches(
+            bankPatchesJson = patches(
                 """{"Running_Treadmill": {"equipment": "treadmill", "loggingType": "distance_time"}}""",
             ),
             aliasesJson = NO_ALIASES,
@@ -206,7 +207,7 @@ class ExerciseBankBuilderTest {
                     extra = mapOf("equipment" to "machine", "loggingType" to "assisted"),
                 ),
             ),
-            cardioRetagJson = NO_PATCHES,
+            bankPatchesJson = NO_PATCHES,
             aliasesJson = NO_ALIASES,
         )
 
@@ -240,6 +241,71 @@ class ExerciseBankBuilderTest {
     }
 
     @Test
+    fun `a superseded row is dropped, and its name still finds what replaced it`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = """
+                [
+                  {"id":"Pullups","name":"Pullups","primaryMuscles":["lats"],"secondaryMuscles":[],
+                   "equipment":"body only","category":"strength","level":"beginner"},
+                  {"id":"Weighted_Pull_Ups","name":"Weighted Pull Ups","primaryMuscles":["lats"],
+                   "secondaryMuscles":[],"equipment":"other","category":"strength","level":"beginner"}
+                ]
+            """.trimIndent(),
+            authoredJson = "[]",
+            bankPatchesJson = """{"superseded": {"Weighted_Pull_Ups": "Pullups"}}""",
+            aliasesJson = """{"weighted pull up": "Weighted Pull Ups"}""",
+        )
+
+        // One movement, one row: a lifter cannot split their history by picking the other one.
+        assertEquals(listOf("Pullups"), bank.exercises.map { it.id })
+        // And both the dropped row's own name and the shorthand that named it find the replacement.
+        assertEquals(listOf("Pullups"), bank.aliases.getValue("weighted pull ups"))
+        assertEquals(listOf("Pullups"), bank.aliases.getValue("weighted pull up"))
+    }
+
+    @Test
+    fun `a supersession naming a row that is not there fails the build`() {
+        val problems = assertThrows(ExerciseBankException::class.java) {
+            ExerciseBankBuilder.build(
+                upstreamJson = """
+                    [{"id":"Pullups","name":"Pullups","primaryMuscles":["lats"],
+                      "secondaryMuscles":[],"equipment":"body only","category":"strength",
+                      "level":"beginner"}]
+                """.trimIndent(),
+                authoredJson = "[]",
+                bankPatchesJson = """{"superseded": {"Weighted_Pull_Ups": "Pullups"}}""",
+                aliasesJson = "{}",
+            )
+        }
+
+        // Dropping an exercise silently is the failure this check exists to prevent.
+        assertTrue(problems.message.orEmpty(), problems.message.orEmpty().contains("Weighted_Pull_Ups"))
+    }
+
+    @Test
+    fun `an exercise with a load advances by double progression, and one without is never prescribed`() {
+        val derive = ExerciseBankBuilder::deriveProgressionModel
+
+        // ADR 0004 settles what the engine does for anything with a load.
+        assertEquals("double_progression", derive("weight_reps"))
+        assertEquals("double_progression", derive("bodyweight_reps"))
+        assertEquals("double_progression", derive("assisted"))
+        // A hold and a run are recorded and never prescribed: no load for a recommendation to move.
+        assertEquals("none", derive("time"))
+        assertEquals("none", derive("distance_time"))
+    }
+
+    @Test
+    fun `every logging type in the vocabulary derives a model in the vocabulary`() {
+        Vocabulary.LOGGING_TYPE.forEach { loggingType ->
+            assertTrue(
+                loggingType,
+                ExerciseBankBuilder.deriveProgressionModel(loggingType) in Vocabulary.PROGRESSION_MODEL,
+            )
+        }
+    }
+
+    @Test
     fun `derives unilateral from explicit one-side wording only`() {
         val derive = ExerciseBankBuilder::deriveUnilateral
 
@@ -258,7 +324,7 @@ class ExerciseBankBuilderTest {
             authoredJson = authored(
                 row(id = "Bulgarian_Split_Squat", name = "Bulgarian Split Squat", extra = mapOf("unilateral" to true)),
             ),
-            cardioRetagJson = NO_PATCHES,
+            bankPatchesJson = NO_PATCHES,
             aliasesJson = NO_ALIASES,
         )
 
@@ -270,10 +336,10 @@ class ExerciseBankBuilderTest {
     private fun problemsFrom(
         upstreamJson: String = "[]",
         authoredJson: String = "[]",
-        cardioRetagJson: String = NO_PATCHES,
+        bankPatchesJson: String = NO_PATCHES,
         aliasesJson: String = NO_ALIASES,
     ): List<String> = try {
-        ExerciseBankBuilder.build(upstreamJson, authoredJson, cardioRetagJson, aliasesJson)
+        ExerciseBankBuilder.build(upstreamJson, authoredJson, bankPatchesJson, aliasesJson)
         emptyList()
     } catch (e: ExerciseBankException) {
         e.problems

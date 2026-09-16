@@ -725,6 +725,53 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migratesToProgressionModelsWithNothingPrescribedForWhatIsOnlyRecorded() {
+        helper.createDatabase(SIXTEENTH_DATABASE, 16).use { version16 ->
+            listOf(
+                "'Barbell_Bench', 'Barbell Bench', 'chest', '', 'barbell', 'weight_reps'",
+                "'Plank', 'Plank', 'abdominals', '', 'body only', 'time'",
+                "'Treadmill', 'Treadmill', 'quadriceps', '', 'machine', 'distance_time'",
+            ).forEach { columns ->
+                version16.execSQL(
+                    "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, " +
+                        "equipment, logging_type, mechanic, force, category, level, unilateral, " +
+                        "source, tombstoned) VALUES ($columns, 'compound', 'push', 'strength', " +
+                        "'beginner', 0, 'upstream', 0)",
+                )
+            }
+            version16.execSQL(
+                "INSERT INTO exercise_preference (exercise_id, display_unit) " +
+                    "VALUES ('Barbell_Bench', 'lb')",
+            )
+        }
+
+        val version17 = helper.runMigrationsAndValidate(SIXTEENTH_DATABASE, 17, true, MIGRATION_16_17)
+
+        version17.use { db ->
+            // Anything with a load takes what ADR 0004 settles; anything measured in time or
+            // distance is recorded and never prescribed.
+            db.query("SELECT id, progression_model FROM exercise ORDER BY id").use {
+                it.moveToFirst()
+                assertEquals("Barbell_Bench", it.getString(0))
+                assertEquals("double_progression", it.getString(1))
+                it.moveToNext()
+                assertEquals("Plank", it.getString(0))
+                assertEquals("none", it.getString(1))
+                it.moveToNext()
+                assertEquals("Treadmill", it.getString(0))
+                assertEquals("none", it.getString(1))
+            }
+            // The unit the lifter had already chosen survives, and they have chosen nothing about
+            // coaching yet.
+            db.query("SELECT display_unit, progression_model FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+                assertTrue(it.isNull(1))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -741,5 +788,6 @@ class GymDatabaseMigrationTest {
         const val THIRTEENTH_DATABASE = "gym-migration-test-13.db"
         const val FOURTEENTH_DATABASE = "gym-migration-test-14.db"
         const val FIFTEENTH_DATABASE = "gym-migration-test-15.db"
+        const val SIXTEENTH_DATABASE = "gym-migration-test-16.db"
     }
 }

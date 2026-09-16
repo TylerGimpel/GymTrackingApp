@@ -57,8 +57,9 @@ class ExerciseBankAssetTest {
 
     @Test
     fun assetDatabaseOpensAndCarriesTheWholeBank() = runBlocking {
-        // 876 upstream rows plus the 20 authored ones.
-        assertEquals(896, fromAsset.exerciseDao().count())
+        // 876 upstream rows, less the 3 superseded by a row that records the same movement with an
+        // optional added weight, plus the 20 authored ones.
+        assertEquals(893, fromAsset.exerciseDao().count())
     }
 
     @Test
@@ -78,7 +79,7 @@ class ExerciseBankAssetTest {
             ProfileRepository(fromAsset.profileDao(), WeightUnit.KILOGRAMS),
         ).observeBank().first()
 
-        assertEquals(896, bank.size)
+        assertEquals(893, bank.size)
         assertTrue(bank.all { it.primaryMuscle != null })
         // LoggingType.fromStored throws on anything outside the vocabulary, so reaching here at all
         // means every shipped row parsed.

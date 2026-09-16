@@ -63,7 +63,7 @@ A belt or a plate hung off a lifter whose own body is the load. Optional and usu
 How much of the work a machine did for the lifter. The one measurement in this project where less is better, so it is stored as **Added weight** with the sign reversed: weight taken off the lifter rather than hung on them. That makes "more is progress" true of every exercise by arithmetic, rather than a rule each future reader has to remember to invert (ADR 0004).
 
 **Progression model**:
-How an exercise's recommendation advances over time, including `none` for exercises that are recorded but never prescribed.
+How an exercise's recommendation advances over time, including `none` for exercises that are recorded but never prescribed. Derived by the bank from the **Logging type** — anything with a load advances by the double progression ADR 0004 settles, and a hold or a run is recorded and never prescribed — and overridable per exercise, because a lift somebody does not want coached is their business and the bank cannot know. The lifter's choice lives apart from the bank row, so a **Bank update** improving the derivation cannot overrule it.
 
 **Unilateral**:
 An exercise trained one side at a time. Logged as a single entry by default, expandable to per-side.

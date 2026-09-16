@@ -66,6 +66,15 @@ data class Exercise(
      * stored, so a gym with both kinds of machine still has one continuous progress graph.
      */
     val displayUnit: WeightUnit = WeightUnit.DEFAULT,
+    /**
+     * What the bank derived this exercise advances by, from what it measures.
+     *
+     * The guess, not the answer: [progressionModel] is what anything reading this should ask, since
+     * a lifter who has said otherwise has said it.
+     */
+    val bankProgressionModel: ProgressionModel = ProgressionModel.DOUBLE_PROGRESSION,
+    /** What the lifter chose instead, where they chose anything. */
+    val chosenProgressionModel: ProgressionModel? = null,
     /** What the lifter calls this, where they have renamed it. */
     val userName: String? = null,
     /** A standing note — "seat notch 3, use the long bar" — shown wherever the exercise is used. */
@@ -87,6 +96,15 @@ data class Exercise(
      * renamed it by reading the wrong field.
      */
     val name: String get() = userName ?: bankName
+
+    /**
+     * How this exercise's recommendation advances: the lifter's choice where they made one, and
+     * what the bank derived otherwise.
+     *
+     * Derived rather than stored, so that nothing can prescribe against a model the lifter has
+     * overridden by reading the wrong field — the same move [name] makes for a rename.
+     */
+    val progressionModel: ProgressionModel get() = chosenProgressionModel ?: bankProgressionModel
 
     /** Added by the lifter rather than shipped. Never an update's to modify or remove. */
     val isUserAuthored: Boolean get() = source == ExerciseSource.USER
@@ -111,5 +129,6 @@ data class Exercise(
         displayUnit = chosen.displayUnit,
         userName = chosen.userName,
         note = chosen.note,
+        chosenProgressionModel = chosen.chosenProgressionModel,
     )
 }

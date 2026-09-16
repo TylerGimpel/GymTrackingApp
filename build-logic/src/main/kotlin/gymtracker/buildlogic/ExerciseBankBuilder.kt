@@ -16,6 +16,12 @@ data class BankExercise(
     val category: String,
     val level: String,
     val loggingType: String,
+    /**
+     * How this exercise's recommendation advances, derived from what it measures.
+     *
+     * Filled last, after every patch has settled the logging type it is derived from.
+     */
+    val progressionModel: String = "double_progression",
     val unilateral: Boolean,
     /** `upstream` or `authored` — which source shipped the row, not whether a user created it. */
     val source: String,
@@ -78,7 +84,7 @@ object ExerciseBankBuilder {
     fun build(
         upstreamJson: String,
         authoredJson: String,
-        cardioRetagJson: String,
+        bankPatchesJson: String,
         aliasesJson: String,
     ): ExerciseBank {
         val problems = mutableListOf<String>()
@@ -87,18 +93,89 @@ object ExerciseBankBuilder {
             .mapNotNull { it.toUpstreamExercise(problems) }
         val authored = readRows(authoredJson, "authored-exercises.json", problems)
             .mapNotNull { it.toAuthoredExercise(problems) }
-        val patches = readPatches(cardioRetagJson, problems)
+        val patches = readPatches(bankPatchesJson, problems)
+        val superseded = readSupersessions(bankPatchesJson, upstream, problems)
 
         checkCollisions(upstream, authored, problems)
         val patched = applyPatches(upstream, patches, problems)
+            .filterNot { it.id in superseded }
 
         val exercises = (patched + authored)
+            // Derived here rather than where each row is read, because it follows the logging type
+            // and a patch can still change that: `bank-patches.json` moves rows onto `distance_time`
+            // long after the upstream branch guessed at one.
+            .map { it.copy(progressionModel = deriveProgressionModel(it.loggingType)) }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-        val aliases = readAliases(aliasesJson, exercises, problems)
+        // A superseded row's own name becomes shorthand for what replaced it, and any shorthand
+        // that already named it follows the same redirect: the exercise was merged, not lost.
+        val redirects = supersessionAliases(superseded, upstream, exercises)
+        val aliases = redirects + readAliases(aliasesJson, exercises, redirects, problems)
 
         if (problems.isNotEmpty()) throw ExerciseBankException(problems)
 
         return ExerciseBank(exercises, aliases)
+    }
+
+    /**
+     * Reads which rows a better one already covers, and what covers them.
+     *
+     * Upstream ships a separate weighted twin for movements this app records with an optional added
+     * weight — a weighted pull-up beside a pull-up — and two rows for one movement let a lifter
+     * split their history in half by picking whichever matched the day they wore a belt. Neither
+     * half then knows about the other, so progression reads both as thinner than the training was.
+     *
+     * Both ends are checked. A supersession naming a row that is not there, or replacing one with
+     * something that is not in the bank, would drop an exercise and say nothing.
+     */
+    private fun readSupersessions(
+        json: String,
+        upstream: List<BankExercise>,
+        problems: MutableList<String>,
+    ): Map<String, String> {
+        val superseded = JsonParser.parseString(json)
+            .takeIf { it.isJsonObject }
+            ?.asJsonObject
+            ?.getAsJsonObject("superseded")
+            ?: return emptyMap()
+
+        val byId = upstream.associateBy { it.id }
+        return superseded.entrySet().mapNotNull { (id, replacement) ->
+            val replacementId = replacement.stringOrNull()
+            when {
+                id !in byId -> {
+                    problems += "bank-patches.json: `$id` is superseded but is not an upstream exercise"
+                    null
+                }
+
+                replacementId == null || replacementId !in byId -> {
+                    problems += "bank-patches.json: `$id` is superseded by `$replacementId`, which is not in the bank"
+                    null
+                }
+
+                else -> id to replacementId
+            }
+        }.toMap()
+    }
+
+    /**
+     * The shorthand a dropped row leaves behind: its own name, pointing at what replaced it.
+     *
+     * A lifter who knows the exercise as "Weighted Pull Ups" types that, and the row is no longer
+     * there to find. Without this the supersession would read to them as the app having lost an
+     * exercise rather than having merged one.
+     */
+    private fun supersessionAliases(
+        superseded: Map<String, String>,
+        upstream: List<BankExercise>,
+        shipped: List<BankExercise>,
+    ): Map<String, List<String>> {
+        val byId = upstream.associateBy { it.id }
+        val shippedNames = shipped.associateBy { it.id }
+        return superseded.mapNotNull { (id, replacementId) ->
+            val dropped = byId[id] ?: return@mapNotNull null
+            val replacement = shippedNames[replacementId] ?: return@mapNotNull null
+            dropped.name.lowercase() to listOf(replacement.name)
+        }.toMap()
     }
 
     /**
@@ -110,6 +187,7 @@ object ExerciseBankBuilder {
     private fun readAliases(
         json: String,
         exercises: List<BankExercise>,
+        redirects: Map<String, List<String>>,
         problems: MutableList<String>,
     ): Map<String, List<String>> {
         val parsed = JsonParser.parseString(json)
@@ -122,13 +200,16 @@ object ExerciseBankBuilder {
 
         return parsed.asJsonObject.entrySet().associate { (alias, value) ->
             val entries = if (value.isJsonArray) value.asJsonArray.toList() else listOf(value)
-            val targets = entries.mapNotNull { entry ->
+            val named = entries.mapNotNull { entry ->
                 entry.stringOrNull().also {
                     // Dropping a malformed target would ship the alias one exercise short and say
                     // nothing, which is the same silent failure the whole check exists to stop.
                     if (it == null) problems += "aliases.json: `$alias` names `$entry`, which is not a name"
                 }
             }
+            // A shorthand that named a row since superseded points at what replaced it, rather
+            // than failing the build for naming something the bank deliberately stopped shipping.
+            val targets = named.flatMap { redirects[it.lowercase()] ?: listOf(it) }.distinct()
             if (targets.isEmpty() && entries.isEmpty()) {
                 problems += "aliases.json: `$alias` names no exercise at all"
             }
@@ -161,15 +242,20 @@ object ExerciseBankBuilder {
         }
     }
 
+    /**
+     * Reads the re-tagging half of the corrections file.
+     *
+     * Either half may be absent — a file that only supersedes rows re-tags none — but a file with
+     * neither says nothing at all, which is far more likely to be a malformed file than an empty
+     * intention, and would otherwise apply no corrections and report nothing.
+     */
     private fun readPatches(json: String, problems: MutableList<String>): Map<String, JsonObject> {
-        val patches = JsonParser.parseString(json)
-            .takeIf { it.isJsonObject }
-            ?.asJsonObject
-            ?.getAsJsonObject("patches")
-        if (patches == null) {
-            problems += "cardio-retag.json: expected an object with a `patches` member"
+        val corrections = JsonParser.parseString(json).takeIf { it.isJsonObject }?.asJsonObject
+        if (corrections == null || !corrections.has("patches") && !corrections.has("superseded")) {
+            problems += "bank-patches.json: expected an object with a `patches` or `superseded` member"
             return emptyMap()
         }
+        val patches = corrections.getAsJsonObject("patches") ?: return emptyMap()
         return patches.entrySet().associate { (id, value) -> id to value.asJsonObject }
     }
 
@@ -210,7 +296,7 @@ object ExerciseBankBuilder {
     ): List<BankExercise> {
         val byId = upstream.associateBy { it.id }
         patches.keys.filterNot(byId::containsKey).forEach {
-            problems += "cardio-retag.json: patch target `$it` is not an upstream exercise"
+            problems += "bank-patches.json: patch target `$it` is not an upstream exercise"
         }
         return upstream.map { row ->
             val patch = patches[row.id] ?: return@map row
@@ -230,7 +316,7 @@ object ExerciseBankBuilder {
         problems: MutableList<String>,
     ): String? = string(field)?.also {
         if (it !in allowed) {
-            problems += "cardio-retag.json: `$id` sets `$field` to `$it`, which is outside the closed vocabulary"
+            problems += "bank-patches.json: `$id` sets `$field` to `$it`, which is outside the closed vocabulary"
         }
     }
 
@@ -240,7 +326,7 @@ object ExerciseBankBuilder {
      * What a set of this exercise records, derived from category, force and equipment.
      *
      * Upstream carries no such field, so it has to come from somewhere. The cardio rows are patched
-     * by `cardio-retag.json` rather than relying on the `cardio` branch here, which is why that
+     * by `bank-patches.json` rather than relying on the `cardio` branch here, which is why that
      * branch almost never fires; it is kept so that a future untagged cardio row still lands
      * somewhere sensible rather than being logged as weight and reps.
      *
@@ -260,6 +346,20 @@ object ExerciseBankBuilder {
         category == "cardio" -> "distance_time"
         equipment == null || equipment == "body only" -> "bodyweight_reps"
         else -> "weight_reps"
+    }
+
+    /**
+     * What an exercise that measures [loggingType] advances by.
+     *
+     * ADR 0004 settles what the engine does — double progression inside a rep range — so that is
+     * what anything with a load advances by. An exercise measured in time or distance is recorded
+     * and never prescribed: there is no load for a recommendation to move.
+     *
+     * A guess from the only thing the bank knows, and the lifter overrides it per exercise.
+     */
+    internal fun deriveProgressionModel(loggingType: String): String = when (loggingType) {
+        "time", "distance_time" -> "none"
+        else -> "double_progression"
     }
 
     internal fun deriveUnilateral(name: String): Boolean {

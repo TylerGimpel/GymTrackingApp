@@ -427,6 +427,34 @@ internal val MIGRATION_15_16 = object : Migration(15, 16) {
     }
 }
 
+/**
+ * Version 17 gives an exercise a progression model, and the lifter somewhere to overrule it.
+ *
+ * The last of the five fields spec #24 adds to an exercise. Two columns, because they answer
+ * different questions: what the bank derived from what the exercise measures, and what the lifter
+ * decided instead. The second lives in `exercise_preference` for the reason ADR 0009 gives — an
+ * update writes bank rows and never touches that table, so an improvement to the derivation cannot
+ * overrule somebody who said they do not want a lift coached.
+ *
+ * Every existing row takes the model its logging type derives, which is what the shipped bank would
+ * have given it: nothing prescribed for a stretch, a hold or a treadmill, and double progression for
+ * anything with a load (ADR 0004). The default on the `ALTER` matches the entity, because Room
+ * compares defaults when it validates a migrated schema.
+ */
+internal val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `exercise` ADD COLUMN `progression_model` TEXT NOT NULL " +
+                "DEFAULT '" + ExerciseEntity.DEFAULT_PROGRESSION_MODEL + "'",
+        )
+        db.execSQL(
+            "UPDATE `exercise` SET `progression_model` = 'none' " +
+                "WHERE `logging_type` IN ('time', 'distance_time')",
+        )
+        db.execSQL("ALTER TABLE `exercise_preference` ADD COLUMN `progression_model` TEXT")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -443,6 +471,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_13_14,
     MIGRATION_14_15,
     MIGRATION_15_16,
+    MIGRATION_16_17,
 )
 
 /**

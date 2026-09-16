@@ -44,4 +44,6 @@ object Vocabulary {
     val LEVEL = setOf("beginner", "intermediate", "expert")
 
     val LOGGING_TYPE = setOf("weight_reps", "bodyweight_reps", "assisted", "time", "distance_time")
+
+    val PROGRESSION_MODEL = setOf("double_progression", "none")
 }
