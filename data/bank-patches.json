@@ -1,5 +1,5 @@
 {
-  "_comment": "Patches applied to existing free-exercise-db cardio rows at build time. The dataset tags every cardio machine as the generic 'machine', which cannot drive the gym equipment checklist - a user who has a rower but no treadmill is indistinguishable. These patches assign the six cardio equipment values and the logging type. Row IDs are from the upstream dataset and are stable.",
+  "_comment": "Corrections applied to free-exercise-db rows at build time, in two kinds. `patches` re-tag a row: the dataset marks every cardio machine as the generic 'machine', which cannot drive the gym equipment checklist - a user who has a rower but no treadmill is indistinguishable - so these assign the six cardio equipment values and the logging type. `superseded` drop a row that a better one already covers, naming its replacement: upstream ships a separate weighted twin for movements this app records with an optional added weight, and two rows for one movement split a lifter's history in half. Row IDs are from the upstream dataset and are stable.",
   "patches": {
     "Bicycling": {
       "equipment": "outdoor",
@@ -56,6 +56,14 @@
     "Rope_Jumping": {
       "equipment": "other",
       "loggingType": "time"
+    },
+    "Band_Assisted_Pull-Up": {
+      "loggingType": "bodyweight_reps"
     }
+  },
+  "superseded": {
+    "Weighted_Pull_Ups": "Pullups",
+    "Weighted_Bench_Dip": "Bench_Dips",
+    "Weighted_Crunches": "Crunches"
   }
 }

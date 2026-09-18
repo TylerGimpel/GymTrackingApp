@@ -9,7 +9,7 @@
     "Fan Bike"
   ],
   "assisted pull up": [
-    "Band Assisted Pull-Up"
+    "Assisted Pull-Up Machine"
   ],
   "back squat": [
     "Barbell Squat"
@@ -424,5 +424,8 @@
   ],
   "zottman curl": [
     "Zottman Curl"
+  ],
+  "assisted dip": [
+    "Assisted Dip Machine"
   ]
 }

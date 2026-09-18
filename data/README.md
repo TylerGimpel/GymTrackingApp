@@ -10,7 +10,7 @@ None of these files is read at runtime and nothing here is fetched over a networ
 |---|---|
 | `upstream-exercises.json` | **876 upstream rows**, structured fields only |
 | `authored-exercises.json` | **20 new exercises** the upstream dataset does not contain |
-| `cardio-retag.json` | **14 patches** to existing upstream cardio rows |
+| `bank-patches.json` | **15 patches** re-tagging existing upstream rows, and **3 supersessions** |
 | `aliases.json` | **133 search aliases** covering 160 alias→exercise pairs |
 
 Upstream is [`yuhonas/free-exercise-db`](https://github.com/yuhonas/free-exercise-db) — Unlicense, 876 rows. **Take its structured fields only.** Its `instructions` and `images` are excluded on provenance grounds and must not be reintroduced; see `docs/adr/0002-exercise-bank-source-and-omissions.md`.
@@ -70,5 +70,9 @@ The shipped SQLite file is generated from **Room's own exported schema**, never 
 ## Two things worth knowing when editing
 
 **`assisted` inverts progression.** `Assisted Pull-Up Machine` and `Assisted Dip Machine` are the only rows carrying it: less weight means more progress, so every comparison — beat, missed, personal best, graph direction — flips. Getting it wrong means confidently coaching someone to get weaker.
+
+**One movement, one row.** Upstream ships a separate weighted twin for movements this app records with an optional **added weight** — `Weighted_Pull_Ups` beside `Pullups`, `Weighted_Bench_Dip` beside `Bench_Dips`, `Weighted_Crunches` beside `Crunches`. Two rows for one movement let a lifter split their history in half by picking whichever matched the day they wore a belt, and neither half then knows about the other. The `superseded` section of `bank-patches.json` drops the twin and names its replacement; the dropped row's own name stays searchable as shorthand for the replacement, and any existing alias naming it redirects there too. **The rule:** where upstream ships `X` and `Weighted X`, and `X` is `bodyweight_reps`, `Weighted X` is superseded. On a phone that already has the dropped row, a **bank update** tombstones it if anything has been logged against it, so no history is lost.
+
+**A band's assistance is not a number.** `Band_Assisted_Pull-Up` is patched to `bodyweight_reps` rather than `assisted`. `assisted` records how much help the machine was set to, and a band gives no such figure; leaving it `weight_reps` would have demanded a weight nobody lifted. As `bodyweight_reps` it records reps with the added-weight field left empty, which is what actually happened. The two rows that genuinely record assistance are the authored `Assisted Pull-Up Machine` and `Assisted Dip Machine`, and the `assisted pull up` / `assisted dip` shorthands point at those.
 
 **`unilateral` changes logging, not identity.** Five rows carry it. A unilateral exercise logs a single entry by default and expands to per-side on demand; per the set-identity rule, both still count as **one set**.
