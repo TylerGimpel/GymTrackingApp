@@ -16,7 +16,8 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- The countdown and the alert. Runtime-granted on Android 13+, and asked for. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- The alert channel vibrates, which is how it reaches a pocket in a loud gym. -->
+    <!-- The alert channel vibrates, where the phone is set to vibrate. It never overrules
+         that setting: on silent it stays silent (ADR 0011). -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
