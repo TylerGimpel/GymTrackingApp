@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.domain.LayoffDecay
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.warmUpsFor
 import com.tylergimpel.gymtracker.domain.TrainingHistory
 import com.tylergimpel.gymtracker.domain.recommendNextSet
 import com.tylergimpel.gymtracker.domain.restFor
@@ -69,8 +70,64 @@ class RecommendationRepository(
                 progress = progress,
                 calibration = CalibrationRamp.of(exercise, ROUNDING),
                 setsToday = open?.let { sessions.setsLoggedInSession(exercise.id, it) } ?: 0,
-            )?.let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) }
+            )
+                ?.let { warmUpFirst(it, exercise, open) }
+                ?.let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) }
         }
+    }
+
+    /**
+     * The next rung of the ramp where one is still owed, and what was asked for otherwise.
+     *
+     * The ramp is generated from the weight the set is climbing to, so it arrives with whatever
+     * the engine settled on rather than from a second opinion about the working weight. How much
+     * of it is left is counted from the log, like everything else here — a lifter who logged
+     * their own warm-ups has climbed the ramp with them.
+     *
+     * Nothing to warm up for while the app is still calibrating: the ramp *is* the session then.
+     */
+    private suspend fun warmUpFirst(
+        recommendation: Recommendation,
+        exercise: Exercise,
+        open: Long?,
+    ): Recommendation {
+        val load = (recommendation as? Recommendation.Prescribing)?.prescription?.load
+            ?: return recommendation
+        val session = open ?: return recommendation
+
+        // A ramp leads up to the work and is over once the work starts. Offering one to a
+        // lifter who is three sets in would be the app asking them to warm up for something they
+        // are in the middle of.
+        if (sessions.setsOfTypeInSession(exercise.id, session, SetType.WORKING.stored) > 0) {
+            return recommendation
+        }
+
+        val ramp = warmUpsFor(
+            workingLoad = load,
+            exercise = exercise,
+            alreadyWorkedTheMuscle = alreadyWarmed(exercise, session),
+            rounding = ROUNDING,
+        )
+        val done = sessions.setsOfTypeInSession(exercise.id, session, SetType.WARMUP.stored)
+        return ramp.getOrNull(done)?.let(Recommendation::WarmingUp) ?: recommendation
+    }
+
+    /**
+     * How many exercises earlier in this session already trained the same primary muscle.
+     *
+     * A ramp belongs to the muscle rather than to the exercise, so the third chest movement of an
+     * evening has had its warming-up done for it by the first two.
+     */
+    private suspend fun alreadyWarmed(exercise: Exercise, session: Long): Int {
+        val muscles = exercise.primaryMuscles.toSet()
+        if (muscles.isEmpty()) return 0
+
+        return sessions.exercisesTrainedIn(session)
+            .filterNot { it == exercise.id }
+            .distinct()
+            .count { other ->
+                exercises.byId(other)?.toDomain()?.primaryMuscles.orEmpty().any { it in muscles }
+            }
     }
 
     /**

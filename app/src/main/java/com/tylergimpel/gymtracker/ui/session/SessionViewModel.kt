@@ -220,6 +220,15 @@ data class SessionUiState(
     val editingExercise: ExerciseDetails? = null,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
+    /**
+     * Whether this exercise is starting without a ramp because the muscle is already warm.
+     *
+     * Said out loud for one reason: a lifter who got three warm-ups on their first chest movement
+     * and none on their third needs the second answer to read as deliberate rather than as the
+     * app having forgotten. Only while they are starting the exercise — once the sets are going,
+     * saying it again is noise.
+     */
+    val muscleAlreadyWarm: Boolean = false,
     /** Which rung of the wheel the controls are acting on; null is the set about to be done. */
     val focusedSet: Int? = null,
     /** The rest running, if one is. */
@@ -350,6 +359,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 skipping = screen.skipping,
                 editingExercise = screen.editingExercise,
                 editingRest = screen.editingRest,
+                muscleAlreadyWarm = screen.selected?.let { chosen ->
+                    recommendation !is Recommendation.WarmingUp &&
+                        logged?.setsOf(chosen).isNullOrEmpty() &&
+                        logged?.exercises.orEmpty().any { performed ->
+                            performed.exercise.id != chosen.id &&
+                                performed.exercise.primaryMuscles.any { it in chosen.primaryMuscles }
+                        }
+                } ?: false,
                 focusedSet = screen.focusedSet,
                 resting = screen.resting,
                 pace = screen.selected?.let { chosen ->

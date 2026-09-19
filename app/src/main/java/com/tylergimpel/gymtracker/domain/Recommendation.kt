@@ -65,6 +65,17 @@ sealed interface Recommendation {
     ) : Recommendation
 
     /**
+     * A rung of the ramp up to the working weight.
+     *
+     * Not the work: it earns no **Volume** and asks for a **Plain rep count**, because a warm-up
+     * is not progressed and has no top to reach. The screen shows it without a band for the same
+     * reason — a range on a warm-up would invite a lifter to chase it.
+     */
+    data class WarmingUp(override val prescription: Prescription) : Recommendation {
+        override val setType: SetType get() = SetType.WARMUP
+    }
+
+    /**
      * The same weight as last time, and a line asking for less of it.
      *
      * Three sessions short of a lift is past what a lighter bar fixes — the weight has already
@@ -113,6 +124,7 @@ sealed interface Recommendation {
  * A [Recommendation.Stopped] carries nothing, rest included: there is no set to rest after.
  */
 fun Recommendation.resting(rest: Duration?): Recommendation = when (this) {
+    is Recommendation.WarmingUp -> copy(prescription = prescription.copy(rest = rest))
     is Recommendation.Prescribing -> copy(prescription = prescription.copy(rest = rest))
     is Recommendation.CuttingVolume -> copy(prescription = prescription.copy(rest = rest))
     is Recommendation.Calibrating -> copy(prescription = prescription.copy(rest = rest))

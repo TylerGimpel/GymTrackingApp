@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetOutcome
 import com.tylergimpel.gymtracker.domain.SetType
@@ -380,6 +381,71 @@ class RecommendationPersistenceTest {
         }
     }
 
+
+    @Test
+    fun aWorkingWeightWellAboveTheBarIsRampedUpTo() = runBlocking {
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("100", "8")) }
+
+        // An open session with nothing in it yet, which is where a lifter starts an exercise.
+        val sessions = train("2026-09-16T18:00", finish = false) { startSession(SessionPlan(emptyList())) }
+        val first = recommendations.nextSet(exercise(BENCH))!!
+
+        // The first thing asked for is a rung rather than the work: 100 kg is five bars' worth,
+        // and nobody should be working that out at the rack.
+        assertTrue(first is Recommendation.WarmingUp)
+        assertEquals(SetType.WARMUP, first.setType)
+        assertTrue(first.prescription.load!!.value < 100.0)
+
+        // Logging it moves up the ramp rather than repeating it.
+        sessions.logSet(BENCH, SetDraft().showing(first), prescription = first.prescription)
+        val second = recommendations.nextSet(exercise(BENCH))!!
+        assertTrue(second is Recommendation.WarmingUp)
+        assertTrue(second.prescription.load!!.value > first.prescription.load!!.value)
+    }
+
+    @Test
+    fun aGeneratedWarmUpIsRecordedAsOneAndEarnsNoVolume() = runBlocking {
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("100", "8")) }
+
+        val sessions = train("2026-09-16T18:00", finish = false) { startSession(SessionPlan(emptyList())) }
+        val ramp = recommendations.nextSet(exercise(BENCH))!!
+        sessions.logSet(BENCH, SetDraft().showing(ramp), prescription = ramp.prescription)
+
+        val logged = sessions.observeActiveSession().first()!!
+        val performed = sessions.observeSession(logged.id).first()!!.exercises
+        assertEquals(SetType.WARMUP, performed.single().sets.single().type)
+        // The numbers a lifter reads have to reflect the work that counted.
+        assertEquals(emptyMap<String, Double>(), volumeByMuscle(performed))
+    }
+
+    @Test
+    fun aMuscleTheSessionAlreadyWarmedGetsAShorterRamp() = runBlocking {
+        // Two chest movements with history, so both would ramp on their own.
+        train("2026-09-14T18:00") {
+            logSet(BENCH, SetDraft("100", "8"))
+            logSet(INCLINE, SetDraft("80", "8"))
+        }
+
+        val sessions = train("2026-09-16T18:00", finish = false) { startSession(SessionPlan(emptyList())) }
+        val cold = recommendations.nextSet(exercise(BENCH))!!
+        assertTrue(cold is Recommendation.WarmingUp)
+
+        // Train the first one, and the second movement of the same muscle needs less of a ramp:
+        // a warm-up belongs to the muscle rather than to the exercise.
+        sessions.logSet(BENCH, SetDraft("100", "8"))
+
+        var rungs = 0
+        while (rungs < RAMP_CAP) {
+            val next = recommendations.nextSet(exercise(INCLINE))!!
+            if (next !is Recommendation.WarmingUp) break
+            sessions.logSet(INCLINE, SetDraft().showing(next), prescription = next.prescription)
+            rungs++
+        }
+
+        // 80 kg is four bars' worth and would ramp in three; the chest being warm takes one off.
+        assertEquals(2, rungs)
+    }
+
     @Test
     fun whatTheAppWorkedOutSurvivesABankUpdate() = runBlocking {
         train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
@@ -461,6 +527,10 @@ class RecommendationPersistenceTest {
         const val TEST_DATABASE = "recommendation-persistence-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val SQUAT = "Barbell_Squat"
+        const val INCLINE = "Barbell_Incline_Bench_Press_-_Medium_Grip"
+
+        /** Enough to notice a ramp that will not end, rather than hang the suite on one. */
+        const val RAMP_CAP = 8
         const val ASSISTED_PULL_UP = "Assisted_Pull_Up_Machine"
         const val ASSISTED_DIP = "Assisted_Dip_Machine"
 

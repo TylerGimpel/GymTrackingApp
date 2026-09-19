@@ -111,6 +111,40 @@ interface SessionDao {
     @Query("UPDATE superset_group SET auto_jump = :autoJump WHERE id = :supersetId")
     suspend fun setAutoJump(supersetId: Long, autoJump: Boolean)
 
+    /**
+     * How many sets of one type have been logged against one exercise in one session.
+     *
+     * What tells the ramp how far up it the lifter has got. Sets rather than rows, so a per-side
+     * warm-up counts once (ADR 0003).
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT set_entry.session_exercise_id, set_entry.set_index
+            FROM set_entry
+            JOIN session_exercise ON session_exercise.id = set_entry.session_exercise_id
+            WHERE session_exercise.exercise_id = :exerciseId
+              AND session_exercise.session_id = :sessionId
+              AND set_entry.type = :type
+        )
+        """,
+    )
+    suspend fun setsOfTypeInSession(exerciseId: String, sessionId: Long, type: String): Int
+
+    /**
+     * Which exercises have been trained in one session, in the order they were performed.
+     *
+     * What answers "is this muscle already warm": a ramp belongs to the muscle rather than to the
+     * exercise, so what came earlier in the evening decides how much of one is left to do.
+     */
+    @Query(
+        """
+        SELECT exercise_id FROM session_exercise
+        WHERE session_id = :sessionId ORDER BY order_index
+        """,
+    )
+    suspend fun exercisesTrainedIn(sessionId: Long): List<String>
+
     /** The superset an exercise is part of in one session, if it is in one. */
     @Query(
         """

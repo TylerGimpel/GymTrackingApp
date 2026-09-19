@@ -275,6 +275,15 @@ fun SessionScreen(
                         onFocus = { onFocusSet(it.takeIf { index -> index < state.wheel.lastIndex }) },
                         modifier = Modifier.height(WHEEL_HEIGHT),
                     )
+                    // Why there is no ramp on this one, at the moment a lifter would wonder.
+                    if (state.muscleAlreadyWarm) {
+                        Text(
+                            text = stringResource(R.string.wheel_already_warm),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
                     WheelFooting(state, onEndRest)
                     SetEntryControls(
                         exercise = selected,
@@ -724,13 +733,24 @@ internal fun NextSet(
     val repRange = when (recommendation) {
         is Recommendation.Prescribing -> recommendation.repRange
         is Recommendation.CuttingVolume -> recommendation.repRange
-        is Recommendation.Calibrating, Recommendation.Stopped -> null
+        // Neither a ramp rung nor a set the app is guessing at is progressed, so neither has a
+        // top to reach — and a band on one would invite a lifter to chase it.
+        is Recommendation.WarmingUp, is Recommendation.Calibrating, Recommendation.Stopped -> null
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (recommendation is Recommendation.Calibrating) {
+        // What kind of set this is, where it is not the ordinary one. A lifter looking at a
+        // light first set needs to know the app meant it.
+        val kind = when (recommendation) {
+            is Recommendation.Calibrating -> R.string.session_calibrating
+            is Recommendation.WarmingUp -> R.string.set_type_warmup
+            is Recommendation.Prescribing, is Recommendation.CuttingVolume,
+            Recommendation.Stopped,
+            -> null
+        }
+        kind?.let {
             Text(
-                text = stringResource(R.string.session_calibrating),
+                text = stringResource(it),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -789,7 +809,8 @@ internal fun NextSet(
             // That there is no number because the app has stopped guessing, rather than because
             // it has nothing to say about this lift at all.
             Recommendation.Stopped -> R.string.session_stopped
-            is Recommendation.Prescribing -> null
+            // A rung of a ramp says what it is above and needs no explaining under.
+            is Recommendation.WarmingUp, is Recommendation.Prescribing -> null
         }
         line?.let {
             Text(

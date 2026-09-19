@@ -103,6 +103,11 @@ interface ExerciseDao {
     )
     suspend fun forgetEmptyPreference(exerciseId: String)
 
+    /** One exercise and whatever the lifter has decided about it. */
+    @Transaction
+    @Query("SELECT * FROM exercise WHERE id = :exerciseId")
+    suspend fun byId(exerciseId: String): ExerciseWithPreference?
+
     /** What the app has worked out about an exercise, or null where it has nothing yet. */
     @Query("SELECT * FROM exercise_progress WHERE exercise_id = :exerciseId")
     suspend fun progress(exerciseId: String): ExerciseProgressEntity?
