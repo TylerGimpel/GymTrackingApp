@@ -102,6 +102,11 @@ The list of exercises a session was supposed to contain, copied from its routine
 An exercise a session's plan asked for and the session did not contain. Deliberately not a **Skip**, which is a routine *day* dealt with on purpose: this is what quietly did not happen, and counting it across recent sessions is the signal swap and dislike read.
 _Avoid_: skipped exercise, which borrows a word that already means something else here.
 
+**Avoided**:
+An exercise the recent sessions that asked for it kept not containing — counted from **Unperformed** over a window of the sessions that planned it, so one trained every week and one trained every third are held to the same standard.
+
+An observation and never an action. The app notices and the lifter decides: people skip squats because squats are hard rather than because they dislike them, and inferring a **Dislike** from avoidance would quietly strip the most valuable work out of a programme. Every threshold in it is an invented, tuneable judgement call.
+
 **Revision**:
 A change to which days are in the active routine, or to their order. Revising ends the current cycle and starts a new one; it can never affect logged history. Renaming a day, or editing the routine's goal, cadence, equipment or rep preference, is not a revision and leaves the cycle alone — see `docs/adr/0006-routines-are-not-versioned.md`.
 
@@ -146,6 +151,13 @@ Forming a superset from neighbouring exercises, and breaking one up. Both are st
 **Prescription**:
 What the app tells the user to do for a given set — weight, reps and rest, where the reps of a working set are a rep range rather than a single count. Recorded alongside what they actually did, which is the only way overriding a recommendation and falling short of one can ever be told apart: they are identical in a log that holds only the actual, and they want opposite responses. A set answers its prescription as **followed**, **overridden** — a different weight, which is a decision — or **fell short**, the weight asked for and fewer reps than it asked for.
 
+**Rest**:
+How long to wait after a set, and the third thing a **Prescription** carries. Derived per *set* rather than per exercise, because what governs it is what the set was: a ramp rung rests briefly, heavy low-rep work rests longest, endurance work least, and in between it goes by how much of the lifter the movement asks for.
+
+Three answers in order of who gets the last word. A **Superset** member has none of its own — the point of alternating is not stopping, so the rest belongs to the group and is taken once the group has come round. Otherwise the lifter's own standing answer for the exercise wins if they gave one, and the derived answer stands if they did not. A rest set for one set only says nothing about the next.
+
+Every number in the derivation is an invented, tuneable judgement call.
+
 **Bodyweight entry**:
 What the lifter weighed, and when they weighed it. Profile data rather than training: it sits on the same calendar as the sessions and belongs to none of them, contributes nothing to **Volume** and is never a **Set** — it carries no session, no exercise and no set index, so there is nothing for a volume or set query to reach rather than something to filter out. Stored in canonical kilograms like every other weight, and read in the lifter's **Preferred unit**.
 
@@ -177,6 +189,14 @@ The mode the app is in when it has no useful anchor for an exercise — a first 
 The short climb a first session makes to find a working weight, rather than predicting one. Starts at a **seed** chosen from what the exercise is loaded with — an empty bar, a light dumbbell, a low pin — and steps up until the lifter stops, biased low throughout and capped so session one does not become forty minutes. Every rung is a **Calibration set**, and each is harder than the last: more weight on a bar, less help on an assisted machine.
 
 The seed is the only part of cold start a model does: measuring what somebody can lift is several times more precise than estimating it and costs one session, so the estimate's job is to shorten the ramp rather than to produce the answer (`docs/research/cold-start-weights.md`).
+
+**Warm-up ramp**:
+The climb up to a working weight, as distinct from a **Calibration ramp**, which climbs to find out what that weight is. Rungs are **Warm-up sets** and count toward no volume.
+
+**Belongs to the muscle rather than to the exercise.** The third chest movement of an evening has had its warming-up done for it by the first two, so the ramp shortens by what came earlier in the session, and a light or single-joint movement gets fewer rungs than a heavy compound. Once the working sets have started the ramp is over: offering one to a lifter three sets in is the app asking them to warm up for something they are in the middle of.
+
+**Layoff**:
+Time away from one exercise, and what it does to the **Anchor**. The estimate decays because it has stopped being informative, not because the lifter has become fragile — the research is explicit that pre-break strength returns within weeks — so the number that matters is the one past which the app stops prescribing from it and goes back to **Calibrating**. Tracked per exercise, with a grace period, a modest rate after it, and every number injected rather than hard-coded, because no usable decay curve exists to copy.
 
 **Prescribing**:
 The mode the app is in when real history supports the recommendation.
