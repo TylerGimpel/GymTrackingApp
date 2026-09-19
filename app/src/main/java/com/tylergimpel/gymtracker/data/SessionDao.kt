@@ -145,6 +145,15 @@ interface SessionDao {
     )
     suspend fun exercisesTrainedIn(sessionId: Long): List<String>
 
+    /**
+     * Every exercise anything has ever been logged against.
+     *
+     * What puts a swap candidate the lifter has done before at the top of the list: those need
+     * no calibrating, so switching to one costs a walk across the gym and nothing else.
+     */
+    @Query("SELECT DISTINCT exercise_id FROM session_exercise")
+    suspend fun exercisesEverTrained(): List<String>
+
     /** The superset an exercise is part of in one session, if it is in one. */
     @Query(
         """

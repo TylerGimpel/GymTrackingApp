@@ -35,6 +35,7 @@ import com.tylergimpel.gymtracker.domain.SessionPace
 import com.tylergimpel.gymtracker.domain.afterLogging
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.domain.swapCandidatesFor
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.domain.asTextIn
@@ -49,6 +50,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -160,6 +162,13 @@ private data class ScreenState(
     val refiling: Refiling? = null,
     val skipping: RoutineDay? = null,
     val editingExercise: ExerciseDetails? = null,
+    /**
+     * What to train instead, while the lifter is looking for something else to do.
+     *
+     * Null when the sheet is closed. Empty when it is open and the app has nothing to suggest,
+     * which is a real answer and one the sheet says out loud rather than looking broken.
+     */
+    val swapCandidates: List<Exercise>? = null,
 )
 
 data class SessionUiState(
@@ -225,6 +234,8 @@ data class SessionUiState(
     val skipping: RoutineDay? = null,
     /** The name and note being edited on the selected exercise, if they are. */
     val editingExercise: ExerciseDetails? = null,
+    /** What to train instead, while the lifter is looking. Null while the sheet is closed. */
+    val swapCandidates: List<Exercise>? = null,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
     /**
@@ -384,6 +395,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 refiling = screen.refiling,
                 skipping = screen.skipping,
                 editingExercise = screen.editingExercise,
+                swapCandidates = screen.swapCandidates,
                 editingRest = screen.editingRest,
                 muscleAlreadyWarm = screen.selected?.let { chosen ->
                     recommendation !is Recommendation.WarmingUp &&
@@ -779,6 +791,41 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
         }
+    }
+
+    /**
+     * Opens the question of training something else, because the machine is busy.
+     *
+     * A **Swap** is for this session only and nothing about it is written down: the session's
+     * plan still records what the evening was for, so the exercise that got skipped reads as
+     * **Unperformed** rather than absent. Making a substitution permanent is a **Revision**,
+     * which belongs to the routine rather than here.
+     */
+    fun startSwapping() {
+        val replacing = screen.value.selected ?: return
+        viewModelScope.launch {
+            val candidates = swapCandidatesFor(
+                replacing = replacing,
+                bank = exercises.observeBank().first(),
+                equipment = state.value.routine?.routine?.equipment.orEmpty(),
+                trainedBefore = database.sessionDao().exercisesEverTrained().toSet(),
+            )
+            screen.update { it.copy(swapCandidates = candidates) }
+        }
+    }
+
+    fun cancelSwapping() = screen.update { it.copy(swapCandidates = null) }
+
+    /**
+     * Trains [instead] for the rest of this session.
+     *
+     * Nothing is stored and nothing is inherited: an exercise swapped in with no history
+     * calibrates like any other first session, because the app never extrapolates across
+     * exercises and a busy rack is not evidence about anything (ADR 0004).
+     */
+    fun swapTo(instead: Exercise) {
+        select(instead)
+        screen.update { it.copy(swapCandidates = null) }
     }
 
     /** Opens what the app is asking the lifter to rest for, so they can disagree with it. */

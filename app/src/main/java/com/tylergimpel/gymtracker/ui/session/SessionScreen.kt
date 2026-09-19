@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -140,6 +141,9 @@ fun SessionScreen(
         onEndRest = viewModel::endRest,
         onAddRest = viewModel::addTimeToRest,
         onJumpTo = viewModel::select,
+        onSwap = viewModel::startSwapping,
+        onSwapTo = viewModel::swapTo,
+        onCancelSwap = viewModel::cancelSwapping,
         onEditRest = viewModel::startEditingRest,
         onRestThisSet = viewModel::restThisSetOnly,
         onRestAlways = viewModel::restFromNowOn,
@@ -192,6 +196,9 @@ fun SessionScreen(
     onEndRest: () -> Unit = {},
     onAddRest: () -> Unit = {},
     onJumpTo: (Exercise) -> Unit = {},
+    onSwap: () -> Unit = {},
+    onSwapTo: (Exercise) -> Unit = {},
+    onCancelSwap: () -> Unit = {},
     onEditRest: () -> Unit = {},
     onRestThisSet: () -> Unit = {},
     onRestAlways: () -> Unit = {},
@@ -339,6 +346,7 @@ fun SessionScreen(
                         exercise = selected,
                         recommendation = state.recommendation,
                         onEditRest = onEditRest,
+                        onSwap = onSwap,
                         draft = state.draft,
                         rightDraft = state.rightDraft,
                         perSide = state.perSide,
@@ -411,6 +419,10 @@ fun SessionScreen(
     state.refiling?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
 
     state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
+
+    state.swapCandidates?.let {
+        SwapSheet(it, onSwapTo, onPickExercise, onCancelSwap)
+    }
 
     state.editingRest?.let {
         RestDialog(it, onRestChange, onRestThisSet, onRestAlways, onCancelRest)
@@ -651,6 +663,7 @@ private fun SetEntryControls(
     exercise: Exercise,
     recommendation: Recommendation?,
     onEditRest: () -> Unit,
+    onSwap: () -> Unit,
     draft: SetDraft,
     rightDraft: SetDraft,
     perSide: Boolean,
@@ -670,8 +683,13 @@ private fun SetEntryControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(exercise.name, style = MaterialTheme.typography.titleMedium)
-            TextButton(onClick = onEditExercise) {
-                Text(stringResource(R.string.exercise_edit))
+            Row {
+                // Beside the exercise it would replace, because that is where a lifter is
+                // standing when they find the machine occupied.
+                TextButton(onClick = onSwap) { Text(stringResource(R.string.swap_open)) }
+                TextButton(onClick = onEditExercise) {
+                    Text(stringResource(R.string.exercise_edit))
+                }
             }
         }
 
@@ -899,6 +917,46 @@ private const val REPS_THAT_NEED_EFFORT = 15
  * sideways while reading a weight does not.
  */
 private const val SWIPE_TO_OPEN = 300f
+
+/**
+ * What to train instead, because the machine is busy.
+ *
+ * The suggestions are the app's best guesses, and the two ways out of them get equal room:
+ * searching the whole bank, and adding an exercise the app has never heard of. Nobody is ever
+ * stuck with a list.
+ */
+@Composable
+private fun SwapSheet(
+    candidates: List<Exercise>,
+    onSwapTo: (Exercise) -> Unit,
+    onSearch: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.swap_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (candidates.isEmpty()) {
+                    // A real answer rather than an empty box: the gym checklist may be narrow, or
+                    // this movement may have no close relatives in the bank.
+                    Text(stringResource(R.string.swap_nothing))
+                }
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                    items(candidates, key = Exercise::id) { candidate ->
+                        TextButton(onClick = { onSwapTo(candidate) }) { Text(candidate.name) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSearch) { Text(stringResource(R.string.swap_search)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
 
 /**
  * How long to rest, and for how long that answer holds.
