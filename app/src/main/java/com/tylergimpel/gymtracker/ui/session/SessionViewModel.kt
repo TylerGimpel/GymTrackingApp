@@ -31,6 +31,8 @@ import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.AfterLogging
+import com.tylergimpel.gymtracker.domain.Avoided
+import com.tylergimpel.gymtracker.domain.avoidedExercises
 import com.tylergimpel.gymtracker.domain.SessionPace
 import com.tylergimpel.gymtracker.domain.afterLogging
 import com.tylergimpel.gymtracker.domain.SessionPlan
@@ -173,6 +175,8 @@ private data class ScreenState(
     val swapCandidates: List<Exercise>? = null,
     /** Whether the only things left to suggest are ones the lifter has banned. */
     val swappingLeavesOnlyDisliked: Boolean = false,
+    /** Exercises the lifter has already been asked about, so the question is asked once. */
+    val askedAbout: Set<String> = emptySet(),
 )
 
 data class SessionUiState(
@@ -248,6 +252,14 @@ data class SessionUiState(
      * can decide.
      */
     val swappingLeavesOnlyDisliked: Boolean = false,
+    /**
+     * An exercise the recent sessions kept asking for and the training kept not containing.
+     *
+     * A question rather than an action: what the app has noticed, put to the lifter with keeping
+     * it exactly as available as swapping or removing it. Null once they have answered, and never
+     * more than one at a time — a screen full of questions is a screen nobody reads.
+     */
+    val avoided: Avoided? = null,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
     /**
@@ -366,17 +378,23 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * Together because `combine` runs out of typed overloads at five, and the two belong together
      * anyway: they are the two halves of what this screen is for.
      */
-    private data class Training(val logged: LoggedSession?, val recommended: Recommended?)
+    private data class Training(
+        val logged: LoggedSession?,
+        val recommended: Recommended?,
+        /** The last few finished sessions, which is what "keeps not doing it" is counted over. */
+        val recent: List<LoggedSession>,
+    )
 
     val state: StateFlow<SessionUiState> =
         combine(
-            combine(logged, recommended, ::Training),
+            combine(logged, recommended, repository.observeRecent(), ::Training),
             repository.observeLastFinished(),
             routines.observeProgress(),
             screen,
             profile.observeDisplayUnit(),
         ) { training, lastFinished, routine, screen, lifterUnit ->
             val logged = training.logged
+            val recent = training.recent
             // Only where it is about the exercise in front of the lifter right now.
             val recommendation = training.recommended
                 ?.takeIf { it.exerciseId == screen.selected?.id }
@@ -409,6 +427,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 editingExercise = screen.editingExercise,
                 swapCandidates = screen.swapCandidates,
                 swappingLeavesOnlyDisliked = screen.swappingLeavesOnlyDisliked,
+                // The first one they have not answered about yet, and only one at a time.
+                avoided = avoidedExercises(recent)
+                    .firstOrNull { it.exercise.id !in screen.askedAbout },
                 editingRest = screen.editingRest,
                 muscleAlreadyWarm = screen.selected?.let { chosen ->
                     recommendation !is Recommendation.WarmingUp &&
@@ -855,6 +876,35 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     ?.copy(isDisliked = disliked) ?: it.selected)
             }
         }
+    }
+
+    /**
+     * Keeps an exercise the lifter has been avoiding, and stops asking about it.
+     *
+     * As available as swapping or removing it, and deliberately so: people skip squats for being
+     * hard rather than for being disliked, and an app that made avoidance mean dislike would
+     * quietly strip the most valuable work out of a programme.
+     */
+    fun keepAvoided(avoided: Avoided) =
+        screen.update { it.copy(askedAbout = it.askedAbout + avoided.exercise.id) }
+
+    /** Takes an exercise out of the routine day it keeps going untrained in. */
+    fun removeAvoided(avoided: Avoided) {
+        val day = state.value.routine?.routine?.rotation
+            ?.firstOrNull { day -> day.exercises.any { it.id == avoided.exercise.id } }
+            ?: return keepAvoided(avoided)
+
+        viewModelScope.launch {
+            routines.removeExerciseFromDay(day.id, avoided.exercise.id)
+            keepAvoided(avoided)
+        }
+    }
+
+    /** Offers something else instead of the one they keep not doing. */
+    fun swapAvoided(avoided: Avoided) {
+        keepAvoided(avoided)
+        select(avoided.exercise)
+        startSwapping()
     }
 
     fun cancelSwapping() =

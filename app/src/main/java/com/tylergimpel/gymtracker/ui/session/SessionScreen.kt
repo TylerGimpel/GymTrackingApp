@@ -56,6 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.DistanceUnit
+import com.tylergimpel.gymtracker.domain.Avoided
 import com.tylergimpel.gymtracker.domain.Drop
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
@@ -144,6 +145,9 @@ fun SessionScreen(
         onSwap = viewModel::startSwapping,
         onSwapTo = viewModel::swapTo,
         onCancelSwap = viewModel::cancelSwapping,
+        onKeepAvoided = viewModel::keepAvoided,
+        onSwapAvoided = viewModel::swapAvoided,
+        onRemoveAvoided = viewModel::removeAvoided,
         onEditRest = viewModel::startEditingRest,
         onRestThisSet = viewModel::restThisSetOnly,
         onRestAlways = viewModel::restFromNowOn,
@@ -199,6 +203,9 @@ fun SessionScreen(
     onSwap: () -> Unit = {},
     onSwapTo: (Exercise) -> Unit = {},
     onCancelSwap: () -> Unit = {},
+    onKeepAvoided: (Avoided) -> Unit = {},
+    onSwapAvoided: (Avoided) -> Unit = {},
+    onRemoveAvoided: (Avoided) -> Unit = {},
     onEditRest: () -> Unit = {},
     onRestThisSet: () -> Unit = {},
     onRestAlways: () -> Unit = {},
@@ -419,6 +426,10 @@ fun SessionScreen(
     state.refiling?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
 
     state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
+
+    state.avoided?.let {
+        AvoidedPrompt(it, onKeepAvoided, onSwapAvoided, onRemoveAvoided)
+    }
 
     state.swapCandidates?.let {
         SwapSheet(it, state.swappingLeavesOnlyDisliked, onSwapTo, onPickExercise, onCancelSwap)
@@ -924,6 +935,50 @@ private const val REPS_THAT_NEED_EFFORT = 15
  * sideways while reading a weight does not.
  */
 private const val SWIPE_TO_OPEN = 300f
+
+/**
+ * The question the app asks about an exercise a lifter keeps not doing.
+ *
+ * **Keeping it is as prominent as swapping or removing it**, and that is the whole design rather
+ * than a courtesy: people skip squats because squats are hard, not because they dislike them, and
+ * a prompt that made "remove" the easy answer would quietly strip the most valuable work out of a
+ * programme. The app noticed; the lifter decides, and nothing happens until they do.
+ */
+@Composable
+private fun AvoidedPrompt(
+    avoided: Avoided,
+    onKeep: (Avoided) -> Unit,
+    onSwap: (Avoided) -> Unit,
+    onRemove: (Avoided) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { onKeep(avoided) },
+        title = { Text(avoided.exercise.name) },
+        text = {
+            Text(
+                stringResource(
+                    R.string.avoided_question,
+                    avoided.unperformed,
+                    avoided.asked,
+                ),
+            )
+        },
+        // Three answers, side by side and the same size as each other.
+        confirmButton = {
+            Row {
+                TextButton(onClick = { onKeep(avoided) }) {
+                    Text(stringResource(R.string.avoided_keep))
+                }
+                TextButton(onClick = { onSwap(avoided) }) {
+                    Text(stringResource(R.string.avoided_swap))
+                }
+                TextButton(onClick = { onRemove(avoided) }) {
+                    Text(stringResource(R.string.avoided_remove))
+                }
+            }
+        },
+    )
+}
 
 /**
  * What to train instead, because the machine is busy.

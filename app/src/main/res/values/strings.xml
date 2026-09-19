@@ -50,6 +50,10 @@
     <string name="rest_add_time">+1:00</string>
     <string name="drawer_open">Routine</string>
     <string name="swap_open">Swap</string>
+    <string name="avoided_question">This has come up %2$d times lately and you have trained it in %1$d fewer. Keep it, swap it, or take it out?</string>
+    <string name="avoided_keep">Keep it</string>
+    <string name="avoided_swap">Swap it</string>
+    <string name="avoided_remove">Take it out</string>
     <string name="swap_title">Train something else</string>
     <string name="swap_nothing">Nothing close by in your gym. Search the whole list, or add what you are using.</string>
     <string name="swap_search">Search or add</string>
