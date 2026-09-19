@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.Duration
+
 /**
  * Where a row of the exercise bank came from.
  *
@@ -75,6 +77,13 @@ data class Exercise(
     val bankProgressionModel: ProgressionModel = ProgressionModel.DOUBLE_PROGRESSION,
     /** What the lifter chose instead, where they chose anything. */
     val chosenProgressionModel: ProgressionModel? = null,
+    /**
+     * How long the lifter rests on this exercise, where they have said.
+     *
+     * Overrules what the app derives from the set. Null is the ordinary case and means the derived
+     * answer stands — not that they chose nothing in particular.
+     */
+    val chosenRest: Duration? = null,
     /** What the lifter calls this, where they have renamed it. */
     val userName: String? = null,
     /** A standing note — "seat notch 3, use the long bar" — shown wherever the exercise is used. */
@@ -130,5 +139,6 @@ data class Exercise(
         userName = chosen.userName,
         note = chosen.note,
         chosenProgressionModel = chosen.chosenProgressionModel,
+        chosenRest = chosen.chosenRest,
     )
 }

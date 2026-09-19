@@ -11,6 +11,7 @@ import com.tylergimpel.gymtracker.domain.planBankUpdate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import java.time.Duration
 import java.util.UUID
 
 /** Reads the exercise bank, handing the rest of the app domain types rather than Room entities. */
@@ -79,6 +80,19 @@ class ExerciseRepository(
             exercises.setProgressionModel(exerciseId, model?.stored)
             exercises.forgetEmptyPreference(exerciseId)
         }
+
+    /**
+     * Records how long the lifter rests on [exerciseId] from now on, or clears it back to what the
+     * app derives from each set.
+     *
+     * Kept apart from the bank row like every other choice: the app's table is a starting point,
+     * and a lifter who knows the machine is in a corner nobody walks past is right about their own
+     * gym (ADR 0009).
+     */
+    suspend fun setRest(exerciseId: String, rest: Duration?) = database.withTransaction {
+        exercises.setRest(exerciseId, rest?.seconds?.toInt())
+        exercises.forgetEmptyPreference(exerciseId)
+    }
 
     /** Records the standing note on [exerciseId] — "seat notch 3, use the long bar". */
     suspend fun note(exerciseId: String, note: String?) = database.withTransaction {

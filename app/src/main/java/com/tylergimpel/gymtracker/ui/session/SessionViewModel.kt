@@ -21,6 +21,7 @@ import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.resting
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionPosition
@@ -49,6 +50,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -100,6 +102,15 @@ data class ExerciseDetails(
 private data class ScreenState(
     val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
+    /**
+     * A rest the lifter set for the set being entered, overruling what the app asked for.
+     *
+     * Cleared when the exercise changes, like everything else about the set in front of them: it
+     * is a statement about this set rather than about the lifter.
+     */
+    val restForThisSet: Duration? = null,
+    /** The rest being edited, while the lifter is changing one. */
+    val editingRest: Duration? = null,
     /**
      * Whether the drafts still hold what the app put in them rather than something typed.
      *
@@ -182,6 +193,8 @@ data class SessionUiState(
     val skipping: RoutineDay? = null,
     /** The name and note being edited on the selected exercise, if they are. */
     val editingExercise: ExerciseDetails? = null,
+    /** The rest being edited, while the lifter is changing one. */
+    val editingRest: Duration? = null,
 )
 
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
@@ -267,6 +280,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             val recommendation = training.recommended
                 ?.takeIf { it.exerciseId == screen.selected?.id }
                 ?.recommendation
+                // What the lifter said about this one set has the last word over the table.
+                ?.let { if (screen.restForThisSet != null) it.resting(screen.restForThisSet) else it }
             SessionUiState(
                 lifterUnit = lifterUnit,
                 session = logged?.session,
@@ -291,6 +306,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 refiling = screen.refiling,
                 skipping = screen.skipping,
                 editingExercise = screen.editingExercise,
+                editingRest = screen.editingRest,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
@@ -328,6 +344,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // Nothing typed yet, so the recommendation for this exercise is free to fill the
             // fields the moment it arrives.
             untouched = true,
+            // A rest set for one set belongs to that set, not to the lifter's evening.
+            restForThisSet = null,
             // Departing is a property of the machine in front of the lifter, so it does not
             // follow them to the next exercise any more than per-side entry does.
             overridingDisplayUnit = false,
@@ -597,6 +615,41 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                         chosenProgressionModel = open.progressionModel
                             .takeIf { model -> model != exercise.bankProgressionModel },
                     ),
+                )
+            }
+        }
+    }
+
+    /** Opens what the app is asking the lifter to rest for, so they can disagree with it. */
+    fun startEditingRest() = screen.update {
+        it.copy(editingRest = state.value.recommendation?.prescription?.rest ?: Duration.ZERO)
+    }
+
+    fun changeEditingRest(rest: Duration) = screen.update { it.copy(editingRest = rest) }
+
+    fun cancelEditingRest() = screen.update { it.copy(editingRest = null) }
+
+    /** Rests for this long after the set being entered, and says nothing about the next one. */
+    fun restThisSetOnly() =
+        screen.update { it.copy(restForThisSet = it.editingRest, editingRest = null) }
+
+    /**
+     * Rests for this long on this exercise from now on.
+     *
+     * Recorded against the exercise rather than the set, because "I need longer on this machine"
+     * is a standing fact about the machine and the lifter rather than about tonight.
+     */
+    fun restFromNowOn() {
+        val exercise = screen.value.selected ?: return
+        val rest = screen.value.editingRest ?: return
+        viewModelScope.launch {
+            exercises.setRest(exercise.id, rest)
+            screen.update {
+                it.copy(
+                    editingRest = null,
+                    restForThisSet = null,
+                    // Carried across rather than re-read, as the unit and the name are.
+                    selected = it.selected?.copy(chosenRest = rest),
                 )
             }
         }

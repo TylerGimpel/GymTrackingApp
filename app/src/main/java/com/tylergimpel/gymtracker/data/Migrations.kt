@@ -479,6 +479,20 @@ internal val MIGRATION_17_18 = object : Migration(17, 18) {
     }
 }
 
+/**
+ * Version 19 gives a lifter somewhere to say how long they rest on an exercise.
+ *
+ * In `exercise_preference` for the reason ADR 0009 gives: it is a choice, so it goes where a bank
+ * update cannot reach it. Nullable, and null for every existing row, because the app derives a
+ * rest from what each set is and a lifter who has said nothing has not chosen the derived answer
+ * — they have said nothing.
+ */
+internal val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `exercise_preference` ADD COLUMN `rest_seconds` INTEGER")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -497,6 +511,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_15_16,
     MIGRATION_16_17,
     MIGRATION_17_18,
+    MIGRATION_18_19,
 )
 
 /**

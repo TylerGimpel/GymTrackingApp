@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -66,6 +67,7 @@ import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asTimeText
+import java.time.Duration
 import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.ui.DayPickerDialog
 import com.tylergimpel.gymtracker.ui.label
@@ -124,6 +126,11 @@ fun SessionScreen(
         onStartRefiling = viewModel::startRefiling,
         onRefileOn = viewModel::refileOn,
         onCancelRefiling = viewModel::cancelRefiling,
+        onEditRest = viewModel::startEditingRest,
+        onRestThisSet = viewModel::restThisSetOnly,
+        onRestAlways = viewModel::restFromNowOn,
+        onRestChange = viewModel::changeEditingRest,
+        onCancelRest = viewModel::cancelEditingRest,
         onFinish = viewModel::startFinishing,
         onFinishAs = viewModel::finishSession,
         onCancelFinishing = viewModel::cancelFinishing,
@@ -167,6 +174,11 @@ fun SessionScreen(
     onStartRefiling: (Session) -> Unit = {},
     onRefileOn: (LocalDate) -> Unit = {},
     onCancelRefiling: () -> Unit = {},
+    onEditRest: () -> Unit = {},
+    onRestThisSet: () -> Unit = {},
+    onRestAlways: () -> Unit = {},
+    onRestChange: (Duration) -> Unit = {},
+    onCancelRest: () -> Unit = {},
     onFinish: () -> Unit = {},
     onFinishAs: (RoutineDay?) -> Unit = {},
     onCancelFinishing: () -> Unit = {},
@@ -252,6 +264,7 @@ fun SessionScreen(
                     SetEntryControls(
                         exercise = selected,
                         recommendation = state.recommendation,
+                        onEditRest = onEditRest,
                         draft = state.draft,
                         rightDraft = state.rightDraft,
                         perSide = state.perSide,
@@ -323,6 +336,10 @@ fun SessionScreen(
     state.refiling?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
 
     state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
+
+    state.editingRest?.let {
+        RestDialog(it, onRestChange, onRestThisSet, onRestAlways, onCancelRest)
+    }
 
     state.editingExercise?.let { details ->
         ExerciseDetailsDialog(
@@ -558,6 +575,7 @@ private fun EmptySession(
 private fun SetEntryControls(
     exercise: Exercise,
     recommendation: Recommendation?,
+    onEditRest: () -> Unit,
     draft: SetDraft,
     rightDraft: SetDraft,
     perSide: Boolean,
@@ -595,6 +613,13 @@ private fun SetEntryControls(
         // What the app is asking for, above the fields that already hold it.
         recommendation?.let {
             NextSet(it, exercise.loggingType, draft.displayUnit)
+            // Tappable, because the table is a starting point: a lifter who needs longer on this
+            // machine than the research says is right about their own gym.
+            it.prescription.rest?.let { rest ->
+                TextButton(onClick = onEditRest, contentPadding = PaddingValues(0.dp)) {
+                    Text(stringResource(R.string.session_rest, rest.asTimeText()))
+                }
+            }
         }
 
         if (perSide) {
@@ -746,6 +771,44 @@ private fun NextSet(
             )
         }
     }
+}
+
+/**
+ * How long to rest, and for how long that answer holds.
+ *
+ * Two confirmations rather than one, because "longer today" and "longer on this machine from now
+ * on" are different things and the app cannot tell which one a lifter means. Neither is a setting
+ * buried anywhere: both are one tap from the set being entered.
+ */
+@Composable
+private fun RestDialog(
+    rest: Duration,
+    onChange: (Duration) -> Unit,
+    onThisSet: () -> Unit,
+    onAlways: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.session_rest_title)) },
+        text = {
+            OutlinedTextField(
+                value = rest.seconds.takeIf { it > 0 }?.toString().orEmpty(),
+                onValueChange = { typed ->
+                    onChange(Duration.ofSeconds(typed.trim().toLongOrNull()?.coerceAtLeast(0) ?: 0))
+                },
+                label = { Text(stringResource(R.string.set_rest_taken)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onThisSet) { Text(stringResource(R.string.session_rest_this_set)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onAlways) { Text(stringResource(R.string.session_rest_always)) }
+        },
+    )
 }
 
 /**

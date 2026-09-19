@@ -7,8 +7,12 @@ import com.tylergimpel.gymtracker.domain.ExerciseProgress
 import com.tylergimpel.gymtracker.domain.Increment
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepRange
+import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.TrainingHistory
 import com.tylergimpel.gymtracker.domain.recommendNextSet
+import com.tylergimpel.gymtracker.domain.restFor
+import com.tylergimpel.gymtracker.domain.resting
+import java.time.Duration
 
 /**
  * Tells the lifter what to lift: from what they have lifted before, or from a ramp where there is
@@ -45,15 +49,38 @@ class RecommendationRepository(
         return database.withTransaction {
             val open = sessions.activeSession()?.id
             val history = historyOf(exercise.id, open)
-            val progress = history.progressIn(repRangeFor(exercise.id), ROUNDING)
+            val repRange = repRangeFor(exercise.id)
+            val progress = history.progressIn(repRange, ROUNDING)
             remember(exercise.id, progress)
             recommendNextSet(
                 history = history,
                 progress = progress,
                 calibration = CalibrationRamp.of(exercise, ROUNDING),
                 setsToday = open?.let { sessions.setsLoggedInSession(exercise.id, it) } ?: 0,
-            )
+            )?.let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) }
         }
+    }
+
+    /**
+     * How long to rest after the set being prescribed, or nothing where this set has no rest of
+     * its own to take.
+     *
+     * Three answers in order of who gets the last word. A **Superset** member has none at all: the
+     * point of alternating is not stopping, so the rest belongs to the group and is recorded there
+     * as the longest any member asked for. Otherwise the lifter's own answer for this exercise
+     * stands if they gave one — they know their gym — and the derived one stands if they did not.
+     */
+    private suspend fun restToPrescribe(
+        exercise: Exercise,
+        setType: SetType,
+        repRange: RepRange,
+        open: Long?,
+    ): Duration? {
+        val derived = exercise.chosenRest ?: restFor(exercise, setType, repRange)
+        val group = open?.let { sessions.supersetOf(it, exercise.id) } ?: return derived
+
+        sessions.restAtLeast(group, derived.seconds.toInt())
+        return null
     }
 
     /**

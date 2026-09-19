@@ -825,6 +825,45 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    /**
+     * Version 19 gives a lifter somewhere to say how long they rest on an exercise.
+     *
+     * Beside their other choices rather than on the bank row, so a release that improves the
+     * exercise cannot take it away (ADR 0009), and null for everything that already existed:
+     * a lifter who has said nothing has not chosen the derived answer.
+     */
+    @Test
+    fun migratesToARestTheLifterCanSetPerExercise() {
+        helper.createDatabase(EIGHTEENTH_DATABASE, 18).use { version18 ->
+            version18.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "logging_type, mechanic, force, category, level, unilateral, source, " +
+                    "tombstoned, progression_model) VALUES ('Barbell_Bench', 'Bench Press', " +
+                    "'chest', '', 'barbell', 'weight_reps', 'compound', 'push', 'strength', " +
+                    "'beginner', 0, 'upstream', 0, 'double_progression')",
+            )
+            version18.execSQL(
+                "INSERT INTO exercise_preference (exercise_id, display_unit) " +
+                    "VALUES ('Barbell_Bench', 'lb')",
+            )
+        }
+
+        val version19 = helper.runMigrationsAndValidate(EIGHTEENTH_DATABASE, 19, true, MIGRATION_18_19)
+
+        version19.use { db ->
+            db.query("SELECT display_unit, rest_seconds FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+                assertTrue(it.isNull(1))
+            }
+            db.execSQL("UPDATE exercise_preference SET rest_seconds = 180")
+            db.query("SELECT rest_seconds FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals(180, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -843,5 +882,6 @@ class GymDatabaseMigrationTest {
         const val FIFTEENTH_DATABASE = "gym-migration-test-15.db"
         const val SIXTEENTH_DATABASE = "gym-migration-test-16.db"
         const val SEVENTEENTH_DATABASE = "gym-migration-test-17.db"
+        const val EIGHTEENTH_DATABASE = "gym-migration-test-18.db"
     }
 }

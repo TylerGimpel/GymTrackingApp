@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.Duration
+
 /**
  * What the app has to say about the next set of an exercise, and which of its two modes it is in.
  *
@@ -84,6 +86,23 @@ sealed interface Recommendation {
         override val prescription: Prescription get() = Prescription()
         override val setType: SetType get() = SetType.WORKING
     }
+}
+
+/**
+ * The same recommendation, carrying how long to rest after the set it asks for.
+ *
+ * Applied after the fact rather than computed with the weight, because rest depends on what kind
+ * of set came out of all this — a ramp rung rests briefly and the work it ramps up to does not —
+ * and on things outside the engine's reach, like the lifter having said they need longer on this
+ * machine, or the set belonging to a **Superset** that rests after the group instead.
+ *
+ * A [Recommendation.Stopped] carries nothing, rest included: there is no set to rest after.
+ */
+fun Recommendation.resting(rest: Duration?): Recommendation = when (this) {
+    is Recommendation.Prescribing -> copy(prescription = prescription.copy(rest = rest))
+    is Recommendation.CuttingVolume -> copy(prescription = prescription.copy(rest = rest))
+    is Recommendation.Calibrating -> copy(prescription = prescription.copy(rest = rest))
+    Recommendation.Stopped -> this
 }
 
 /**

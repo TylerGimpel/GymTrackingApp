@@ -22,6 +22,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -299,6 +300,51 @@ class RecommendationPersistenceTest {
         // Five sessions short of the same lift, and the app says so rather than guessing a sixth
         // time. Nothing is prescribed, so a set logged now records that nothing was asked.
         assertEquals(Recommendation.Stopped, recommendations.nextSet(exercise(BENCH)))
+    }
+
+    @Test
+    fun everyPrescribedSetCarriesARestDerivedFromWhatThatSetIs() = runBlocking {
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
+
+        val next = recommendations.nextSet(exercise(BENCH))!!.prescription
+
+        // A multi-joint lift worked in the default 8 - 12 range: two and a half minutes, which is
+        // the middle of what the research gives for it.
+        assertEquals(Duration.ofSeconds(150), next.rest)
+    }
+
+    @Test
+    fun aLifterWhoNeedsLongerOnAMachineSaysSoOnce() = runBlocking {
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
+
+        exercises.setRest(BENCH, Duration.ofMinutes(4))
+
+        // Their gym, their machine, their answer — and it outlives the session.
+        assertEquals(Duration.ofMinutes(4), recommendations.nextSet(exercise(BENCH))!!.prescription.rest)
+    }
+
+    @Test
+    fun aSupersetRestsAfterTheGroupRatherThanBetweenItsMembers() = runBlocking {
+        // History first, so that what the app asks for today is work rather than a ramp rung.
+        train("2026-09-14T18:00") {
+            logSet(BENCH, SetDraft("60", "8"))
+            logSet(SQUAT, SetDraft("100", "8"))
+        }
+        val sessions = train("2026-09-16T18:00", finish = false) {
+            logSet(BENCH, SetDraft("60", "8"))
+            logSet(SQUAT, SetDraft("100", "8"))
+            val logged = observeActiveSession().first()!!
+            val performed = observeSession(logged.id).first()!!.exercises
+            groupWithNext(performed.first().id)
+        }
+
+        // No member carries a rest: the point of alternating is not stopping.
+        assertNull(recommendations.nextSet(exercise(BENCH))!!.prescription.rest)
+
+        // The group carries it instead, for as long as the hardest thing in it asked.
+        val logged = sessions.observeActiveSession().first()!!
+        val group = sessions.observeSession(logged.id).first()!!.supersets.single()
+        assertEquals(150, group.restSeconds)
     }
 
     @Test

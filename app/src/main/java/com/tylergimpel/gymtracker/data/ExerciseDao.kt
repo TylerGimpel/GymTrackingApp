@@ -67,6 +67,15 @@ interface ExerciseDao {
     )
     suspend fun setNote(exerciseId: String, note: String?)
 
+    /** Records how long the lifter rests on an exercise, or clears it back to the derived answer. */
+    @Query(
+        """
+        INSERT INTO exercise_preference (exercise_id, rest_seconds) VALUES (:exerciseId, :seconds)
+        ON CONFLICT(exercise_id) DO UPDATE SET rest_seconds = excluded.rest_seconds
+        """,
+    )
+    suspend fun setRest(exerciseId: String, seconds: Int?)
+
     /** Records what the lifter decided an exercise advances by, or clears it back to the bank's. */
     @Query(
         """
@@ -89,7 +98,7 @@ interface ExerciseDao {
         DELETE FROM exercise_preference
         WHERE exercise_id = :exerciseId
           AND display_unit IS NULL AND name IS NULL AND note IS NULL
-          AND progression_model IS NULL
+          AND progression_model IS NULL AND rest_seconds IS NULL
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)

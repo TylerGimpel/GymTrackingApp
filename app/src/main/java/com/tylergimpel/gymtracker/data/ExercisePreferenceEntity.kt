@@ -62,4 +62,15 @@ data class ExercisePreferenceEntity(
      */
     @ColumnInfo(name = "progression_model")
     val progressionModel: String? = null,
+
+    /**
+     * How long this lifter rests on this exercise, where they have said.
+     *
+     * A suggestion the app derives from what a set is, and a lifter who disagrees is right about
+     * their own gym: they know the machine is in a corner nobody walks past, or that they need
+     * longer than the table says. Here rather than on the bank row because it is theirs, and
+     * nullable like the rest because most exercises will never be told anything.
+     */
+    @ColumnInfo(name = "rest_seconds")
+    val restSeconds: Int? = null,
 )

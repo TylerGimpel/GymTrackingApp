@@ -111,6 +111,31 @@ interface SessionDao {
     @Query("UPDATE superset_group SET auto_jump = :autoJump WHERE id = :supersetId")
     suspend fun setAutoJump(supersetId: Long, autoJump: Boolean)
 
+    /** The superset an exercise is part of in one session, if it is in one. */
+    @Query(
+        """
+        SELECT superset_group_id FROM session_exercise
+        WHERE session_id = :sessionId AND exercise_id = :exerciseId
+          AND superset_group_id IS NOT NULL
+        ORDER BY order_index DESC LIMIT 1
+        """,
+    )
+    suspend fun supersetOf(sessionId: Long, exerciseId: String): Long?
+
+    /**
+     * Records what a group rests for, where the app has worked out that its members want longer.
+     *
+     * Never shortens one: a group rests for as long as the hardest thing in it asked, and the
+     * member being prescribed right now may not be that thing.
+     */
+    @Query(
+        """
+        UPDATE superset_group SET rest_seconds = :seconds
+        WHERE id = :supersetId AND (rest_seconds IS NULL OR rest_seconds < :seconds)
+        """,
+    )
+    suspend fun restAtLeast(supersetId: Long, seconds: Int)
+
     @Insert
     suspend fun insert(planned: SessionPlanEntity): Long
 

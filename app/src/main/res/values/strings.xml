@@ -32,6 +32,10 @@
     <string name="session_empty_selected">Log your first set and the session starts.</string>
     <string name="session_log_set">Log set</string>
     <string name="session_calibrating">calibrating</string>
+    <string name="session_rest">rest %1$s</string>
+    <string name="session_rest_title">How long to rest</string>
+    <string name="session_rest_this_set">This set</string>
+    <string name="session_rest_always">Always on this one</string>
     <string name="session_calibrating_hint">Stop when it gets hard. Being wrong here is expected.</string>
     <string name="session_cutting_volume">Same weight, fewer sets — this one has been hard three sessions running.</string>
     <string name="session_stopped">No suggestion for this lift: it has come up short too many sessions running. Pick a weight that works today.</string>
