@@ -94,6 +94,18 @@ class ExerciseRepository(
         exercises.forgetEmptyPreference(exerciseId)
     }
 
+    /**
+     * Records that the lifter never wants [exerciseId] suggested again, or takes it back.
+     *
+     * Global and reversible, and it touches nothing that was logged: the sets already against
+     * this exercise are a record of training that happened, and excluding it from what the app
+     * offers is not a claim that it did not.
+     */
+    suspend fun setDisliked(exerciseId: String, disliked: Boolean) = database.withTransaction {
+        exercises.setDisliked(exerciseId, disliked)
+        exercises.forgetEmptyPreference(exerciseId)
+    }
+
     /** Records the standing note on [exerciseId] — "seat notch 3, use the long bar". */
     suspend fun note(exerciseId: String, note: String?) = database.withTransaction {
         exercises.setNote(exerciseId, note?.takeIf(String::isNotBlank))

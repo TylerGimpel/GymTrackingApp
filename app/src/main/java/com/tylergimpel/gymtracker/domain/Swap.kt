@@ -24,6 +24,7 @@ fun swapCandidatesFor(
     bank: List<Exercise>,
     equipment: Set<String>,
     trainedBefore: Set<String> = emptySet(),
+    includeDisliked: Boolean = false,
 ): List<Exercise> {
     val muscles = replacing.primaryMuscles.toSet()
 
@@ -32,6 +33,9 @@ fun swapCandidatesFor(
         // A dropped exercise is still in the bank for the history that points at it, and is not
         // something to offer anybody.
         .filterNot { it.isTombstoned }
+        // A hard ban, respected here as everywhere: offering one back because the alternatives
+        // scored worse would break the only promise a dislike makes.
+        .filter { includeDisliked || !it.isDisliked }
         // The same movement, in the sense that matters: what it trains and how much of the body
         // it asks for. A substitute that works a different muscle is not a substitute.
         .filter { candidate -> candidate.primaryMuscles.any { it in muscles } }

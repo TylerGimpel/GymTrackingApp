@@ -71,6 +71,29 @@ class SwapTest {
         assertFalse(swapCandidatesFor(benchPress, bank, GYM).contains(benchPress))
     }
 
+
+    @Test
+    fun `an exercise the lifter never wants to see again is never suggested`() {
+        val banned = inclinePress.copy(isDisliked = true)
+
+        val candidates = swapCandidatesFor(benchPress, listOf(banned, dipMachine), GYM)
+
+        // A single hard ban rather than a ranking penalty: offering it back because the
+        // alternatives scored worse would break the only promise the setting makes.
+        assertFalse(candidates.contains(banned))
+        assertTrue(candidates.contains(dipMachine))
+    }
+
+    @Test
+    fun `when the bans leave nothing, the app can still ask which is least bad`() {
+        val banned = listOf(inclinePress, dipMachine).map { it.copy(isDisliked = true) }
+
+        assertTrue(swapCandidatesFor(benchPress, banned, GYM).isEmpty())
+        // Asked for explicitly, by a caller that has found there is nothing else and is about to
+        // put the decision to the lifter rather than make it for them.
+        assertEquals(2, swapCandidatesFor(benchPress, banned, GYM, includeDisliked = true).size)
+    }
+
     private companion object {
         val GYM = setOf("barbell", "machine", "dumbbell")
 

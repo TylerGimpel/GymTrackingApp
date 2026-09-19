@@ -67,6 +67,15 @@ interface ExerciseDao {
     )
     suspend fun setNote(exerciseId: String, note: String?)
 
+    /** Records that the lifter never wants this exercise suggested again, or takes it back. */
+    @Query(
+        """
+        INSERT INTO exercise_preference (exercise_id, disliked) VALUES (:exerciseId, :disliked)
+        ON CONFLICT(exercise_id) DO UPDATE SET disliked = excluded.disliked
+        """,
+    )
+    suspend fun setDisliked(exerciseId: String, disliked: Boolean)
+
     /** Records how long the lifter rests on an exercise, or clears it back to the derived answer. */
     @Query(
         """
@@ -98,7 +107,7 @@ interface ExerciseDao {
         DELETE FROM exercise_preference
         WHERE exercise_id = :exerciseId
           AND display_unit IS NULL AND name IS NULL AND note IS NULL
-          AND progression_model IS NULL AND rest_seconds IS NULL
+          AND progression_model IS NULL AND rest_seconds IS NULL AND disliked = 0
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)

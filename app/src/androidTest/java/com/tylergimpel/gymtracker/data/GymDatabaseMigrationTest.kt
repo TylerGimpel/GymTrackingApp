@@ -864,6 +864,56 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    /**
+     * Version 20 lets a lifter say they never want to see an exercise again.
+     *
+     * False for everything that exists, and — the part that matters — no logged set is touched
+     * by any of it. Excluding an exercise from what the app suggests is not a statement that the
+     * training never happened.
+     */
+    @Test
+    fun migratesToADislikeThatLeavesHistoryAlone() {
+        helper.createDatabase(NINETEENTH_DATABASE, 19).use { version19 ->
+            version19.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "logging_type, mechanic, force, category, level, unilateral, source, " +
+                    "tombstoned, progression_model) VALUES ('Barbell_Bench', 'Bench Press', " +
+                    "'chest', '', 'barbell', 'weight_reps', 'compound', 'push', 'strength', " +
+                    "'beginner', 0, 'upstream', 0, 'double_progression')",
+            )
+            version19.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note) " +
+                    "VALUES (1757869200000, NULL, '2026-09-14', NULL)",
+            )
+            version19.execSQL(
+                "INSERT INTO session_exercise (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Barbell_Bench', 1)",
+            )
+            version19.execSQL(
+                "INSERT INTO set_entry (session_exercise_id, set_index, type, weight_kg, reps, " +
+                    "note, side, display_unit) VALUES (1, 1, 'working', 60.0, 8, NULL, NULL, NULL)",
+            )
+        }
+
+        val version20 = helper.runMigrationsAndValidate(NINETEENTH_DATABASE, 20, true, MIGRATION_19_20)
+
+        version20.use { db ->
+            db.execSQL(
+                "INSERT INTO exercise_preference (exercise_id, disliked) " +
+                    "VALUES ('Barbell_Bench', 1)",
+            )
+            db.query("SELECT disliked FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+            // The set logged against it is exactly where it was.
+            db.query("SELECT COUNT(*) FROM set_entry WHERE weight_kg = 60.0").use {
+                it.moveToFirst()
+                assertEquals(1, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -883,5 +933,6 @@ class GymDatabaseMigrationTest {
         const val SIXTEENTH_DATABASE = "gym-migration-test-16.db"
         const val SEVENTEENTH_DATABASE = "gym-migration-test-17.db"
         const val EIGHTEENTH_DATABASE = "gym-migration-test-18.db"
+        const val NINETEENTH_DATABASE = "gym-migration-test-19.db"
     }
 }

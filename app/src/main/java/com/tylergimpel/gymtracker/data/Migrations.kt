@@ -493,6 +493,25 @@ internal val MIGRATION_18_19 = object : Migration(18, 19) {
     }
 }
 
+/**
+ * Version 20 lets a lifter say they never want to see an exercise again.
+ *
+ * In `exercise_preference` with their other choices, where a bank update cannot reach it
+ * (ADR 0009). Not null and false for everything that exists, because a dislike is a yes or a no
+ * and nobody has said yes yet — and the default is on the column as well as the entity, since
+ * Room compares defaults when it validates a migrated schema.
+ *
+ * Nothing about logged history is touched, here or anywhere: excluding an exercise from what the
+ * app suggests is not a statement that the training never happened.
+ */
+internal val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `exercise_preference` ADD COLUMN `disliked` INTEGER NOT NULL DEFAULT 0",
+        )
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -512,6 +531,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_16_17,
     MIGRATION_17_18,
     MIGRATION_18_19,
+    MIGRATION_19_20,
 )
 
 /**

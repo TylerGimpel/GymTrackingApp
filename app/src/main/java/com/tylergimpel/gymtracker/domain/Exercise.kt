@@ -84,6 +84,15 @@ data class Exercise(
      * answer stands — not that they chose nothing in particular.
      */
     val chosenRest: Duration? = null,
+    /**
+     * Whether the lifter never wants this suggested again.
+     *
+     * A single hard ban rather than a ranking penalty: an exercise somebody has ruled out is
+     * ruled out, and a suggestion engine that offered it anyway because the alternatives scored
+     * worse would have broken the only promise this setting makes. Global, reversible, and never
+     * a statement about history — the sets already logged against it stay exactly where they are.
+     */
+    val isDisliked: Boolean = false,
     /** What the lifter calls this, where they have renamed it. */
     val userName: String? = null,
     /** A standing note — "seat notch 3, use the long bar" — shown wherever the exercise is used. */
@@ -140,5 +149,6 @@ data class Exercise(
         note = chosen.note,
         chosenProgressionModel = chosen.chosenProgressionModel,
         chosenRest = chosen.chosenRest,
+        isDisliked = chosen.isDisliked,
     )
 }

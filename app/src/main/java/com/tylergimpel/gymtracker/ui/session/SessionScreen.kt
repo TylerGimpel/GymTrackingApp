@@ -421,7 +421,7 @@ fun SessionScreen(
     state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
 
     state.swapCandidates?.let {
-        SwapSheet(it, onSwapTo, onPickExercise, onCancelSwap)
+        SwapSheet(it, state.swappingLeavesOnlyDisliked, onSwapTo, onPickExercise, onCancelSwap)
     }
 
     state.editingRest?.let {
@@ -529,6 +529,13 @@ private fun ExerciseDetailsDialog(
                 ProgressionModelChooser(details.progressionModel) {
                     onChange(details.copy(progressionModel = it))
                 }
+                // Global, reversible, and a statement about what to suggest rather than about
+                // what was trained: everything already logged against it stays put.
+                FilterChip(
+                    selected = details.disliked,
+                    onClick = { onChange(details.copy(disliked = !details.disliked)) },
+                    label = { Text(stringResource(R.string.exercise_disliked)) },
+                )
             }
         },
         confirmButton = {
@@ -928,6 +935,7 @@ private const val SWIPE_TO_OPEN = 300f
 @Composable
 private fun SwapSheet(
     candidates: List<Exercise>,
+    onlyDislikedLeft: Boolean,
     onSwapTo: (Exercise) -> Unit,
     onSearch: () -> Unit,
     onCancel: () -> Unit,
@@ -937,6 +945,13 @@ private fun SwapSheet(
         title = { Text(stringResource(R.string.swap_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // When the bans leave no way to train the muscle, the app asks which is
+                // least bad. Silently including a banned exercise would break the promise the
+                // ban makes, and silently skipping the muscle would leave a hole in the training
+                // that nobody chose.
+                if (onlyDislikedLeft) {
+                    Text(stringResource(R.string.swap_only_disliked))
+                }
                 if (candidates.isEmpty()) {
                     // A real answer rather than an empty box: the gym checklist may be narrow, or
                     // this movement may have no close relatives in the bank.

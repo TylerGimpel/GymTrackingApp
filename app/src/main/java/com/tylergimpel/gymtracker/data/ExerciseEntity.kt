@@ -127,6 +127,7 @@ fun ExerciseEntity.toDomain(
     unilateral = unilateral,
     displayUnit = WeightUnit.fromStored(preference?.displayUnit) ?: lifterUnit,
     chosenRest = preference?.restSeconds?.let { Duration.ofSeconds(it.toLong()) },
+    isDisliked = preference?.disliked == true,
     userName = preference?.name,
     note = preference?.note,
     source = ExerciseSource.fromStored(source),

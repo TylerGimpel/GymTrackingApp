@@ -73,4 +73,15 @@ data class ExercisePreferenceEntity(
      */
     @ColumnInfo(name = "rest_seconds")
     val restSeconds: Int? = null,
+
+    /**
+     * Whether the lifter never wants this exercise suggested again.
+     *
+     * A hard ban rather than a ranking penalty, and not nullable like the rest of this row: a
+     * dislike is a yes or a no, and "not said" and "no" mean the same thing here. Reversible,
+     * global, and with no effect whatever on logged history — excluding an exercise is not
+     * destructive, and the sets already against it are a record of training that happened.
+     */
+    @ColumnInfo(name = "disliked", defaultValue = "0")
+    val disliked: Boolean = false,
 )

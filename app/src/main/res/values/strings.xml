@@ -53,6 +53,8 @@
     <string name="swap_title">Train something else</string>
     <string name="swap_nothing">Nothing close by in your gym. Search the whole list, or add what you are using.</string>
     <string name="swap_search">Search or add</string>
+    <string name="swap_only_disliked">Everything left for this muscle is one you said you did not want. Which is least bad today?</string>
+    <string name="exercise_disliked">Never suggest this</string>
     <string name="drawer_sets_done">%1$d done</string>
     <string name="drawer_day_next">%1$s · next</string>
     <string name="rest_unreliable">This phone will not let the app set an exact alarm, so a rest may reach you late. Allow alarms in Settings to fix it.</string>

@@ -115,6 +115,8 @@ data class ExerciseDetails(
     val note: String,
     /** How the lifter wants this exercise coached, including not at all. */
     val progressionModel: ProgressionModel,
+    /** Whether they never want it suggested again. */
+    val disliked: Boolean = false,
 )
 
 /**
@@ -169,6 +171,8 @@ private data class ScreenState(
      * which is a real answer and one the sheet says out loud rather than looking broken.
      */
     val swapCandidates: List<Exercise>? = null,
+    /** Whether the only things left to suggest are ones the lifter has banned. */
+    val swappingLeavesOnlyDisliked: Boolean = false,
 )
 
 data class SessionUiState(
@@ -236,6 +240,14 @@ data class SessionUiState(
     val editingExercise: ExerciseDetails? = null,
     /** What to train instead, while the lifter is looking. Null while the sheet is closed. */
     val swapCandidates: List<Exercise>? = null,
+    /**
+     * Whether the only candidates left are ones the lifter has banned.
+     *
+     * The sheet says so and asks which is least bad, rather than quietly offering a banned
+     * exercise or quietly skipping the muscle. Both of those decide something only the lifter
+     * can decide.
+     */
+    val swappingLeavesOnlyDisliked: Boolean = false,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
     /**
@@ -396,6 +408,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 skipping = screen.skipping,
                 editingExercise = screen.editingExercise,
                 swapCandidates = screen.swapCandidates,
+                swappingLeavesOnlyDisliked = screen.swappingLeavesOnlyDisliked,
                 editingRest = screen.editingRest,
                 muscleAlreadyWarm = screen.selected?.let { chosen ->
                     recommendation !is Recommendation.WarmingUp &&
@@ -744,6 +757,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     name = exercise.name,
                     note = exercise.note.orEmpty(),
                     progressionModel = exercise.progressionModel,
+                    disliked = exercise.isDisliked,
                 ),
             )
         }
@@ -776,6 +790,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 open.exerciseId,
                 open.progressionModel.takeIf { it != exercise.bankProgressionModel },
             )
+            exercises.setDisliked(open.exerciseId, open.disliked)
             screen.update {
                 it.copy(
                     editingExercise = null,
@@ -784,6 +799,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     // showing the old name while the write lands.
                     selected = it.selected?.copy(
                         userName = renamed,
+                        isDisliked = open.disliked,
                         note = open.note.takeIf(String::isNotBlank),
                         chosenProgressionModel = open.progressionModel
                             .takeIf { model -> model != exercise.bankProgressionModel },
@@ -804,17 +820,45 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun startSwapping() {
         val replacing = screen.value.selected ?: return
         viewModelScope.launch {
-            val candidates = swapCandidatesFor(
-                replacing = replacing,
-                bank = exercises.observeBank().first(),
-                equipment = state.value.routine?.routine?.equipment.orEmpty(),
-                trainedBefore = database.sessionDao().exercisesEverTrained().toSet(),
-            )
-            screen.update { it.copy(swapCandidates = candidates) }
+            val bank = exercises.observeBank().first()
+            val equipment = state.value.routine?.routine?.equipment.orEmpty()
+            val trained = database.sessionDao().exercisesEverTrained().toSet()
+
+            val candidates = swapCandidatesFor(replacing, bank, equipment, trained)
+            // When the bans leave no way to train the muscle, the app **asks which is least bad**
+            // rather than silently including one — which would break the promise a dislike makes
+            // — or silently skipping the muscle, which would quietly leave a hole in the
+            // training. The decision is the lifter's; only they can make it.
+            val banned = candidates.isEmpty() &&
+                swapCandidatesFor(replacing, bank, equipment, trained, includeDisliked = true)
+                    .isNotEmpty()
+
+            screen.update {
+                it.copy(
+                    swapCandidates = if (banned) {
+                        swapCandidatesFor(replacing, bank, equipment, trained, includeDisliked = true)
+                    } else {
+                        candidates
+                    },
+                    swappingLeavesOnlyDisliked = banned,
+                )
+            }
         }
     }
 
-    fun cancelSwapping() = screen.update { it.copy(swapCandidates = null) }
+    /** Never wants to see [exercise] suggested again, or wants it back. */
+    fun setDisliked(exercise: Exercise, disliked: Boolean) {
+        viewModelScope.launch {
+            exercises.setDisliked(exercise.id, disliked)
+            screen.update {
+                it.copy(selected = it.selected?.takeIf { chosen -> chosen.id == exercise.id }
+                    ?.copy(isDisliked = disliked) ?: it.selected)
+            }
+        }
+    }
+
+    fun cancelSwapping() =
+        screen.update { it.copy(swapCandidates = null, swappingLeavesOnlyDisliked = false) }
 
     /**
      * Trains [instead] for the rest of this session.
@@ -825,7 +869,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      */
     fun swapTo(instead: Exercise) {
         select(instead)
-        screen.update { it.copy(swapCandidates = null) }
+        screen.update { it.copy(swapCandidates = null, swappingLeavesOnlyDisliked = false) }
     }
 
     /** Opens what the app is asking the lifter to rest for, so they can disagree with it. */
