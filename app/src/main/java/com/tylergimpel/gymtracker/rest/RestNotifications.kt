@@ -54,6 +54,16 @@ class RestNotifications(private val context: Context) {
         notifyIfAllowed(notification)
     }
 
+    /**
+     * Whether any of this would actually reach the lifter.
+     *
+     * False when notifications are off or the runtime permission was never granted, which on
+     * Android 13 and later is the default. Worth asking rather than posting into nothing: the
+     * countdown *is* the rest timer as far as a lifter with a phone in their pocket is concerned,
+     * and a feature that fails by being invisible has to say so while the app is open.
+     */
+    fun canBeSeen(): Boolean = manager.areNotificationsEnabled()
+
     /** Takes the countdown away: the rest was skipped, or the next set is already being logged. */
     fun clear() = manager.cancel(REST)
 

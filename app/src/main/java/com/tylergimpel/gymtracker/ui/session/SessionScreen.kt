@@ -6,6 +6,21 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -104,6 +119,32 @@ fun SessionScreen(
     viewModel: SessionViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    val askAboutNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { viewModel.recheckRestAlerts() }
+
+    // Asked once, on the way in. On Android 13 and later an app that never asks simply never
+    // appears, and the countdown is the whole of the rest timer to a lifter with a phone in a
+    // pocket. The system shows this at most once; the standing line below is what catches the
+    // lifter who said no, or who turned notifications off later.
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            askAboutNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // Both permissions are revocable and both are granted somewhere else, so the answer is read
+    // again every time the lifter comes back rather than once at launch.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.recheckRestAlerts()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
 
     SessionScreen(
         state = state,
@@ -141,6 +182,7 @@ fun SessionScreen(
         onFocusSet = viewModel::focusSet,
         onEndRest = viewModel::endRest,
         onAddRest = viewModel::addTimeToRest,
+        onFixRestAlerts = { fix -> context.startActivity(settingsFor(fix, context)) },
         onJumpTo = viewModel::select,
         onSwap = viewModel::startSwapping,
         onSwapTo = viewModel::swapTo,
@@ -199,6 +241,7 @@ fun SessionScreen(
     onFocusSet: (Int?) -> Unit = {},
     onEndRest: () -> Unit = {},
     onAddRest: () -> Unit = {},
+    onFixRestAlerts: (RestFix) -> Unit = {},
     onJumpTo: (Exercise) -> Unit = {},
     onSwap: () -> Unit = {},
     onSwapTo: (Exercise) -> Unit = {},
@@ -348,7 +391,7 @@ fun SessionScreen(
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
-                    WheelFooting(state, onEndRest, onAddRest)
+                    WheelFooting(state, onEndRest, onAddRest, onFixRestAlerts)
                     SetEntryControls(
                         exercise = selected,
                         recommendation = state.recommendation,
@@ -1074,8 +1117,40 @@ private fun RestDialog(
  * like one. Totals appear only where something has actually planned them; inventing one would be
  * stating a plan nobody made.
  */
+/**
+ * What a lifter can be sent to fix, when a rest cannot reach them.
+ *
+ * Both are permissions the app is allowed to ask for and neither is one it can grant itself, so
+ * what the screen offers is the trip to the place that can.
+ */
+enum class RestFix { EXACT_ALARMS, NOTIFICATIONS }
+
+/** A silent failure said out loud, with the one tap that fixes it. */
 @Composable
-private fun WheelFooting(state: SessionUiState, onEndRest: () -> Unit, onAddRest: () -> Unit) {
+private fun RestAlertWarning(
+    @StringRes said: Int,
+    @StringRes fix: Int,
+    onFix: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Text(
+            text = stringResource(said),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        TextButton(onClick = onFix, contentPadding = PaddingValues(vertical = 4.dp)) {
+            Text(stringResource(fix))
+        }
+    }
+}
+
+@Composable
+private fun WheelFooting(
+    state: SessionUiState,
+    onEndRest: () -> Unit,
+    onAddRest: () -> Unit,
+    onFixRestAlerts: (RestFix) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1101,15 +1176,20 @@ private fun WheelFooting(state: SessionUiState, onEndRest: () -> Unit, onAddRest
 
     // A rest that is running, and the way out of it. What reaches a lifter with the phone in a
     // pocket is the alarm (#57); this is the session saying one is going.
-    // Said where a lifter will read it, because the failure it warns about is silent: an alarm
-    // that never fires is discovered by missing a set rather than by an error.
+    // Said where a lifter will read it, because both failures below are silent: an alarm that
+    // never fires and a countdown nobody was allowed to draw are each discovered by missing a
+    // set rather than by an error. Each carries the way out of it, because telling somebody to
+    // go to Settings without taking them there is half a sentence.
     if (!state.restAlarmsAreReliable) {
-        Text(
-            text = stringResource(R.string.rest_unreliable),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
+        RestAlertWarning(R.string.rest_unreliable, R.string.rest_allow_alarms) {
+            onFixRestAlerts(RestFix.EXACT_ALARMS)
+        }
+    }
+
+    if (!state.restCountdownVisible) {
+        RestAlertWarning(R.string.rest_countdown_hidden, R.string.rest_allow_notifications) {
+            onFixRestAlerts(RestFix.NOTIFICATIONS)
+        }
     }
 
     state.resting?.let {
@@ -1759,3 +1839,20 @@ internal fun Effort.summary(displayUnit: WeightUnit, lifterUnit: WeightUnit): St
             )
         }
     }
+
+/**
+ * Where to send a lifter to let a rest reach them.
+ *
+ * Settings rather than a second permission dialog: the alarm one has no dialog at all, and the
+ * notification one is shown at most once by the system, after which the only honest route is the
+ * page that can still change the answer.
+ */
+private fun settingsFor(fix: RestFix, context: Context): Intent = when (fix) {
+    RestFix.EXACT_ALARMS -> Intent(
+        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+        Uri.fromParts("package", context.packageName, null),
+    )
+
+    RestFix.NOTIFICATIONS -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+}

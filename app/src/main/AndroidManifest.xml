@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Two permissions, both for the rest timer, and both the askable kind.
+  Three permissions, all for the rest timer, and all the askable kind.
 
   The exercise bank ships inside the APK so the app has nothing to fetch, and no network
   permission belongs here (docs/adr/0002-exercise-bank-source-and-omissions.md).
@@ -14,8 +14,10 @@
 
     <!-- Denied by default on Android 12+, and again after a backup restore. The app checks. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- The countdown and the alert. Runtime-granted on Android 13+. -->
+    <!-- The countdown and the alert. Runtime-granted on Android 13+, and asked for. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The alert channel vibrates, which is how it reaches a pocket in a loud gym. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:allowBackup="true"

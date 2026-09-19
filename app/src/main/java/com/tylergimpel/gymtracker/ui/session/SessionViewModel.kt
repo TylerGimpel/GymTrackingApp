@@ -127,6 +127,17 @@ data class ExerciseDetails(
  * Held as one object rather than as a flow each, because `combine` runs out of typed overloads at
  * five and the alternative is packing values into pairs to smuggle them past it.
  */
+/**
+ * What the platform will currently let a rest do: wake the lifter, and be seen while it runs.
+ *
+ * Two answers together because they fail the same way — silently, discovered by missing a set —
+ * and are surfaced together in the same corner of the screen.
+ */
+data class RestAlerts(
+    val alarmsAreReliable: Boolean = true,
+    val countdownVisible: Boolean = true,
+)
+
 private data class ScreenState(
     val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
@@ -149,6 +160,14 @@ private data class ScreenState(
     val focusedSet: Int? = null,
     /** The rest running, if one is. */
     val resting: Resting? = null,
+    /**
+     * What the rest timer is currently able to do, as last read from the platform.
+     *
+     * Held here rather than asked on every emission, because the answer changes while the app is
+     * in the background — a lifter who has just been sent to Settings comes back having changed
+     * it — and a value sampled inside the stream would keep reporting what was true at launch.
+     */
+    val restAlerts: RestAlerts = RestAlerts(),
     /**
      * Whether the drafts still hold what the app put in them rather than something typed.
      *
@@ -284,6 +303,14 @@ data class SessionUiState(
      * by missing a set rather than by seeing an error.
      */
     val restAlarmsAreReliable: Boolean = true,
+    /**
+     * Whether the countdown will actually appear.
+     *
+     * False when notifications are off or were never granted, which on Android 13 and later is
+     * the default. The same silent failure as a denied alarm and surfaced the same way: with the
+     * phone in a pocket, the notification *is* the rest timer.
+     */
+    val restCountdownVisible: Boolean = true,
     /** How far through the exercise, and how far through the work that counts. */
     val pace: SessionPace? = null,
     /** Roughly how much longer the session has to run, cardio included. */
@@ -338,6 +365,10 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     )
 
     private val screen = MutableStateFlow(ScreenState())
+
+    init {
+        recheckRestAlerts()
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val logged: StateFlow<LoggedSession?> = repository.observeActiveSession()
@@ -441,7 +472,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 } ?: false,
                 focusedSet = screen.focusedSet,
                 resting = screen.resting,
-                restAlarmsAreReliable = alarms.canWakeReliably(),
+                restAlarmsAreReliable = screen.restAlerts.alarmsAreReliable,
+                restCountdownVisible = screen.restAlerts.countdownVisible,
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(logged?.setsOf(chosen).orEmpty(), recommendation?.setType)
                 },
@@ -628,6 +660,22 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
             AfterLogging.Nothing -> Unit
         }
+    }
+
+    /**
+     * Re-reads what the rest timer is allowed to do.
+     *
+     * Called when the screen is shown and every time it is returned to, because both permissions
+     * are revocable and the way either gets granted is the lifter leaving the app and coming
+     * back. Nothing here asks for anything: asking belongs to the screen, which has an activity.
+     */
+    fun recheckRestAlerts() = screen.update {
+        it.copy(
+            restAlerts = RestAlerts(
+                alarmsAreReliable = alarms.canWakeReliably(),
+                countdownVisible = notifications.canBeSeen(),
+            ),
+        )
     }
 
     /**

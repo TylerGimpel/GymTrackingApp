@@ -29,13 +29,15 @@ class DeclaredPermissionsTest {
         }
 
     @Test
-    fun theAppAsksForTheTwoThingsTheRestTimerNeedsAndNothingElse() {
-        // Both askable, both for the timer. No network permission, because the exercise bank
-        // ships inside the APK and there is nothing to fetch (ADR 0002).
+    fun theAppAsksForTheThingsTheRestTimerNeedsAndNothingElse() {
+        // All askable, all for the timer: schedule it, show it, and be felt through a pocket.
+        // No network permission, because the exercise bank ships inside the APK and there is
+        // nothing to fetch (ADR 0002).
         assertEquals(
             listOf(
                 "android.permission.POST_NOTIFICATIONS",
                 "android.permission.SCHEDULE_EXACT_ALARM",
+                "android.permission.VIBRATE",
             ),
             declared.sorted(),
         )

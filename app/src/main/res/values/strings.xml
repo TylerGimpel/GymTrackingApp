@@ -61,7 +61,10 @@
     <string name="exercise_disliked">Never suggest this</string>
     <string name="drawer_sets_done">%1$d done</string>
     <string name="drawer_day_next">%1$s · next</string>
-    <string name="rest_unreliable">This phone will not let the app set an exact alarm, so a rest may reach you late. Allow alarms in Settings to fix it.</string>
+    <string name="rest_unreliable">This phone will not let the app set an exact alarm, so a rest may reach you late.</string>
+    <string name="rest_allow_alarms">Allow alarms</string>
+    <string name="rest_countdown_hidden">Notifications are off, so the countdown will not show and the rest will end quietly.</string>
+    <string name="rest_allow_notifications">Turn notifications on</string>
     <string name="session_rest_title">How long to rest</string>
     <string name="session_rest_this_set">This set</string>
     <string name="session_rest_always">Always on this one</string>

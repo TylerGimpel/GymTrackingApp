@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.content.getSystemService
 import com.tylergimpel.gymtracker.domain.RestAlarms
 import com.tylergimpel.gymtracker.domain.ScheduledRest
@@ -20,6 +21,10 @@ import com.tylergimpel.gymtracker.domain.ScheduledRest
  * which is exact and permitted during doze. A long one gets `setAlarmClock`, the strongest thing
  * an app can ask for and the only one exempt from idle quotas outright — at the price of a clock
  * icon in the status bar, which is why short rests do not use it.
+ *
+ * **Counted on elapsed realtime, not on the wall clock.** A rest is ninety seconds from now; it
+ * is not a time of day. A phone that crosses a timezone or has its clock corrected by the network
+ * mid-session would otherwise move a timer that has already started.
  */
 class RestAlarmScheduler(private val context: Context) : RestAlarms {
 
@@ -38,17 +43,28 @@ class RestAlarmScheduler(private val context: Context) : RestAlarms {
     override fun schedule(rest: ScheduledRest) {
         val ringing = pendingIntent(FLAG_REPLACE)
         val endsAt = rest.endsAt.toEpochMilli()
+        val inThisLong = endsAt - System.currentTimeMillis()
 
         when {
             // Without the permission there is no honest way to be exact, and a late alarm is
             // worse than an inexact one that at least admits what it is. The product says so
             // elsewhere; this is the fallback rather than the plan.
-            !canWakeReliably() -> alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt, ringing)
+            !canWakeReliably() -> alarms.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + inThisLong,
+                ringing,
+            )
 
+            // The one wall-clock route, because it has to be: what an alarm clock shows in the
+            // status bar is a time of day, so that is the term it has to be asked for in.
             rest.byAlarmClock ->
                 alarms.setAlarmClock(AlarmManager.AlarmClockInfo(endsAt, showRest()), ringing)
 
-            else -> alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endsAt, ringing)
+            else -> alarms.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + inThisLong,
+                ringing,
+            )
         }
     }
 
