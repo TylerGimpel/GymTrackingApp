@@ -194,7 +194,15 @@ fun List<TrainedSetRow>.toTrainingHistory(): TrainingHistory = TrainingHistory(
             date = rows.first().date,
             sets = rows.groupBy { it.setEntry.sessionExerciseId to it.setEntry.setIndex }
                 .map { (_, ofOneSet) -> ofOneSet.minBy { it.setEntry.id } }
-                .map { TrainedSet(SetType.fromStored(it.setEntry.type), it.setEntry.toPerformance()) },
+                .map {
+                    TrainedSet(
+                        type = SetType.fromStored(it.setEntry.type),
+                        performance = it.setEntry.toPerformance(),
+                        // What the app asked of that set, which is what the ladder reads it
+                        // against: beaten, missed, or a weight the lifter chose instead.
+                        prescription = it.setEntry.toPrescription(),
+                    )
+                },
         )
     },
 )

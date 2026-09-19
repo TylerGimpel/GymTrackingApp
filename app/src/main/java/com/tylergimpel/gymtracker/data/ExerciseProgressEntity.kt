@@ -56,15 +56,16 @@ data class ExerciseProgressEntity(
     val repRangeTop: Int,
 
     /**
-     * The load the exercise is currently being worked at — the anchor read back down to the bottom
-     * of the range and rounded to something loadable.
+     * The load the exercise is currently being worked at.
      *
-     * **Written and not yet read back.** Today every recommendation recomputes it from the log, so
-     * this column is a record rather than a source; what will read it is the step that advances a
-     * weight after the range has been beaten twice (#50), which has to start from the weight the
-     * lifter has been working at rather than from a fresh answer to the formula. Carried ahead of
-     * its reader on ADR 0007's precedent, which is how the prescription columns arrived too — the
-     * alternative is a schema migration inside the ticket that needs it.
+     * **Nothing reads this.** The weight a lifter is working at is the one the app last asked for,
+     * the log records every prescription, and the engine recovers it from there and moves it with
+     * the ladder rather than trusting a column that could have drifted (ADR 0010). It is written
+     * because spec #25 asks the engine to hold the working weight as stored state, and it is the
+     * one number here that a reader would otherwise have to fold a whole history to get.
+     *
+     * If the analytics arrive (#28) and still do not want it, delete it rather than keep inventing
+     * readers for it.
      */
     @ColumnInfo(name = "working_load_kg")
     val workingLoadKg: Double,

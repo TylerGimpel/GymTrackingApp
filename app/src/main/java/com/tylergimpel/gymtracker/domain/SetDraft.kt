@@ -216,6 +216,9 @@ data class SetDraft(
     fun showing(recommendation: Recommendation): SetDraft {
         // A hold and a run are recorded rather than prescribed, so there is nothing to fill in.
         if (!loggingType.recordsReps) return this
+        // Neither is there when the app has stopped prescribing for a lift: the fields are the
+        // lifter's own, and seeding them with nothing would clear what they had typed.
+        if (recommendation.prescription.isEmpty) return this
 
         val type = recommendation.setType
         val reps = recommendation.prescription.reps?.toString() ?: repsText

@@ -28,14 +28,27 @@ class AnchorTest {
     @Test
     fun `a better session moves the estimate part of the way, not all of it`() {
         val anchor = Anchor.from(
+            trained(sets(working(60.0, 6)), sets(working(60.0, 6)), sets(working(65.0, 6))),
+        )!!
+
+        // Epley calls that last session 78, and the estimate goes part of the way to it. Five kilos
+        // more than last week is a good session rather than evidence the estimate was wrong, and
+        // smoothing is what keeps one of those from becoming next week's prescription.
+        assertEquals(73.8, anchor.estimated1rm.value, TOLERANCE)
+        assertTrue(anchor.estimated1rm.value < 78.0)
+    }
+
+    @Test
+    fun `a session that beats the estimate outright replaces it`() {
+        val anchor = Anchor.from(
             trained(sets(working(60.0, 6)), sets(working(60.0, 6)), sets(working(80.0, 6))),
         )!!
 
-        // Epley calls that last session 96, and the estimate goes nowhere near it in one step.
-        // What closes the rest of the gap is beating the range substantially, which re-anchors from
-        // what was actually lifted rather than creeping (#50) — not a larger smoothing factor.
-        assertEquals(79.2, anchor.estimated1rm.value, TOLERANCE)
-        assertTrue(anchor.estimated1rm.value < 96.0)
+        // Twenty kilos more than last week is not noise to be absorbed — it is the estimate having
+        // been wrong, which wants the opposite treatment. Creeping toward it at a third of the gap
+        // per session would take a month to admit a number that was never right, and that is the
+        // whole reason a deliberately light cold start is safe to ship.
+        assertEquals(96.0, anchor.estimated1rm.value, TOLERANCE)
     }
 
     @Test

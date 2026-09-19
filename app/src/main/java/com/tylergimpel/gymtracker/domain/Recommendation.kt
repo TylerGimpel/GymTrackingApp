@@ -50,29 +50,72 @@ sealed interface Recommendation {
         override val prescription: Prescription,
         override val setType: SetType = SetType.CALIBRATION,
     ) : Recommendation
+
+    /**
+     * The same weight as last time, and a line asking for less of it.
+     *
+     * Three sessions short of a lift is past what a lighter bar fixes — the weight has already
+     * come down once, and taking it down again chases the lifter to the floor. So the intensity
+     * holds and the volume is what gives.
+     *
+     * **The app asks; it does not cut.** Nothing here prescribes a number of sets — a session is
+     * as long as the lifter makes it, and what will prescribe set counts is the generator (#26),
+     * which is what this rung will reduce when it exists. Until then the honest implementation of
+     * "cut the volume" is to hold the weight and say so, which is also why this rung is one of the
+     * two the screen breaks its silence for: a weight that has not moved looks like nothing
+     * happening.
+     */
+    data class CuttingVolume(override val prescription: Prescription) : Recommendation {
+        override val setType: SetType get() = SetType.WORKING
+    }
+
+    /**
+     * Nothing prescribed, and the app says why.
+     *
+     * A lift that has fallen short session after session is not one more guess away from being
+     * right, and an app that guesses forever is one whose numbers stop being read. Saying so is
+     * the point: silence here would look like the engine having nothing to offer a lift it had
+     * simply given up on.
+     *
+     * Carries an empty **Prescription**, so a set logged now records that nothing was asked of it
+     * — which is true, and which keeps the ladder from reading the next session as an override.
+     */
+    data object Stopped : Recommendation {
+        override val prescription: Prescription get() = Prescription()
+        override val setType: SetType get() = SetType.WORKING
+    }
 }
 
 /**
  * What to tell the lifter to do for the next set of one exercise, or nothing where there is
  * nothing honest to say.
  *
- * The boundary between the two modes, and it turns on one thing: whether this exercise's own
- * logged sets support an estimate. [progress] is what the caller worked out from [history] — it is
- * passed in rather than recomputed because the caller has already stored it — and where it exists,
+ * The boundary between the modes, and it turns on one thing: whether this exercise's own logged
+ * sets support an estimate. [progress] is what the caller worked out from [history] — it is passed
+ * in rather than recomputed because the caller has already stored it — and where it exists,
  * history is prescribed from. Where it does not, the ramp runs; and the app leaves calibrating by
  * itself the moment the first session becomes history.
  *
- * Null where even calibration has nothing to offer: a hold, a run, a lift the lifter has said they
- * do not want coached, or a ramp that has run out for today.
+ * What the ladder has to say is layered on top, because two of its rungs are things the lifter has
+ * to be told rather than changes to a number.
+ *
+ * Null where nothing has anything to offer: a hold, a run, a lift the lifter has said they do not
+ * want coached, or a ramp that has run out for today.
  */
 fun recommendNextSet(
     history: TrainingHistory,
     progress: ExerciseProgress?,
     calibration: CalibrationRamp?,
     setsToday: Int,
-): Recommendation? =
-    if (progress != null) {
-        Recommendation.Prescribing(history.nextSetOf(progress))
-    } else {
-        calibration?.nextSet(setsToday)
+): Recommendation? {
+    if (progress == null) return calibration?.nextSet(setsToday)
+
+    return when (history.ladderIn(progress.repRange)) {
+        Ladder.STOP -> Recommendation.Stopped
+        Ladder.CUT_VOLUME -> Recommendation.CuttingVolume(history.nextSetOf(progress))
+        // The other rungs have already moved the weight this prescribes, and say nothing further:
+        // in the normal state the screen says nothing about itself.
+        Ladder.HOLD, Ladder.ADVANCE, Ladder.BACK_OFF ->
+            Recommendation.Prescribing(history.nextSetOf(progress))
     }
+}

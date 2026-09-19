@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sign
 
@@ -35,7 +36,33 @@ value class Anchor(val estimated1rm: Kilograms) {
             epleyFactor(estimated1rm.value, min(range.bottom, MAX_REPS_ESTIMATED_FROM)),
     )
 
+    /**
+     * Whether [best] is so far past this estimate that the estimate was simply wrong.
+     *
+     * The escape hatch smoothing needs. A cold start is deliberately light, so the first session
+     * a lifter takes seriously can land 50% or more above what the app thought — and creeping
+     * toward it a session at a time would take a month to admit a number that was never right.
+     * Ordinary progress never looks like this: climbing a rep range from its bottom to its top
+     * moves an estimate by 6% on a 6 - 8 range and 11% on an 8 - 12 one, and a set past the top
+     * moves it by nothing at all, because the reps are out where the estimate stops reading them.
+     *
+     * Signed, like everything else here: a quarter *past* the estimate is less help on an assisted
+     * machine and more weight on a bar.
+     */
+    fun isSubstantiallyBeatenBy(best: Kilograms): Boolean =
+        best.value > estimated1rm.value + abs(estimated1rm.value) * SUBSTANTIAL_BEAT_FRACTION
+
     companion object {
+        /**
+         * How far past the estimate a session has to land before the estimate follows it outright.
+         *
+         * **An invented, tuneable number.** A quarter is comfortably beyond anything ordinary
+         * progress produces and comfortably inside what a wrong cold start produces, which is the
+         * only property it needs. It is not derived from anything and must not read as though it
+         * were.
+         */
+        const val SUBSTANTIAL_BEAT_FRACTION = 0.25
+
         /**
          * How far the estimate moves toward a session that disagrees with it.
          *
@@ -72,9 +99,17 @@ value class Anchor(val estimated1rm: Kilograms) {
                 .mapNotNull(TrainedSession::estimated1rm)
                 .fold(null as Anchor?) { anchor, best -> anchor.smoothedTo(best) }
 
-        /** The first session to say anything is taken at its word; every later one moves it. */
-        private fun Anchor?.smoothedTo(best: Kilograms): Anchor = when (this) {
-            null -> Anchor(best)
+        /**
+         * The first session to say anything is taken at its word; every later one moves it.
+         *
+         * A session that beats the estimate substantially is taken at its word too. Smoothing is
+         * there to absorb noise, and a session half again as good as anything before it is not
+         * noise — it is the estimate being wrong, which is a different problem and wants the
+         * opposite treatment.
+         */
+        private fun Anchor?.smoothedTo(best: Kilograms): Anchor = when {
+            this == null -> Anchor(best)
+            isSubstantiallyBeatenBy(best) -> Anchor(best)
             else -> Anchor(
                 Kilograms(estimated1rm.value + SMOOTHING * (best.value - estimated1rm.value)),
             )

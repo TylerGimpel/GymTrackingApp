@@ -33,6 +33,8 @@
     <string name="session_log_set">Log set</string>
     <string name="session_calibrating">calibrating</string>
     <string name="session_calibrating_hint">Stop when it gets hard. Being wrong here is expected.</string>
+    <string name="session_cutting_volume">Same weight, fewer sets — this one has been hard three sessions running.</string>
+    <string name="session_stopped">No suggestion for this lift: it has come up short too many sessions running. Pick a weight that works today.</string>
     <string name="session_edit_set">Edit set</string>
     <string name="session_save">Save</string>
     <string name="session_delete">Delete</string>

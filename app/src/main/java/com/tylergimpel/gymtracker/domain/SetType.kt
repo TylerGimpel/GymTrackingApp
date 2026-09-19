@@ -32,6 +32,17 @@ enum class SetType(val stored: String) {
     val countsTowardVolume: Boolean get() = this in COUNTING
 
     /**
+     * Whether a set of this type is performed at the exercise's working weight.
+     *
+     * What the **Graded ladder** reads, and it is a narrower question than whether the set was
+     * work. A warm-up and a calibration rung are steps on the way to a working weight rather than
+     * one — a lifter who stops a ramp early has finished finding out, not failed — and a back-off
+     * set is deliberately lighter than one. Holding a lifter at any of the three would hold them
+     * at the lightest thing they lifted that day.
+     */
+    val isAtTheWorkingWeight: Boolean get() = this == WORKING || this == AMRAP
+
+    /**
      * Whether a set of this type tells the engine anything about what the lifter can do.
      *
      * Everything but a warm-up, which is a ramp rather than work and would drag an estimate down

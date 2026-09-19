@@ -230,6 +230,77 @@ class RecommendationPersistenceTest {
         assertEquals(12, afterwards.reps)
     }
 
+
+    @Test
+    fun beatingTheRangeTwiceRunningAdvancesTheWeightOnceItIsHistory() = runBlocking {
+        // A first session to give the engine something to prescribe from, then two sessions that
+        // clear the top of the default 8 - 12 range at what it asked for.
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
+        val first = recommendations.nextSet(exercise(BENCH))!!.prescription
+        train("2026-09-16T18:00") {
+            logSet(BENCH, SetDraft("60", "14"), prescription = first)
+        }
+        val second = recommendations.nextSet(exercise(BENCH))!!.prescription
+        assertEquals(60.0, second.load!!.value, TOLERANCE)
+
+        train("2026-09-18T18:00") {
+            logSet(BENCH, SetDraft("60", "14"), prescription = second)
+        }
+
+        // One increment on the bar, and the reps start again at the bottom of the range.
+        val next = recommendations.nextSet(exercise(BENCH))!!.prescription
+        assertEquals(62.5, next.load!!.value, TOLERANCE)
+        assertEquals(8, next.reps)
+    }
+
+    @Test
+    fun twoSessionsShortOfTheWeightBackItOff() = runBlocking {
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
+        val asked = recommendations.nextSet(exercise(BENCH))!!.prescription
+
+        train("2026-09-16T18:00") { logSet(BENCH, SetDraft("60", "4"), prescription = asked) }
+        // One short session costs nothing: the same weight comes back.
+        val afterOne = recommendations.nextSet(exercise(BENCH))!!.prescription
+        assertEquals(60.0, afterOne.load!!.value, TOLERANCE)
+
+        train("2026-09-18T18:00") { logSet(BENCH, SetDraft("60", "4"), prescription = afterOne) }
+
+        // Two running, and about a tenth comes off — rounded down to a weight that exists.
+        assertEquals(52.5, recommendations.nextSet(exercise(BENCH))!!.prescription.load!!.value, TOLERANCE)
+    }
+
+    @Test
+    fun aWeightTheLifterChoseThemselvesNeverBacksTheirTrainingOff() = runBlocking {
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
+        val asked = recommendations.nextSet(exercise(BENCH))!!.prescription
+
+        // Two sessions at a lighter weight of their own. Falling short and deciding to go lighter
+        // look identical in a log that holds only what was done, which is why the prescription is
+        // written down beside it.
+        train("2026-09-16T18:00") { logSet(BENCH, SetDraft("50", "8"), prescription = asked) }
+        train("2026-09-18T18:00") { logSet(BENCH, SetDraft("50", "8"), prescription = asked) }
+
+        assertEquals(60.0, recommendations.nextSet(exercise(BENCH))!!.prescription.load!!.value, TOLERANCE)
+    }
+
+    @Test
+    fun aLiftThatKeepsComingUpShortStopsBeingPrescribedFor() = runBlocking {
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
+        var asked = recommendations.nextSet(exercise(BENCH))!!.prescription
+        repeat(5) { session ->
+            train("2026-09-2${session}T18:00") {
+                logSet(BENCH, SetDraft(asked.load!!.value.toString(), "3"), prescription = asked)
+            }
+            recommendations.nextSet(exercise(BENCH))
+                ?.takeIf { it !is Recommendation.Stopped }
+                ?.let { asked = it.prescription }
+        }
+
+        // Five sessions short of the same lift, and the app says so rather than guessing a sixth
+        // time. Nothing is prescribed, so a set logged now records that nothing was asked.
+        assertEquals(Recommendation.Stopped, recommendations.nextSet(exercise(BENCH)))
+    }
+
     @Test
     fun whatTheAppWorkedOutSurvivesABankUpdate() = runBlocking {
         train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }

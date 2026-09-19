@@ -29,6 +29,14 @@ value class Increment(val size: Kilograms) {
     fun roundDown(load: Kilograms): Kilograms =
         Kilograms(floor(load.value / size.value + FLOAT_DUST) * size.value)
 
+    /**
+     * One step harder than [load] — what an advance moves by.
+     *
+     * Harder rather than heavier, and the same arithmetic for both: a step up the bar, and a step
+     * *off* an assisted machine's help, which is a load counting upward from below zero.
+     */
+    fun oneStepAbove(load: Kilograms): Kilograms = Kilograms(load.value + size.value)
+
     companion object {
         /**
          * What a weight is rounded to until the equipment says otherwise.

@@ -658,13 +658,14 @@ private fun SetEntryControls(
 }
 
 /**
- * What to do next: the weight and the rep count the log button will record, and — only while the
- * app is guessing — the fact that it is.
+ * What to do next: the weight and the rep count the log button will record, and the one line of
+ * explanation that some of what the engine does cannot go without.
  *
  * **In the normal state the screen says nothing about itself.** No badge, no hint, no label: the
  * previous set is already printed under every row below, and a line repeating that the number came
- * from it is noise. `calibrating` is the one mode that speaks, and knowing when the app is guessing
- * is what makes the rest of the time trustworthy (`docs/design/logging-screen.md`).
+ * from it is noise (`docs/design/logging-screen.md`). Three things break that silence, and each
+ * earns it — the app guessing, the app cutting the work rather than the weight, and the app having
+ * stopped. All three are cases where the number alone would be read as something it is not.
  *
  * The value is written in the same shape as the logged sets below it, so accepting a recommendation
  * and reading back what was accepted look like the same thing rather than two different screens'
@@ -677,54 +678,69 @@ private fun NextSet(
     loggingType: LoggingType,
     displayUnit: WeightUnit,
 ) {
-    val reps = recommendation.prescription.reps ?: return
+    val reps = recommendation.prescription.reps
     val asked = loggingType.reading(recommendation.prescription.load)
     val unit = stringResource(displayUnit.label)
-    val guessing = recommendation is Recommendation.Calibrating
 
     // Tight together rather than spaced as three things: the word, the number and the line under
     // it are one message, and the number is the part read from the rack.
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (guessing) {
+        if (recommendation is Recommendation.Calibrating) {
             Text(
                 text = stringResource(R.string.session_calibrating),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = when (asked) {
-                is PrescribedLoad.Weight ->
-                    stringResource(R.string.set_summary, asked.weight.asTextIn(displayUnit), unit, reps)
-
-                is PrescribedLoad.Belt -> stringResource(
-                    R.string.set_added_weight_summary,
-                    asked.added.asTextIn(displayUnit),
-                    unit,
-                    reps,
-                )
-
-                // Written as the machine is set. The minus sign in front of it is the screen
-                // saying which way it counts, not a negative weight.
-                is PrescribedLoad.Help -> stringResource(
-                    R.string.set_assisted_summary,
-                    asked.assistance.asTextIn(displayUnit),
-                    unit,
-                    reps,
-                )
-
-                // A pull-up with no belt asks for reps and nothing else, which is the ordinary
-                // case on every exercise whose load is the lifter's own body.
-                PrescribedLoad.None -> stringResource(R.string.set_reps_summary, reps)
-            },
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        // One line admitting the app expects to be wrong, and saying what to do about it. Without
-        // it the word above is the data model talking; with it, a lifter knows the number is a
-        // starting point and that correcting it is the point.
-        if (guessing) {
+        if (reps != null) {
             Text(
-                text = stringResource(R.string.session_calibrating_hint),
+                text = when (asked) {
+                    is PrescribedLoad.Weight -> stringResource(
+                        R.string.set_summary,
+                        asked.weight.asTextIn(displayUnit),
+                        unit,
+                        reps,
+                    )
+
+                    is PrescribedLoad.Belt -> stringResource(
+                        R.string.set_added_weight_summary,
+                        asked.added.asTextIn(displayUnit),
+                        unit,
+                        reps,
+                    )
+
+                    // Written as the machine is set. The minus sign in front of it is the screen
+                    // saying which way it counts, not a negative weight.
+                    is PrescribedLoad.Help -> stringResource(
+                        R.string.set_assisted_summary,
+                        asked.assistance.asTextIn(displayUnit),
+                        unit,
+                        reps,
+                    )
+
+                    // A pull-up with no belt asks for reps and nothing else, which is the ordinary
+                    // case on every exercise whose load is the lifter's own body.
+                    PrescribedLoad.None -> stringResource(R.string.set_reps_summary, reps)
+                },
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        }
+
+        // What the number cannot say by itself.
+        val line = when (recommendation) {
+            // That the app expects to be wrong, and what to do about it. Without it the word
+            // above is the data model talking.
+            is Recommendation.Calibrating -> R.string.session_calibrating_hint
+            // That a weight which has not moved is a decision rather than nothing happening.
+            is Recommendation.CuttingVolume -> R.string.session_cutting_volume
+            // That there is no number because the app has stopped guessing, rather than because
+            // it has nothing to say about this lift at all.
+            Recommendation.Stopped -> R.string.session_stopped
+            is Recommendation.Prescribing -> null
+        }
+        line?.let {
+            Text(
+                text = stringResource(it),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

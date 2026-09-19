@@ -171,7 +171,7 @@ _Avoid_: target reps as a name for what a set asks for. The bottom and the top o
 What a set that is not progressed asks for instead of a rep range — warm-up sets ramping up to the working weight, and calibration sets finding out what it should be. Neither has a top to reach, so neither carries a range.
 
 **Calibrating**:
-The mode the app is in when it has no useful anchor for an exercise — a first session, or a return after a long layoff. It still suggests a weight, but expects to be wrong and to be corrected by what the user actually lifts. The one mode that appears on screen: **Prescribing** says nothing about itself, because knowing when the app is guessing is what makes the rest of the time trustworthy.
+The mode the app is in when it has no useful anchor for an exercise — a first session, or a return after a long layoff. It still suggests a weight, but expects to be wrong and to be corrected by what the user actually lifts. It says so on screen, where **Prescribing** says nothing at all about itself: knowing when the app is guessing is what makes the rest of the time trustworthy. The only other things the screen breaks that silence for are the two rungs of the **Graded ladder** that a number alone would be read wrongly without.
 
 **Calibration ramp**:
 The short climb a first session makes to find a working weight, rather than predicting one. Starts at a **seed** chosen from what the exercise is loaded with — an empty bar, a light dumbbell, a low pin — and steps up until the lifter stops, biased low throughout and capped so session one does not become forty minutes. Every rung is a **Calibration set**, and each is harder than the last: more weight on a bar, less help on an assisted machine.
@@ -181,13 +181,22 @@ The seed is the only part of cold start a model does: measuring what somebody ca
 **Prescribing**:
 The mode the app is in when real history supports the recommendation.
 
+**Graded ladder**:
+What the app does about sessions that keep going the same way, in both directions and never in one step. Two sessions past the top of the **Rep range** earn one **Increment**; a single short session costs nothing, two running take about a tenth off the weight, three hold that weight and cut the work instead, and a lift that keeps coming up short stops being prescribed for at all rather than guessed at forever.
+
+Judged per session rather than per set — one hard set at the end of a session is fatigue — and **against the range rather than against the reps asked for**: the count asked for is last session's, so a lifter drifting down inside their band would otherwise read as falling short twice running. Coming up short means failing to reach the bottom of the range at the weight asked for.
+
+Only sessions that answered what was asked are counted. A weight the lifter chose instead is a decision rather than a failure, and backing off a weight nobody failed is its own kind of wrong; a session the app said nothing about is invisible to the ladder rather than an answer to it, which is what keeps a lift it has stopped prescribing for stopped.
+
+Cutting the volume is advice rather than an action, because nothing in the app prescribes a number of sets yet. Every rate in the ladder is an invented, tuneable judgement call; ADR 0004 supports the shape, not the numbers.
+
 **Personal record**:
 The best set a user has performed at a given rep count for an exercise — best at 5, best at 8, and so on. Rep-specific because a single "best set" is ambiguous once weight and reps both vary.
 
 **Working load**:
 The load an exercise is currently being worked at — the **Anchor** read back down to the bottom of the **Rep range** and rounded down to an **Increment**. A load rather than a weight, because on an assisted machine it is how much help the machine is giving.
 
-What double progression is meant to move: the weight holds while the reps climb through the range, and steps once the top has been beaten twice. Today it follows the anchor, because the step that holds it and then advances it is the graded ladder's, which has its own ticket. Held per exercise beside the anchor, and the app's own working rather than anything the lifter chose, which is why it lives apart from both the shipped bank row and the lifter's preferences.
+What double progression moves: the weight holds while the reps climb through the range, and steps by one **Increment** once the top has been beaten on two consecutive sessions. Held rather than followed — once the app has asked for a weight, that weight is what holds, and not whatever the **Anchor** currently says. The app's own working rather than anything the lifter chose, which is why it lives apart from both the shipped bank row and the lifter's preferences.
 
 **Increment**:
 The smallest weight step actually achievable on a given exercise, set by the equipment rather than by arithmetic — plate pairs on a barbell, rack steps on dumbbells, and for machines, the stack positions the user has been observed to use.
