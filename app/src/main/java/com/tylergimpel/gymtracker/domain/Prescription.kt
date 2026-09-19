@@ -1,7 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
 import java.time.Duration
-import kotlin.math.abs
 
 /**
  * What the app told the lifter to do for one set.
@@ -54,15 +53,13 @@ data class Prescription(
     }
 
     /**
-     * Whether two loads are the same weight as far as a lifter is concerned.
+     * Whether the load asked for is the load that was lifted.
      *
-     * Never an exact comparison: a weight entered in pounds and stored in kilograms is not the
-     * identical double it was prescribed as, and a set the lifter loaded exactly as asked must not
-     * read as an override on a thousandth of a kilogram. The tolerance belongs to [WeightUnit],
-     * which is what does the rounding that makes it necessary.
+     * Never an exact comparison, for the reason [isSameLoadAs] gives: a set the lifter loaded
+     * exactly as asked must not read as an override on a thousandth of a kilogram.
      */
     private fun Kilograms.matches(other: Kilograms?): Boolean =
-        other != null && abs(value - other.value) < WeightUnit.SAME_WEIGHT_TOLERANCE_KG
+        other != null && isSameLoadAs(other)
 }
 
 /** What a set did about the **Prescription** it was given. */

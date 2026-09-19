@@ -18,6 +18,7 @@ import androidx.room.TypeConverters
     entities = [
         ExerciseEntity::class,
         ExercisePreferenceEntity::class,
+        ExerciseProgressEntity::class,
         SessionEntity::class,
         SessionExerciseEntity::class,
         SupersetGroupEntity::class,
@@ -50,7 +51,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
 
     companion object {
-        const val VERSION = 17
+        const val VERSION = 18
 
         /** Path inside assets, written there at build time by `generate<Variant>ExerciseBank`. */
         const val ASSET_PATH = "databases/gym-bank.db"

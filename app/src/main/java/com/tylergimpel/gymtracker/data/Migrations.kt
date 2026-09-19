@@ -455,6 +455,30 @@ internal val MIGRATION_16_17 = object : Migration(16, 17) {
     }
 }
 
+/**
+ * Version 18 gives the engine somewhere to keep what it works out about an exercise.
+ *
+ * A table of its own beside `exercise_preference`, for the reason ADR 0009 gives and one more: the
+ * preference table holds what the lifter chose and this holds what the app computed, and the two
+ * must not share a row. Both are out of `exercise`, which a bank update replaces wholesale.
+ *
+ * Nothing is backfilled. An anchor is a fold over a history rather than a value a column can be
+ * derived into, and the first recommendation asked for on an exercise computes it from the log —
+ * so an installed copy with years of training in it arrives at the same numbers as a fresh one,
+ * without this migration having to reproduce the engine in SQL.
+ */
+internal val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `exercise_progress` (`exercise_id` TEXT NOT NULL, " +
+                "`anchor_kg` REAL NOT NULL, `rep_range_bottom` INTEGER NOT NULL, " +
+                "`rep_range_top` INTEGER NOT NULL, `working_load_kg` REAL NOT NULL, " +
+                "PRIMARY KEY(`exercise_id`), FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -472,6 +496,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_14_15,
     MIGRATION_15_16,
     MIGRATION_16_17,
+    MIGRATION_17_18,
 )
 
 /**

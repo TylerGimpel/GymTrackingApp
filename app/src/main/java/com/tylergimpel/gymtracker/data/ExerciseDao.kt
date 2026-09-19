@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -92,6 +93,30 @@ interface ExerciseDao {
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)
+
+    /** What the app has worked out about an exercise, or null where it has nothing yet. */
+    @Query("SELECT * FROM exercise_progress WHERE exercise_id = :exerciseId")
+    suspend fun progress(exerciseId: String): ExerciseProgressEntity?
+
+    /**
+     * Records what the engine now makes of an exercise.
+     *
+     * A whole-row write, unlike the preferences above, and safely so: every column here is the
+     * app's own and is written together from the same reading of the log. There is nothing of the
+     * lifter's in this table to clear by accident.
+     */
+    @Upsert
+    suspend fun upsertProgress(progress: ExerciseProgressEntity)
+
+    /**
+     * Forgets what the app had worked out about an exercise.
+     *
+     * For the case where the history it was derived from has gone — the last logged set corrected
+     * away or deleted. Absence is this table's way of saying "nothing to go on", and a stale
+     * estimate of training that no longer exists is worse than no estimate at all.
+     */
+    @Query("DELETE FROM exercise_progress WHERE exercise_id = :exerciseId")
+    suspend fun forgetProgress(exerciseId: String)
 
     /** Adds a row: the lifter's own exercise, or one a bank update brought. */
     @Insert

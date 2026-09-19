@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.data.GymDatabase
+import com.tylergimpel.gymtracker.data.RecommendationRepository
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.SessionRepository
@@ -17,6 +18,7 @@ import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -32,12 +34,16 @@ import com.tylergimpel.gymtracker.domain.durationOrNull
 import com.tylergimpel.gymtracker.domain.repsOrNull
 import com.tylergimpel.gymtracker.domain.weightOrNull
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -93,6 +99,14 @@ data class ExerciseDetails(
 private data class ScreenState(
     val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
+    /**
+     * Whether the drafts still hold what the app put in them rather than something typed.
+     *
+     * What lets the recommendation seed the fields without ever overwriting a lifter mid-entry:
+     * true from the moment an exercise is selected until the first keystroke, and true again the
+     * next time one is.
+     */
+    val untouched: Boolean = true,
     val perSide: Boolean = false,
     val overridingDisplayUnit: Boolean = false,
     val rightDraft: SetDraft = SetDraft(),
@@ -122,6 +136,14 @@ data class SessionUiState(
      */
     val positions: List<SessionPosition> = emptyList(),
     val selected: Exercise? = null,
+    /**
+     * What the app is telling the lifter to do for the next set, where it has anything to say.
+     *
+     * Always about [selected] and never about the exercise before it: it is matched to the current
+     * selection on the way out, so a recommendation still in flight when the lifter changes
+     * exercise cannot be shown against — or recorded beside — the wrong movement.
+     */
+    val prescription: Prescription? = null,
     val draft: SetDraft = SetDraft(),
     /** Whether the entry controls are expanded to record each side separately. */
     val perSide: Boolean = false,
@@ -177,6 +199,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     private val exercises =
         ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
 
+    private val recommendations =
+        RecommendationRepository(database, database.exerciseDao(), database.sessionDao())
+
     private val routines = RoutineRepository(
         database = database,
         routines = database.routineDao(),
@@ -193,14 +218,53 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
+    /**
+     * What the app has to say about the selected exercise, and which exercise it is about.
+     *
+     * Carries the id because the answer arrives after a database read: the lifter can have moved on
+     * to the next machine by then, and a recommendation shown — or recorded — against the wrong
+     * exercise is worse than none at all.
+     */
+    private data class Recommended(val exerciseId: String, val prescription: Prescription)
+
+    /**
+     * Re-asked whenever the selection changes or the log does.
+     *
+     * The log, because finishing a session turns today's work into history and moves what comes
+     * next. Logging a set within one changes nothing, by design — advancing takes two consecutive
+     * sessions rather than one good set — so this re-reads and arrives at the same answer.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val recommended: Flow<Recommended?> =
+        combine(screen.map { it.selected }.distinctUntilChanged(), logged) { selected, _ ->
+            selected
+        }.mapLatest { selected ->
+            selected?.let { exercise ->
+                recommendations.prescribeNextSet(exercise)?.let { Recommended(exercise.id, it) }
+            }
+        }
+
+    /**
+     * The session being logged and the recommendation, paired.
+     *
+     * Together because `combine` runs out of typed overloads at five, and the two belong together
+     * anyway: they are the two halves of what this screen is for.
+     */
+    private data class Training(val logged: LoggedSession?, val recommended: Recommended?)
+
     val state: StateFlow<SessionUiState> =
         combine(
-            logged,
+            combine(logged, recommended, ::Training),
             repository.observeLastFinished(),
             routines.observeProgress(),
             screen,
             profile.observeDisplayUnit(),
-        ) { logged, lastFinished, routine, screen, lifterUnit ->
+        ) { training, lastFinished, routine, screen, lifterUnit ->
+            val logged = training.logged
+            // Only where it is about the exercise in front of the lifter right now.
+            val prescription = training.recommended
+                ?.takeIf { it.exerciseId == screen.selected?.id }
+                ?.prescription
             SessionUiState(
                 lifterUnit = lifterUnit,
                 session = logged?.session,
@@ -209,13 +273,15 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 exercises = logged?.exercises.orEmpty(),
                 positions = logged?.positions.orEmpty(),
                 selected = screen.selected,
+                prescription = prescription,
                 // The lifter's own unit is applied on the way out rather than copied into the draft
                 // when it is made, so a distance field cannot be left reading in the unit they had
                 // before they changed it.
-                draft = screen.draft.copy(lifterUnit = lifterUnit),
+                draft = screen.draft.copy(lifterUnit = lifterUnit).seededWith(prescription, screen),
                 perSide = screen.perSide,
                 overridingDisplayUnit = screen.overridingDisplayUnit,
-                rightDraft = screen.rightDraft.copy(lifterUnit = lifterUnit),
+                rightDraft = screen.rightDraft.copy(lifterUnit = lifterUnit)
+                    .seededWith(prescription, screen),
                 editing = screen.editing?.let { it.copy(draft = it.draft.copy(lifterUnit = lifterUnit)) },
                 addingDrop = screen.addingDrop,
                 routine = routine,
@@ -225,6 +291,16 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 editingExercise = screen.editingExercise,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
+
+    /**
+     * The draft with the recommendation in it, while the lifter has typed nothing of their own.
+     *
+     * Seeded on the way out rather than written into the draft when it arrives, so that accepting a
+     * recommendation and typing over one are the same path: what the log button records is whatever
+     * the fields hold, and nothing has to remember to clear a suggestion that has been answered.
+     */
+    private fun SetDraft.seededWith(prescription: Prescription?, screen: ScreenState): SetDraft =
+        if (prescription == null || !screen.untouched) this else showing(prescription)
 
     /**
      * Points the controls at an exercise.
@@ -244,6 +320,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 displayUnit = exercise.displayUnit,
             ),
             perSide = false,
+            // Nothing typed yet, so the recommendation for this exercise is free to fill the
+            // fields the moment it arrives.
+            untouched = true,
             // Departing is a property of the machine in front of the lifter, so it does not
             // follow them to the next exercise any more than per-side entry does.
             overridingDisplayUnit = false,
@@ -259,10 +338,17 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * unit — a set is read off one machine, so its two sides cannot be in different ones.
      */
     fun changeDraft(draft: SetDraft) = screen.update {
-        it.copy(draft = draft, rightDraft = it.rightDraft.readIn(draft.displayUnit))
+        it.copy(
+            draft = draft,
+            rightDraft = it.rightDraft.readIn(draft.displayUnit),
+            // The lifter has said something of their own, so the recommendation stops filling the
+            // fields in: it was a suggestion, and one typed over has been answered.
+            untouched = false,
+        )
     }
 
-    fun changeRightDraft(draft: SetDraft) = screen.update { it.copy(rightDraft = draft) }
+    fun changeRightDraft(draft: SetDraft) =
+        screen.update { it.copy(rightDraft = draft, untouched = false) }
 
     /**
      * Reads the controls in [displayUnit], and remembers it as how this exercise is read.
@@ -318,15 +404,20 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val current = state.value
         val exercise = current.selected ?: return
         viewModelScope.launch {
+            // What was asked, recorded whether or not it was done: a lifter offered 60 who loads
+            // 65 has overridden a recommendation, and only the offer beside the result tells that
+            // apart from falling short of one.
+            val asked = current.prescription ?: Prescription()
             val recorded = if (current.perSide) {
                 repository.logPerSideSet(
                     exercise.id,
                     current.draft,
                     current.rightDraft,
                     exercise.displayUnit,
+                    asked,
                 )
             } else {
-                repository.logSet(exercise.id, current.draft, exercise.displayUnit)
+                repository.logSet(exercise.id, current.draft, exercise.displayUnit, asked)
             }
             if (!recorded) return@launch
             // Keep the numbers: the next set is usually the same load, and retyping them every time

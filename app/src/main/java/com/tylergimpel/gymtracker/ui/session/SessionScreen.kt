@@ -48,9 +48,12 @@ import com.tylergimpel.gymtracker.domain.DistanceUnit
 import com.tylergimpel.gymtracker.domain.Drop
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSession
+import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -74,8 +77,8 @@ import java.time.ZoneOffset
  * The plain logging screen: pick an exercise, enter a weight and reps, see what was logged.
  *
  * Deliberately not the settled live logging design in `docs/design/logging-screen.md` — that wheel
- * belongs to the training-loop spec and needs a recommendation to render. This is the functional
- * path underneath it.
+ * is its own ticket (#53). This is the functional path underneath it, and it now shows what the app
+ * is asking for: the fields arrive holding the recommendation, so logging it is one tap.
  */
 @Composable
 fun SessionScreen(
@@ -246,6 +249,7 @@ fun SessionScreen(
                 item {
                     SetEntryControls(
                         exercise = selected,
+                        prescription = state.prescription,
                         draft = state.draft,
                         rightDraft = state.rightDraft,
                         perSide = state.perSide,
@@ -551,6 +555,7 @@ private fun EmptySession(
 @Composable
 private fun SetEntryControls(
     exercise: Exercise,
+    prescription: Prescription?,
     draft: SetDraft,
     rightDraft: SetDraft,
     perSide: Boolean,
@@ -583,6 +588,13 @@ private fun SetEntryControls(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        // What the app is asking for, above the fields that already hold it. No label and no
+        // badge: the screen says nothing about itself in the normal state, and the number is the
+        // whole message (`docs/design/logging-screen.md`).
+        prescription?.let {
+            PrescribedSet(it, exercise.loggingType, draft.displayUnit)
         }
 
         if (perSide) {
@@ -643,6 +655,51 @@ private fun SetEntryControls(
             Text(stringResource(R.string.session_log_set))
         }
     }
+}
+
+/**
+ * One line saying what to do: the weight and the rep count the log button will record.
+ *
+ * Written in the same shape as the logged sets below it, so accepting a recommendation and reading
+ * back what was accepted look like the same thing rather than two different screens' vocabulary.
+ * Read in the unit the fields are in — the machine's own, which is what the lifter is looking at.
+ */
+@Composable
+private fun PrescribedSet(
+    prescription: Prescription,
+    loggingType: LoggingType,
+    displayUnit: WeightUnit,
+) {
+    val reps = prescription.reps ?: return
+    val load = prescription.load
+    val unit = stringResource(displayUnit.label)
+    Text(
+        text = when {
+            loggingType.recordsWeight && load != null ->
+                stringResource(R.string.set_summary, load.asTextIn(displayUnit), unit, reps)
+
+            // Help, written as the machine is set rather than as it is stored: the minus sign in
+            // front of it is the screen saying which way it counts, not a negative weight.
+            loggingType.recordsAssistance && load != null && load.value < 0.0 -> stringResource(
+                R.string.set_assisted_summary,
+                Kilograms(-load.value).asTextIn(displayUnit),
+                unit,
+                reps,
+            )
+
+            loggingType.recordsAddedWeight && load != null && load.value > 0.0 -> stringResource(
+                R.string.set_added_weight_summary,
+                load.asTextIn(displayUnit),
+                unit,
+                reps,
+            )
+
+            // A pull-up with no belt asks for reps and nothing else, which is the ordinary case on
+            // every exercise whose load is the lifter's own body.
+            else -> stringResource(R.string.set_reps_summary, reps)
+        },
+        style = MaterialTheme.typography.headlineSmall,
+    )
 }
 
 /**

@@ -158,6 +158,8 @@ _Avoid_: weight on its own as a name for it, which already means what is on the 
 **Anchor**:
 The app's current estimate of what a user can lift on one exercise, held as an estimated one-rep max and updated from their own logged sets for that exercise alone. Never inferred from a different exercise.
 
+Smoothed rather than moved to each new best, so one lucky set does not become next week's prescription, and **signed like a load**: negative on an assisted machine, where needing less help is the better estimate. Recomputed from the log rather than accumulated, so correcting a mis-logged set corrects it (`docs/adr/0010-the-anchor-is-recomputed-from-the-log.md`).
+
 **Rep range**:
 The span of reps a working set is prescribed in, such as 6–12. Held per exercise, because it is the exercise's own progression that moves through it: the weight stays while reps climb from the bottom of the range to the top, and only once the top is reached does the weight go up and the reps return to the bottom. A recommendation therefore targets the range, never one rep count.
 _Avoid_: target reps as a name for what a set asks for. The bottom and the top of the range do different jobs, and one number hides that. (ADR 0004's load formula still takes a single rep count as its input; that input is the bottom of the range.)
@@ -173,6 +175,11 @@ The mode the app is in when real history supports the recommendation.
 
 **Personal record**:
 The best set a user has performed at a given rep count for an exercise — best at 5, best at 8, and so on. Rep-specific because a single "best set" is ambiguous once weight and reps both vary.
+
+**Working load**:
+The load an exercise is currently being worked at — the **Anchor** read back down to the bottom of the **Rep range** and rounded down to an **Increment**. A load rather than a weight, because on an assisted machine it is how much help the machine is giving.
+
+What double progression moves: it holds while the reps climb through the range, and steps only once the top has been beaten. Held per exercise beside the anchor, and the app's own working rather than anything the lifter chose, which is why it lives apart from both the shipped bank row and the lifter's preferences.
 
 **Increment**:
 The smallest weight step actually achievable on a given exercise, set by the equipment rather than by arithmetic — plate pairs on a barbell, rack steps on dumbbells, and for machines, the stack positions the user has been observed to use.

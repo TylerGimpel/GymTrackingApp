@@ -293,4 +293,61 @@ class SetDraftTest {
         // pull-up with the number missing says nothing about whether it was hard.
         assertFalse(SetDraft(loggingType = LoggingType.ASSISTED, repsText = "8").isLoggable)
     }
+
+    @Test
+    fun `a recommendation arrives in the fields, so accepting it is one tap and no typing`() {
+        val draft = SetDraft().showing(Prescription(load = Kilograms(60.0), reps = 6))
+
+        assertEquals("60", draft.weightText)
+        assertEquals("6", draft.repsText)
+        assertEquals(Performance.WeightAndReps(Kilograms(60.0), reps = 6), draft.performance)
+    }
+
+    @Test
+    fun `a recommendation is read in the unit the machine is labelled in`() {
+        val draft = SetDraft(displayUnit = WeightUnit.POUNDS)
+            .showing(Prescription(load = Kilograms(60.0), reps = 6))
+
+        // The number changes and the weight does not: 60 kg is what gets logged either way.
+        assertEquals("132.28", draft.weightText)
+        assertEquals(60.0, draft.weight!!.value, 0.01)
+    }
+
+    @Test
+    fun `a pull-up with nothing prescribed to hang off a belt leaves the field empty`() {
+        val draft = SetDraft(loggingType = LoggingType.BODYWEIGHT_REPS)
+            .showing(Prescription(load = Kilograms(0.0), reps = 8))
+
+        // Zero is not a belt, and a field reading 0 would be asking the lifter to take one off.
+        assertEquals("", draft.addedWeightText)
+        assertEquals("8", draft.repsText)
+        assertEquals(Performance.BodyweightReps(addedWeight = null, reps = 8), draft.performance)
+    }
+
+    @Test
+    fun `a prescribed belt reaches the belt field rather than the weight field`() {
+        val draft = SetDraft(loggingType = LoggingType.BODYWEIGHT_REPS)
+            .showing(Prescription(load = Kilograms(10.0), reps = 6))
+
+        assertEquals("10", draft.addedWeightText)
+        assertEquals("", draft.weightText)
+        assertEquals(Performance.BodyweightReps(Kilograms(10.0), reps = 6), draft.performance)
+    }
+
+    @Test
+    fun `prescribed assistance is typed as the machine is set, without its sign`() {
+        val draft = SetDraft(loggingType = LoggingType.ASSISTED)
+            .showing(Prescription(load = Kilograms(-27.5), reps = 6))
+
+        // Negative is how a load says "help" in storage. Nobody reads a minus sign off a pin.
+        assertEquals("27.5", draft.addedWeightText)
+        assertEquals(Performance.Assisted(Kilograms(27.5), reps = 6), draft.performance)
+    }
+
+    @Test
+    fun `nothing is prescribed into a hold, which records a time and no load`() {
+        val draft = SetDraft(loggingType = LoggingType.TIME, durationText = "60")
+
+        assertEquals(draft, draft.showing(Prescription(load = Kilograms(20.0), reps = 6)))
+    }
 }

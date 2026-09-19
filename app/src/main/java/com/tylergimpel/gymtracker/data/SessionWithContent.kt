@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Relation
 import com.tylergimpel.gymtracker.domain.Effort
@@ -13,8 +14,12 @@ import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetMeasurements
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Side
+import com.tylergimpel.gymtracker.domain.TrainedSession
+import com.tylergimpel.gymtracker.domain.TrainedSet
+import com.tylergimpel.gymtracker.domain.TrainingHistory
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import java.time.Duration
+import java.time.LocalDate
 
 /** One stored row of a set, together with any drops continuing it. */
 data class SetEntryWithDrops(
@@ -138,7 +143,7 @@ private fun SetEntryEntity.toPrescription() = Prescription(
  * history. A row that filled neither shape is corrupt rather than empty, and says so here instead
  * of arriving somewhere further away as a weight of zero.
  */
-private fun SetEntryEntity.toPerformance(): Performance = when {
+internal fun SetEntryEntity.toPerformance(): Performance = when {
     durationSeconds != null && distanceM != null ->
         Performance.DistanceAndTime(Metres(distanceM), Duration.ofSeconds(durationSeconds.toLong()))
 
@@ -153,3 +158,43 @@ private fun SetEntryEntity.toPerformance(): Performance = when {
     reps != null -> Performance.BodyweightReps(addedWeightKg?.let(::Kilograms), reps)
     else -> error("Set entry $id records no shape at all: no duration, and no weight and reps")
 }
+
+/**
+ * One logged row of one exercise, carrying the session it was logged in.
+ *
+ * A projection rather than a relation: the engine reads across every session an exercise has ever
+ * appeared in, which is the opposite direction from [SessionWithContent] and would otherwise mean
+ * loading whole sessions to reach a handful of their rows.
+ */
+data class TrainedSetRow(
+    @Embedded
+    val setEntry: SetEntryEntity,
+
+    @ColumnInfo(name = "session_id")
+    val sessionId: Long,
+
+    @ColumnInfo(name = "session_date")
+    val date: LocalDate,
+)
+
+/**
+ * Rows gathered into the history the recommendation engine reads.
+ *
+ * Two collapses happen here, both of them ADR 0003's rule that a set is one set however many rows
+ * record it: rows sharing a set index are one set, read as the effort progression measures — the
+ * first, never a later side — and sets sharing a session are one session, which contributes one
+ * point to the estimate however many sets it took.
+ *
+ * Drops need no filtering at all: a drop is a row of `drop_segment` and was never in this list,
+ * which is what keeps a fatigued continuation out of an estimated one-rep maximum.
+ */
+fun List<TrainedSetRow>.toTrainingHistory(): TrainingHistory = TrainingHistory(
+    groupBy(TrainedSetRow::sessionId).map { (_, rows) ->
+        TrainedSession(
+            date = rows.first().date,
+            sets = rows.groupBy { it.setEntry.sessionExerciseId to it.setEntry.setIndex }
+                .map { (_, ofOneSet) -> ofOneSet.minBy { it.setEntry.id } }
+                .map { TrainedSet(SetType.fromStored(it.setEntry.type), it.setEntry.toPerformance()) },
+        )
+    },
+)

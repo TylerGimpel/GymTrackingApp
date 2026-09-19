@@ -198,6 +198,47 @@ data class SetDraft(
         }
 
     /**
+     * The same draft with the app's recommendation already in its fields.
+     *
+     * What makes accepting one a single tap and no typing: the fields arrive filled in, and the log
+     * button records exactly what is on screen — including, elsewhere, the fact that this was what
+     * was asked for.
+     *
+     * Only the fields this exercise actually records are written. A prescribed load reaches the
+     * weight field of a barbell lift, the belt field of a pull-up or the help field of an assisted
+     * machine, and nowhere else: a load in a field the exercise does not record is a number nobody
+     * lifted, and one that reached storage would be read later as training.
+     */
+    fun showing(prescription: Prescription): SetDraft {
+        val reps = prescription.reps?.toString() ?: repsText
+        val load = prescription.load ?: return copy(repsText = reps)
+        return when {
+            loggingType.recordsWeight -> copy(weightText = load.asTextIn(displayUnit), repsText = reps)
+
+            // A belt is optional, and a prescription of nothing added is the ordinary case on a
+            // pull-up: the field stays empty rather than reading zero, which this draft would
+            // refuse anyway — a belt of nothing is an unweighted set.
+            loggingType.recordsAddedWeight -> copy(
+                addedWeightText = load.takeIf { it.value > 0.0 }?.asTextIn(displayUnit).orEmpty(),
+                repsText = reps,
+            )
+
+            // Typed as the plain magnitude the machine is set to. The load is negative because help
+            // is weight taken off the lifter, and the sign is storage's business rather than
+            // something anybody reads off a pin.
+            loggingType.recordsAssistance -> copy(
+                addedWeightText = load.takeIf { it.value < 0.0 }
+                    ?.let { Kilograms(-it.value).asTextIn(displayUnit) }
+                    .orEmpty(),
+                repsText = reps,
+            )
+
+            // A hold and a run are recorded rather than prescribed, so there is nothing to fill in.
+            else -> this
+        }
+    }
+
+    /**
      * The weight moved by [steps] of the display unit's own step — 2.5 kg or 5 lb.
      *
      * An unreadable field steps from nothing, so the stepper is usable before anything is typed

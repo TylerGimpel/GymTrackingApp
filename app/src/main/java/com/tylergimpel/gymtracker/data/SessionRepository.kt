@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.data
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSession
+import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -86,12 +87,17 @@ class SessionRepository(
      * [exerciseUnit] is what the exercise is read in, which is all this needs to know to decide
      * whether the set departed from it. What is written is canonical kilograms either way.
      *
+     * [prescription] is what the app told the lifter to do, recorded whether or not they did it —
+     * the only way an override and a miss can ever be told apart afterwards. Empty for a set
+     * nothing prescribed, which is every set on an exercise the app has nothing to say about.
+     *
      * Returns false if the draft does not yet read as a weight and a rep count.
      */
     suspend fun logSet(
         exerciseId: String,
         draft: SetDraft,
         exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
+        prescription: Prescription = Prescription(),
     ): Boolean {
         val performance = draft.performance ?: return false
         val displayUnit = draft.displayUnit.overriding(exerciseUnit)
@@ -108,7 +114,9 @@ class SessionRepository(
                     note = draft.note,
                     side = null,
                     displayUnit = displayUnit?.stored,
-                ).recording(performance).measured(draft.measurements),
+                ).recording(performance)
+                    .measured(draft.measurements)
+                    .prescribed(prescription),
             )
         }
         return true
@@ -119,12 +127,16 @@ class SessionRepository(
      *
      * Both rows take the same set index, because this is one set: a lifter expanding a unilateral
      * exercise to per-side is tracking an imbalance, not doubling their training.
+     *
+     * One [prescription] for the set, carried by both rows. The set is what was asked; the two
+     * sides are how it was answered.
      */
     suspend fun logPerSideSet(
         exerciseId: String,
         left: SetDraft,
         right: SetDraft,
         exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
+        prescription: Prescription = Prescription(),
     ): Boolean {
         if (!left.isLoggable || !right.isLoggable) return false
         val displayUnit = left.displayUnit.overriding(exerciseUnit)
@@ -147,7 +159,8 @@ class SessionRepository(
                         side = side.stored,
                         displayUnit = displayUnit?.stored,
                     ).recording(requireNotNull(entered.performance))
-                        .measured(left.measurements),
+                        .measured(left.measurements)
+                        .prescribed(prescription),
                 )
             }
         }

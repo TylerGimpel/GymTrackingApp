@@ -31,6 +31,16 @@ enum class SetType(val stored: String) {
     /** Whether a set of this type contributes to training volume. */
     val countsTowardVolume: Boolean get() = this in COUNTING
 
+    /**
+     * Whether a set of this type tells the engine anything about what the lifter can do.
+     *
+     * Everything but a warm-up, which is a ramp rather than work and would drag an estimate down
+     * toward weights nobody was trying at. A [CALIBRATION] set earns no volume and still informs:
+     * answering this exact question is the whole reason it was performed, and the two flags saying
+     * different things about the same set is the point of having both.
+     */
+    val informsProgression: Boolean get() = this != WARMUP
+
     companion object {
         /**
          * The types that count. Held here rather than as a flag per constant so that the answer to

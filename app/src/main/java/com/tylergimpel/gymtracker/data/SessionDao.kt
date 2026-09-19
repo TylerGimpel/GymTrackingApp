@@ -122,6 +122,33 @@ interface SessionDao {
     @Query("SELECT * FROM set_entry WHERE session_exercise_id = :sessionExerciseId ORDER BY set_index")
     suspend fun setsFor(sessionExerciseId: Long): List<SetEntryWithDrops>
 
+    /**
+     * Every set ever logged against one exercise, oldest first, apart from [excludingSession].
+     *
+     * What the recommendation engine reads, and the shape of the constraint that matters most in
+     * ADR 0004: the exercise id is in the `WHERE`, so no set of any other exercise can reach a
+     * recommendation however similar the two movements are.
+     *
+     * [excludingSession] is the session being logged into. Today's sets are not history yet — an
+     * anchor that moved mid-session would raise the weight between set one and set two on the
+     * strength of a single good set, which is exactly what "advance only after two consecutive
+     * sessions" exists to prevent. Pass [NO_SESSION] where there is none.
+     *
+     * Ordered by the day trained rather than by when the row was written, so a backdated session
+     * lands where it was trained rather than at the end.
+     */
+    @Query(
+        """
+        SELECT set_entry.*, session.id AS session_id, session.date AS session_date
+        FROM set_entry
+        JOIN session_exercise ON session_exercise.id = set_entry.session_exercise_id
+        JOIN session ON session.id = session_exercise.session_id
+        WHERE session_exercise.exercise_id = :exerciseId AND session.id <> :excludingSession
+        ORDER BY session.date, session.id, set_entry.set_index, set_entry.id
+        """,
+    )
+    suspend fun trainedSetsFor(exerciseId: String, excludingSession: Long): List<TrainedSetRow>
+
     @Query("SELECT * FROM set_entry WHERE id = :setId")
     suspend fun setEntry(setId: Long): SetEntryEntity?
 
@@ -191,4 +218,9 @@ interface SessionDao {
 
     @Query("DELETE FROM drop_segment WHERE id = :dropId")
     suspend fun deleteDrop(dropId: Long)
+
+    companion object {
+        /** No session to leave out: an id no row can have, so the comparison simply passes. */
+        const val NO_SESSION = 0L
+    }
 }

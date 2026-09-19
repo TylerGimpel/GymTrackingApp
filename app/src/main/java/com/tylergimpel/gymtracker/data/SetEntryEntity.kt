@@ -6,6 +6,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.tylergimpel.gymtracker.domain.Performance
+import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.SetMeasurements
 import com.tylergimpel.gymtracker.domain.SetType
 
@@ -168,6 +169,19 @@ fun SetEntryEntity.measured(measurements: SetMeasurements): SetEntryEntity = cop
     rpe = measurements.rpe,
     heartRate = measurements.heartRate,
     actualRestSeconds = measurements.restTaken?.seconds?.toInt(),
+)
+
+/**
+ * The same row, carrying what the app asked of this set.
+ *
+ * What was asked rather than what was accepted: a lifter who was offered 60 and loaded 65 has
+ * overridden a recommendation, and that only reads as a decision rather than as a miss because the
+ * offer is written down beside what happened.
+ */
+fun SetEntryEntity.prescribed(prescription: Prescription): SetEntryEntity = copy(
+    recommendedWeightKg = prescription.load?.value,
+    recommendedReps = prescription.reps,
+    recommendedRestSeconds = prescription.rest?.seconds?.toInt(),
 )
 
 /**

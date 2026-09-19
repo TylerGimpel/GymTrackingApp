@@ -772,6 +772,59 @@ class GymDatabaseMigrationTest {
         }
     }
 
+    /**
+     * Version 18 adds the table the engine keeps what it works out in.
+     *
+     * Nothing is backfilled and nothing needs to be: an anchor is a fold over a history rather than
+     * a column that can be derived in SQL, and the first recommendation asked for on an exercise
+     * computes it from the log. What this has to prove is that the table arrives and holds a row.
+     *
+     * That it cannot hold one pointing at an exercise that is not there is checked by
+     * `runMigrationsAndValidate` comparing the foreign key against the exported schema, and not by
+     * inserting a broken row here: a migration-test connection does not have `foreign_keys` on, so
+     * the insert would succeed and prove the opposite of what it looked like.
+     */
+    @Test
+    fun migratesToTheTableTheEngineKeepsWhatItWorksOutIn() {
+        helper.createDatabase(SEVENTEENTH_DATABASE, 17).use { version17 ->
+            version17.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "logging_type, mechanic, force, category, level, unilateral, source, " +
+                    "tombstoned) VALUES ('Barbell_Bench', 'Bench Press', 'chest', '', 'barbell', " +
+                    "'weight_reps', 'compound', 'push', 'strength', 'beginner', 0, 'upstream', 0)",
+            )
+            version17.execSQL(
+                "INSERT INTO exercise_preference (exercise_id, display_unit) " +
+                    "VALUES ('Barbell_Bench', 'lb')",
+            )
+        }
+
+        val version18 = helper.runMigrationsAndValidate(SEVENTEENTH_DATABASE, 18, true, MIGRATION_17_18)
+
+        version18.use { db ->
+            db.query("SELECT COUNT(*) FROM exercise_progress").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+
+            db.execSQL(
+                "INSERT INTO exercise_progress (exercise_id, anchor_kg, rep_range_bottom, " +
+                    "rep_range_top, working_load_kg) VALUES ('Barbell_Bench', 76.0, 8, 12, 60.0)",
+            )
+            db.query("SELECT anchor_kg, working_load_kg FROM exercise_progress").use {
+                it.moveToFirst()
+                assertEquals(76.0, it.getDouble(0), 0.001)
+                assertEquals(60.0, it.getDouble(1), 0.001)
+            }
+
+            // Beside it rather than in it: what the lifter chose is a different table, untouched.
+            db.query("SELECT display_unit FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "gym-migration-test.db"
         const val FOURTH_DATABASE = "gym-migration-test-4.db"
@@ -789,5 +842,6 @@ class GymDatabaseMigrationTest {
         const val FOURTEENTH_DATABASE = "gym-migration-test-14.db"
         const val FIFTEENTH_DATABASE = "gym-migration-test-15.db"
         const val SIXTEENTH_DATABASE = "gym-migration-test-16.db"
+        const val SEVENTEENTH_DATABASE = "gym-migration-test-17.db"
     }
 }
