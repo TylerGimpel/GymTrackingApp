@@ -1,6 +1,9 @@
 package com.tylergimpel.gymtracker.data
 
 import androidx.room.migration.Migration
+import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.METRIC_RACK
+import com.tylergimpel.gymtracker.domain.IMPERIAL_RACK
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
@@ -512,6 +515,29 @@ internal val MIGRATION_19_20 = object : Migration(19, 20) {
     }
 }
 
+/**
+ * Version 21 gives the app somewhere to keep the plates in the room.
+ *
+ * Until now a weight was rounded to a flat 2.5 kg, which is a number rather than a piece of
+ * equipment: it offers 80 kg in a gym whose lightest plate is a twenty. The inventory is global
+ * and editable, and the engine and the plate line both read it (#51).
+ *
+ * **Empty on purpose.** Nothing is seeded here, because a fresh install never runs a migration —
+ * it arrives already built, from the asset — so anything seeded in one is missing from exactly
+ * the copies that have never been touched. The standard rack for the unit the lifter reads in is
+ * applied when the table is read instead, which answers both cases with one rule and leaves
+ * "empty" meaning what it should: nobody has described their gym yet.
+ */
+internal val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `plate_inventory` " +
+                "(`weight_kg` REAL NOT NULL, `pairs` INTEGER NOT NULL, PRIMARY KEY(`weight_kg`))",
+        )
+        db.execSQL("ALTER TABLE `profile` ADD COLUMN `bar_kg` REAL")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -532,6 +558,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_17_18,
     MIGRATION_18_19,
     MIGRATION_19_20,
+    MIGRATION_20_21,
 )
 
 /**

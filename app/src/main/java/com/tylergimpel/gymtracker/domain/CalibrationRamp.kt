@@ -74,7 +74,7 @@ data class CalibrationRamp(
         fun of(exercise: Exercise, rounding: Increment = Increment.DEFAULT): CalibrationRamp? =
             when (exercise.loggingType) {
                 LoggingType.WEIGHT_REPS ->
-                    climbing(Kilograms(seedFor(exercise.equipment)), LOADED_STEPS, rounding)
+                    climbing(seedFor(exercise.equipment, rounding), LOADED_STEPS, rounding)
 
                 LoggingType.ASSISTED ->
                     climbing(Kilograms(-ASSISTED_SEED), ASSISTED_STEPS, rounding)
@@ -128,7 +128,18 @@ data class CalibrationRamp(
          * the profile holds neither until onboarding does (#29), and the research is explicit that
          * the raise is optional because the ramp corrects it either way.
          */
-        private fun seedFor(equipment: String?): Double = SEEDS[equipment] ?: UNKNOWN_EQUIPMENT_SEED
+        private fun seedFor(equipment: String?, rounding: Increment): Kilograms =
+            // A barbell starts at the bar, and the bar is a thing in the room rather than a
+            // constant: 20 kg and 45 lb are different bars, and seeding one for a lifter who owns
+            // the other is how a first prescription ends up reading 44.09 (#64).
+            if (rounding is Increment.Plates && equipment == BARBELL) {
+                rounding.bar
+            } else {
+                Kilograms(SEEDS[equipment] ?: UNKNOWN_EQUIPMENT_SEED)
+            }
+
+        /** What the bank calls the thing whose seed is the bar itself. */
+        private const val BARBELL = "barbell"
 
         private val SEEDS = mapOf(
             "barbell" to 20.0,

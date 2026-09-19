@@ -65,8 +65,15 @@ class RecommendationPersistenceTest {
             database.sessionDao(),
             profile,
         )
-        recommendations =
-            RecommendationRepository(database, database.exerciseDao(), database.sessionDao())
+        recommendations = RecommendationRepository(
+            database = database,
+            exercises = database.exerciseDao(),
+            sessions = database.sessionDao(),
+            // Pinned like the profile above: the rack a test rounds against is part of what it
+            // asserts, and the device's locale deciding it would make these numbers move by
+            // emulator.
+            plates = PlateRepository(database.plateDao(), profile),
+        )
     }
 
     @After

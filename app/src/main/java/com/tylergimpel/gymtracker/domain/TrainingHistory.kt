@@ -215,6 +215,19 @@ class TrainingHistory(val sessions: List<TrainedSession>) {
     fun lastTrained(): LocalDate? = chronological.lastOrNull()?.date
 
     /**
+     * Every load this exercise has been logged at, which is how a machine's stack is known.
+     *
+     * A **Stack number** is a gym-local scale, so there is nothing to infer it from but the log
+     * itself: these are the pin positions somebody has actually selected on this machine. Warm-up
+     * and calibration sets count — a pin is a pin whatever the set was for — and the loads are
+     * signed, so an assisted machine's come back negative and sort the way its stack runs.
+     */
+    fun observedLoads(): List<Kilograms> = sessions
+        .flatMap { session -> session.sets }
+        .mapNotNull { it.performance.loadOrNull }
+        .distinct()
+
+    /**
      * What the recent run of sessions says to do about the weight.
      *
      * A session that left the estimate behind clears the ladder rather than climbing it: whatever

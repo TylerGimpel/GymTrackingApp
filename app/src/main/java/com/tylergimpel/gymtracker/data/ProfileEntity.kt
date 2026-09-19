@@ -30,6 +30,20 @@ data class ProfileEntity(
      */
     @ColumnInfo(name = "display_unit")
     val displayUnit: String? = null,
+
+    /**
+     * What the lifter's barbell weighs, empty.
+     *
+     * A fact about the room rather than about them, and here because the room has exactly one of
+     * everything this app knows about: one lifter, one set of plates, one bar. A gym worth
+     * modelling separately is a gym somebody trains at *as well as* another one, and nothing in
+     * the app can express that yet.
+     *
+     * Twenty kilograms or forty-five pounds are different bars rather than two spellings of one
+     * — which is the whole reason this is stored rather than converted from a constant.
+     */
+    @ColumnInfo(name = "bar_kg")
+    val barKg: Double? = null,
 ) {
     companion object {
         /** There is one lifter, so there is one row, and it has a known id to be written over. */

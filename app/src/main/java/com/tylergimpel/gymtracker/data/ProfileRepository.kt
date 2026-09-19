@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -27,9 +28,29 @@ class ProfileRepository(
     suspend fun displayUnit(): WeightUnit =
         WeightUnit.fromStored(profiles.profile()?.displayUnit) ?: systemDefault
 
-    /** Records that this lifter reads weights in [displayUnit] from now on. */
-    suspend fun setDisplayUnit(displayUnit: WeightUnit) =
-        profiles.upsert(ProfileEntity(displayUnit = displayUnit.stored))
+    /**
+     * Records that this lifter reads weights in [displayUnit] from now on.
+     *
+     * Read before written, because the row holds more than this and the upsert replaces it
+     * whole: building a fresh entity here would quietly take the lifter's barbell away with it.
+     *
+     * The plate inventory is deliberately left alone. Reading in pounds is not the same claim as
+     * owning pound plates — plenty of people prefer one unit at a gym stocked in the other — and
+     * silently restocking somebody's rack because they tapped a chip would be the app deciding
+     * what is in a room it has never seen.
+     */
+    suspend fun setDisplayUnit(displayUnit: WeightUnit) = profiles.upsert(
+        profiles.profile()?.copy(displayUnit = displayUnit.stored)
+            ?: ProfileEntity(displayUnit = displayUnit.stored),
+    )
+
+    /** What the lifter's bar weighs, empty, or null until anything has said. */
+    suspend fun bar(): Kilograms? = profiles.profile()?.barKg?.let(::Kilograms)
+
+    /** Records what the bar in the lifter's gym weighs. */
+    suspend fun setBar(weight: Kilograms) = profiles.upsert(
+        profiles.profile()?.copy(barKg = weight.value) ?: ProfileEntity(barKg = weight.value),
+    )
 }
 
 /**

@@ -46,6 +46,14 @@ class RecommendationRepository(
      * can be handed to the engine is a policy a test can state rather than assert around.
      */
     private val decay: LayoffDecay = LayoffDecay.DEFAULT,
+    /**
+     * The plates in the room, which is what a barbell recommendation has to land on.
+     *
+     * Defaulted from the database rather than required, so that the engine can be built the way
+     * it always was and the inventory arrives with it.
+     */
+    private val plates: PlateRepository =
+        PlateRepository(database.plateDao(), database.profileRepository()),
 ) {
 
     /**
@@ -63,15 +71,16 @@ class RecommendationRepository(
             val open = sessions.activeSession()?.id
             val history = historyOf(exercise.id, open)
             val repRange = repRangeFor(exercise.id)
-            val progress = history.progressIn(repRange, ROUNDING, decay, LocalDate.now(clock))
+            val rounding = incrementFor(exercise, history)
+            val progress = history.progressIn(repRange, rounding, decay, LocalDate.now(clock))
             remember(exercise.id, progress)
             recommendNextSet(
                 history = history,
                 progress = progress,
-                calibration = CalibrationRamp.of(exercise, ROUNDING),
+                calibration = CalibrationRamp.of(exercise, rounding),
                 setsToday = open?.let { sessions.setsLoggedInSession(exercise.id, it) } ?: 0,
             )
-                ?.let { warmUpFirst(it, exercise, open) }
+                ?.let { warmUpFirst(it, exercise, open, rounding) }
                 ?.let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) }
         }
     }
@@ -90,6 +99,7 @@ class RecommendationRepository(
         recommendation: Recommendation,
         exercise: Exercise,
         open: Long?,
+        rounding: Increment,
     ): Recommendation {
         val load = when (recommendation) {
             // Both prescribe a real working load. Holding the weight and cutting the volume is
@@ -112,7 +122,7 @@ class RecommendationRepository(
             workingLoad = load,
             exercise = exercise,
             alreadyWorkedTheMuscle = alreadyWarmed(exercise, session),
-            rounding = ROUNDING,
+            rounding = rounding,
         )
         val done = sessions.setsOfTypeInSession(exercise.id, session, SetType.WARMUP.stored)
         return ramp.getOrNull(done)?.let(Recommendation::WarmingUp) ?: recommendation
@@ -197,14 +207,42 @@ class RecommendationRepository(
         }
     }
 
+    /**
+     * What this exercise can actually be loaded to.
+     *
+     * Three tiers, chosen by what the bank says the exercise is loaded with (#51):
+     *
+     * - **A barbell** is the bar and the pairs in the room, so the number offered is one the
+     *   lifter's own plates can build and the plate line can show them how to.
+     * - **A machine** is only ever a notch it has been logged at, because a **Stack number** is a
+     *   gym-local scale and nothing can be inferred about its gaps from any other machine. Until
+     *   it has been seen at all there is nothing to learn from, so a step stands in.
+     * - **Everything else** moves by a step: dumbbells really do come in even ones, and for
+     *   whatever nobody has described a step is close enough to be corrected rather than resented.
+     */
+    private suspend fun incrementFor(exercise: Exercise, history: TrainingHistory): Increment =
+        when (exercise.equipment) {
+            BARBELL -> plates.barbell()
+
+            // Two, not one: a single logged position says where the pin was once and nothing
+            // about where the next notch is. Until there are two the app knows no more about
+            // this stack than about a dumbbell rack, and a step is the honest stand-in.
+            in STACKED -> history.observedLoads()
+                .takeIf { it.size >= STACK_IS_KNOWN_FROM }
+                ?.let(Increment::Stack)
+                ?: Increment.DEFAULT
+
+            else -> Increment.DEFAULT
+        }
+
     private companion object {
-        /**
-         * What a recommendation is rounded to, until the equipment gets a say.
-         *
-         * One name in one place, so that the three tiers the spec settles — the plate inventory,
-         * the dumbbell rack's own step and the stack positions a machine has been seen at — replace
-         * a constant here rather than arriving from the screen through every caller.
-         */
-        val ROUNDING = Increment.DEFAULT
+        /** What the bank calls the thing built from the plate inventory. */
+        const val BARBELL = "barbell"
+
+        /** What the bank calls the things whose numbers are pin positions rather than weights. */
+        val STACKED = setOf("machine", "cable")
+
+        /** How many distinct positions it takes before the log describes a stack at all. */
+        const val STACK_IS_KNOWN_FROM = 2
     }
 }

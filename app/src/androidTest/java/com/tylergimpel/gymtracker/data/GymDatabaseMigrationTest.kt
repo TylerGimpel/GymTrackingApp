@@ -4,6 +4,7 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.tylergimpel.gymtracker.domain.Kilograms
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -934,5 +935,37 @@ class GymDatabaseMigrationTest {
         const val SEVENTEENTH_DATABASE = "gym-migration-test-17.db"
         const val EIGHTEENTH_DATABASE = "gym-migration-test-18.db"
         const val NINETEENTH_DATABASE = "gym-migration-test-19.db"
+        const val TWENTIETH_DATABASE = "migration-twentieth.db"
+    }
+
+    /**
+     * Version 21 gives the app somewhere to keep the plates in the room.
+     *
+     * Empty, and deliberately so: a fresh install never runs a migration, so seeding one here
+     * would leave the standard rack missing from exactly the copies nobody has edited. What
+     * fills an empty inventory is the read, not the migration.
+     */
+    @Test
+    fun migratesToSomewhereToKeepThePlatesInTheRoom() {
+        helper.createDatabase(TWENTIETH_DATABASE, 20).use { version20 ->
+            version20.execSQL("INSERT INTO profile (id, display_unit) VALUES (1, 'lb')")
+        }
+
+        helper.runMigrationsAndValidate(TWENTIETH_DATABASE, 21, true, MIGRATION_20_21).use { db ->
+            db.query("SELECT COUNT(*) FROM plate_inventory").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+            // The bar is a column on the one profile row, and nothing has said what it weighs.
+            db.query("SELECT bar_kg FROM profile WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals(true, it.isNull(0))
+            }
+            // And what the lifter reads in is exactly where it was.
+            db.query("SELECT display_unit FROM profile WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+            }
+        }
     }
 }
