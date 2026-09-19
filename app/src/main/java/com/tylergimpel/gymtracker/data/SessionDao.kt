@@ -149,6 +149,26 @@ interface SessionDao {
     )
     suspend fun trainedSetsFor(exerciseId: String, excludingSession: Long): List<TrainedSetRow>
 
+    /**
+     * How many sets of one exercise have been logged in one session.
+     *
+     * What tells the calibration ramp which rung comes next. Sets rather than rows, so a per-side
+     * set counts once (ADR 0003) and a lifter tracking an imbalance does not skip up the ramp
+     * twice as fast.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT set_entry.session_exercise_id, set_entry.set_index
+            FROM set_entry
+            JOIN session_exercise ON session_exercise.id = set_entry.session_exercise_id
+            WHERE session_exercise.exercise_id = :exerciseId
+              AND session_exercise.session_id = :sessionId
+        )
+        """,
+    )
+    suspend fun setsLoggedInSession(exerciseId: String, sessionId: Long): Int
+
     @Query("SELECT * FROM set_entry WHERE id = :setId")
     suspend fun setEntry(setId: Long): SetEntryEntity?
 

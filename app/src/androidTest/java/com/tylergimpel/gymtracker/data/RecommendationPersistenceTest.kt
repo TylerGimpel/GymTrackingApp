@@ -3,16 +3,21 @@ package com.tylergimpel.gymtracker.data
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.tylergimpel.gymtracker.domain.CalibrationRamp
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ProgressionModel
+import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetOutcome
+import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.volumeByMuscle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,8 +31,9 @@ import java.time.ZoneId
  *
  * The arithmetic is the domain's and is tested there. What has to hold here is everything the
  * domain cannot promise on its own: that a recommendation is built from one exercise's own sets and
- * nothing else, that what was asked is written down beside what was done, and that what the app
- * worked out survives the release that improves the exercise bank.
+ * nothing else, that what was asked is written down beside what was done, that what the app worked
+ * out survives the release that improves the exercise bank, and that a first session ramps and
+ * hands over to the engine at the second.
  */
 @RunWith(AndroidJUnit4::class)
 class RecommendationPersistenceTest {
@@ -70,7 +76,7 @@ class RecommendationPersistenceTest {
     fun anExerciseWithHistoryIsPrescribedAWeightAndARepCount() = runBlocking {
         train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
 
-        val next = recommendations.prescribeNextSet(exercise(BENCH))!!
+        val next = recommendations.nextSet(exercise(BENCH))!!.prescription
 
         // Eight at 60 makes a 76 kg single, which is 60 again at the bottom of the default range —
         // the weight holds while the reps climb, which is the whole of double progression.
@@ -87,13 +93,74 @@ class RecommendationPersistenceTest {
 
         // Two lifts, one session, and neither number has anything to say about the other: cross
         // exercise strength ratios are folklore, so the app never extrapolates (ADR 0004).
-        assertEquals(60.0, recommendations.prescribeNextSet(exercise(BENCH))!!.load!!.value, TOLERANCE)
-        assertEquals(100.0, recommendations.prescribeNextSet(exercise(SQUAT))!!.load!!.value, TOLERANCE)
+        assertEquals(60.0, recommendations.nextSet(exercise(BENCH))!!.prescription.load!!.value, TOLERANCE)
+        assertEquals(100.0, recommendations.nextSet(exercise(SQUAT))!!.prescription.load!!.value, TOLERANCE)
     }
 
     @Test
-    fun anExerciseNobodyHasTrainedHasNothingToPrescribe() = runBlocking {
-        assertNull(recommendations.prescribeNextSet(exercise(SQUAT)))
+    fun aFirstSessionIsCalibratedRatherThanPrescribed() = runBlocking {
+        val next = recommendations.nextSet(exercise(SQUAT))!!
+
+        // Nothing logged, so nothing to prescribe from — and a real number anyway, because an app
+        // that says "I don't know" to somebody standing at a rack has not helped them. The empty
+        // bar, which is where every novice programme starts.
+        assertTrue(next is Recommendation.Calibrating)
+        assertEquals(20.0, next.prescription.load!!.value, TOLERANCE)
+        assertEquals(CalibrationRamp.RAMP_REPS, next.prescription.reps)
+    }
+
+    @Test
+    fun theRampClimbsAsTheSessionGoesOn() = runBlocking {
+        train("2026-09-14T18:00", finish = false) {
+            logSet(SQUAT, SetDraft("20", "5", type = SetType.CALIBRATION))
+        }
+
+        // Today's sets do not prescribe — they are not history yet — but they do say how far up
+        // the ramp the lifter has got, which is the one thing the current session is asked.
+        val second = recommendations.nextSet(exercise(SQUAT))!!
+        assertTrue(second is Recommendation.Calibrating)
+        assertEquals(30.0, second.prescription.load!!.value, TOLERANCE)
+    }
+
+    @Test
+    fun aRampSetIsRecordedAsACalibrationSetAndEarnsNoVolume() = runBlocking {
+        val ramp = recommendations.nextSet(exercise(SQUAT))!!
+
+        val sessions = train("2026-09-14T18:00", finish = false) {
+            // Logged exactly as offered, which is the one-tap path: the type comes with the
+            // recommendation rather than being left to the lifter to remember.
+            logSet(SQUAT, SetDraft().showing(ramp), prescription = ramp.prescription)
+        }
+
+        val logged = sessions.observeActiveSession().first()!!
+        val performed = sessions.observeSession(logged.id).first()!!.exercises
+        assertEquals(SetType.CALIBRATION, performed.single().sets.single().type)
+        // A session spent finding out what somebody can lift must not corrupt the history it is
+        // establishing, and volume is the first thing it would corrupt.
+        assertEquals(emptyMap<String, Double>(), volumeByMuscle(performed))
+    }
+
+    @Test
+    fun theAppStopsCalibratingOnceTheFirstSessionIsHistory() = runBlocking {
+        train("2026-09-14T18:00") {
+            logSet(SQUAT, SetDraft("40", "5", type = SetType.CALIBRATION))
+        }
+
+        // The ramp's last set is the exercise's first data point, and one data point is enough to
+        // stop guessing. A calibration set earns no volume and still informs: answering this
+        // question is why it was performed.
+        val next = recommendations.nextSet(exercise(SQUAT))!!
+        assertTrue(next is Recommendation.Prescribing)
+        assertEquals(35.0, next.prescription.load!!.value, TOLERANCE)
+    }
+
+    @Test
+    fun aLiftTheLifterDoesNotWantCoachedIsNotCalibratedEither() = runBlocking {
+        exercises.setProgressionModel(SQUAT, ProgressionModel.NONE)
+
+        // Not a recommendation and not a ramp: the app was told to stop coaching this lift, and
+        // offering to find a weight for it would be the same overruling by another route.
+        assertNull(recommendations.nextSet(exercise(SQUAT)))
     }
 
     @Test
@@ -103,14 +170,14 @@ class RecommendationPersistenceTest {
 
         // The history is there and the app has been told not to use it. Saying nothing is the
         // point of the setting, and the alternative would be the app overruling the lifter.
-        assertNull(recommendations.prescribeNextSet(exercise(BENCH)))
+        assertNull(recommendations.nextSet(exercise(BENCH)))
     }
 
     @Test
     fun whatWasPrescribedIsRecordedBesideWhatWasDone() = runBlocking {
         train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
 
-        val asked = recommendations.prescribeNextSet(exercise(BENCH))!!
+        val asked = recommendations.nextSet(exercise(BENCH))!!.prescription
         val sessions = train("2026-09-16T18:00", finish = false) {
             // Offered 60 and loaded 65: a decision, and one that only reads as a decision because
             // the offer was written down beside it.
@@ -128,7 +195,7 @@ class RecommendationPersistenceTest {
     fun takingTheRecommendationAsOfferedReadsAsHavingFollowedIt() = runBlocking {
         train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
 
-        val asked = recommendations.prescribeNextSet(exercise(BENCH))!!
+        val asked = recommendations.nextSet(exercise(BENCH))!!.prescription
         val sessions = train("2026-09-16T18:00", finish = false) {
             logSet(BENCH, SetDraft("60", "8"), prescription = asked)
         }
@@ -145,7 +212,7 @@ class RecommendationPersistenceTest {
         val sessions = train("2026-09-16T18:00", finish = false) {
             logSet(BENCH, SetDraft("60", "12"))
         }
-        val next = recommendations.prescribeNextSet(exercise(BENCH))!!
+        val next = recommendations.nextSet(exercise(BENCH))!!.prescription
 
         // Twelve at 60 has beaten the range, and none of that reaches the set the lifter is about
         // to do: today is not history yet, so the second set of a session is still the set they
@@ -158,7 +225,7 @@ class RecommendationPersistenceTest {
         // Once it is history it counts: the reps asked for are what was managed at this weight.
         // The weight itself holds — stepping it up after a beaten range is #50's, and it takes two
         // consecutive sessions.
-        val afterwards = recommendations.prescribeNextSet(exercise(BENCH))!!
+        val afterwards = recommendations.nextSet(exercise(BENCH))!!.prescription
         assertEquals(60.0, afterwards.load!!.value, TOLERANCE)
         assertEquals(12, afterwards.reps)
     }
@@ -166,14 +233,14 @@ class RecommendationPersistenceTest {
     @Test
     fun whatTheAppWorkedOutSurvivesABankUpdate() = runBlocking {
         train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
-        val before = recommendations.prescribeNextSet(exercise(BENCH))!!
+        val before = recommendations.nextSet(exercise(BENCH))!!.prescription
         assertEquals(1, countOf("exercise_progress"))
 
         // A release that rewrites every shipped exercise row, which is what an update is.
         exercises.applyBankUpdate(bank().map { it.copy(chosenProgressionModel = null) })
 
         assertEquals(1, countOf("exercise_progress"))
-        val after = recommendations.prescribeNextSet(exercise(BENCH))!!
+        val after = recommendations.nextSet(exercise(BENCH))!!.prescription
         assertEquals(before.load!!.value, after.load!!.value, TOLERANCE)
         assertEquals(before.reps, after.reps)
     }
@@ -181,15 +248,16 @@ class RecommendationPersistenceTest {
     @Test
     fun anEstimateIsForgottenWhenTheTrainingItCameFromIsDeleted() = runBlocking {
         val sessions = train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
-        recommendations.prescribeNextSet(exercise(BENCH))
+        recommendations.nextSet(exercise(BENCH))
         assertEquals(1, countOf("exercise_progress"))
 
         val performed = sessions.observeLastFinished().first()!!.exercises.single()
         sessions.deleteSet(performed.id, performed.sets.single().setIndex)
 
         // Nothing left to have worked anything out from, so the row goes rather than prescribing
-        // from training that is no longer there.
-        assertNull(recommendations.prescribeNextSet(exercise(BENCH)))
+        // from training that is no longer there — and the exercise is back to being one the app
+        // knows nothing about, which is a ramp rather than a recommendation.
+        assertTrue(recommendations.nextSet(exercise(BENCH)) is Recommendation.Calibrating)
         assertEquals(0, countOf("exercise_progress"))
     }
 

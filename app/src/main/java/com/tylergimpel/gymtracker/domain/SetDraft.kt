@@ -204,16 +204,23 @@ data class SetDraft(
      * button records exactly what is on screen — including, elsewhere, the fact that this was what
      * was asked for.
      *
+     * The **Set type** comes with it, because the two modes produce different kinds of set and
+     * that is not the lifter's to get right on the app's behalf: a ramp set filed as working would
+     * corrupt both the volume figures and the history calibration exists to establish.
+     *
      * Only the fields this exercise actually records are written. A prescribed load reaches the
      * weight field of a barbell lift, the belt field of a pull-up or the help field of an assisted
      * machine, and nowhere else: a load in a field the exercise does not record is a number nobody
      * lifted, and one that reached storage would be read later as training.
      */
-    fun showing(prescription: Prescription): SetDraft {
+    fun showing(recommendation: Recommendation): SetDraft {
+        val prescription = recommendation.prescription
+        val type = recommendation.setType
         val reps = prescription.reps?.toString() ?: repsText
-        val load = prescription.load ?: return copy(repsText = reps)
+        val load = prescription.load ?: return copy(repsText = reps, type = type)
         return when {
-            loggingType.recordsWeight -> copy(weightText = load.asTextIn(displayUnit), repsText = reps)
+            loggingType.recordsWeight ->
+                copy(weightText = load.asTextIn(displayUnit), repsText = reps, type = type)
 
             // A belt is optional, and a prescription of nothing added is the ordinary case on a
             // pull-up: the field stays empty rather than reading zero, which this draft would
@@ -221,6 +228,7 @@ data class SetDraft(
             loggingType.recordsAddedWeight -> copy(
                 addedWeightText = load.takeIf { it.value > 0.0 }?.asTextIn(displayUnit).orEmpty(),
                 repsText = reps,
+                type = type,
             )
 
             // Typed as the plain magnitude the machine is set to. The load is negative because help
@@ -231,6 +239,7 @@ data class SetDraft(
                     ?.let { Kilograms(-it.value).asTextIn(displayUnit) }
                     .orEmpty(),
                 repsText = reps,
+                type = type,
             )
 
             // A hold and a run are recorded rather than prescribed, so there is nothing to fill in.

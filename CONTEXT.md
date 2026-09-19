@@ -168,7 +168,12 @@ _Avoid_: target reps as a name for what a set asks for. The bottom and the top o
 What a set that is not progressed asks for instead of a rep range — warm-up sets ramping up to the working weight, and calibration sets finding out what it should be. Neither has a top to reach, so neither carries a range.
 
 **Calibrating**:
-The mode the app is in when it has no useful anchor for an exercise — a first session, or a return after a long layoff. It still suggests a weight, but expects to be wrong and to be corrected by what the user actually lifts.
+The mode the app is in when it has no useful anchor for an exercise — a first session, or a return after a long layoff. It still suggests a weight, but expects to be wrong and to be corrected by what the user actually lifts. The one mode that appears on screen: **Prescribing** says nothing about itself, because knowing when the app is guessing is what makes the rest of the time trustworthy.
+
+**Calibration ramp**:
+The short climb a first session makes to find a working weight, rather than predicting one. Starts at a **seed** chosen from what the exercise is loaded with — an empty bar, a light dumbbell, a low pin — and steps up until the lifter stops, biased low throughout and capped so session one does not become forty minutes. Every rung is a **Calibration set**, and each is harder than the last: more weight on a bar, less help on an assisted machine.
+
+The seed is the only part of cold start a model does: measuring what somebody can lift is several times more precise than estimating it and costs one session, so the estimate's job is to shorten the ramp rather than to produce the answer (`docs/research/cold-start-weights.md`).
 
 **Prescribing**:
 The mode the app is in when real history supports the recommendation.

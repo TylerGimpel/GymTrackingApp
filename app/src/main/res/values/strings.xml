@@ -31,6 +31,8 @@
     <string name="session_empty">No session yet. Pick an exercise to start logging.</string>
     <string name="session_empty_selected">Log your first set and the session starts.</string>
     <string name="session_log_set">Log set</string>
+    <string name="session_calibrating">calibrating</string>
+    <string name="session_calibrating_hint">Stop when it gets hard. Being wrong here is expected.</string>
     <string name="session_edit_set">Edit set</string>
     <string name="session_save">Save</string>
     <string name="session_delete">Delete</string>

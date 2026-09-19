@@ -2,6 +2,7 @@ package com.tylergimpel.gymtracker.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
@@ -168,6 +169,24 @@ class RecommendationTest {
     private companion object {
         val SIX_TO_EIGHT = RepRange(6, 8)
 
+        val BARBELL = exercise("barbell", LoggingType.WEIGHT_REPS)
+        val MACHINE = exercise("machine", LoggingType.WEIGHT_REPS)
+        val PLANK = exercise("body only", LoggingType.TIME)
+
+        fun exercise(equipment: String, loggingType: LoggingType) = Exercise(
+            id = "Test",
+            bankName = "Test",
+            primaryMuscles = listOf("chest"),
+            secondaryMuscles = emptyList(),
+            equipment = equipment,
+            mechanic = "compound",
+            force = "push",
+            category = "strength",
+            level = "beginner",
+            loggingType = loggingType,
+            unilateral = false,
+        )
+
         /** Finer than any plate anybody owns, and coarse enough to ignore binary floating point. */
         const val TOLERANCE = 0.0001
 
@@ -191,4 +210,66 @@ class RecommendationTest {
         fun bodyweight(reps: Int) =
             TrainedSet(SetType.WORKING, Performance.BodyweightReps(addedWeight = null, reps = reps))
     }
+
+    @Test
+    fun `an exercise nobody has trained is calibrating, and the app says so`() {
+        val history = TrainingHistory(emptyList())
+
+        val next = history.recommend(BARBELL, setsToday = 0)
+
+        // A real number rather than a shrug: "we do not know" is not something a lifter standing
+        // at a rack can act on. The empty bar is what every novice programme starts at.
+        assertTrue(next is Recommendation.Calibrating)
+        assertEquals(20.0, next!!.prescription.load!!.value, TOLERANCE)
+        assertEquals(SetType.CALIBRATION, next.setType)
+    }
+
+    @Test
+    fun `one logged session is enough to stop guessing`() {
+        val history = TrainingHistory(trained(sets(working(60.0, 6))))
+
+        val next = history.recommend(BARBELL, setsToday = 0)
+
+        // The boundary: the app leaves calibrating the moment its own logged sets support an
+        // estimate, and from then on says nothing about itself.
+        assertTrue(next is Recommendation.Prescribing)
+        assertEquals(60.0, next!!.prescription.load!!.value, TOLERANCE)
+        assertEquals(SetType.WORKING, next.setType)
+    }
+
+    @Test
+    fun `a session of nothing but warm-ups leaves the app still guessing`() {
+        val history = TrainingHistory(trained(sets(warmup(40.0, 5))))
+
+        // A ramp is not work, so it says nothing about a maximum — and an exercise it is all the
+        // app has for is an exercise the app still knows nothing about.
+        assertTrue(history.recommend(BARBELL, setsToday = 0) is Recommendation.Calibrating)
+    }
+
+    @Test
+    fun `an exercise with no history borrows nothing from the one it replaced`() {
+        // What a swap lands on mid-session (#59): the machine being busy is not evidence about
+        // anything, so the substitute calibrates from its own equipment rather than inheriting a
+        // number that belonged to a different movement.
+        val next = TrainingHistory(emptyList()).recommend(MACHINE, setsToday = 0)
+
+        assertEquals(10.0, next!!.prescription.load!!.value, TOLERANCE)
+        assertTrue(next is Recommendation.Calibrating)
+    }
+
+    @Test
+    fun `a lift the app is told not to coach is not calibrated either`() {
+        // Nothing to calibrate for: a hold records a time, and the app has nothing to say about
+        // what to do on one in either mode.
+        assertNull(TrainingHistory(emptyList()).recommend(PLANK, setsToday = 0))
+    }
+
+    /** The whole engine as the repository runs it: work out what it can, then say what it can. */
+    private fun TrainingHistory.recommend(exercise: Exercise, setsToday: Int): Recommendation? =
+        recommendNextSet(
+            history = this,
+            progress = progressIn(SIX_TO_EIGHT),
+            calibration = CalibrationRamp.of(exercise),
+            setsToday = setsToday,
+        )
 }

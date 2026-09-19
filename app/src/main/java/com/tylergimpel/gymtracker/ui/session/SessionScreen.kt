@@ -53,8 +53,8 @@ import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
-import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
+import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionPosition
@@ -249,7 +249,7 @@ fun SessionScreen(
                 item {
                     SetEntryControls(
                         exercise = selected,
-                        prescription = state.prescription,
+                        recommendation = state.recommendation,
                         draft = state.draft,
                         rightDraft = state.rightDraft,
                         perSide = state.perSide,
@@ -555,7 +555,7 @@ private fun EmptySession(
 @Composable
 private fun SetEntryControls(
     exercise: Exercise,
-    prescription: Prescription?,
+    recommendation: Recommendation?,
     draft: SetDraft,
     rightDraft: SetDraft,
     perSide: Boolean,
@@ -590,11 +590,9 @@ private fun SetEntryControls(
             )
         }
 
-        // What the app is asking for, above the fields that already hold it. No label and no
-        // badge: the screen says nothing about itself in the normal state, and the number is the
-        // whole message (`docs/design/logging-screen.md`).
-        prescription?.let {
-            PrescribedSet(it, exercise.loggingType, draft.displayUnit)
+        // What the app is asking for, above the fields that already hold it.
+        recommendation?.let {
+            NextSet(it, exercise.loggingType, draft.displayUnit)
         }
 
         if (perSide) {
@@ -658,48 +656,79 @@ private fun SetEntryControls(
 }
 
 /**
- * One line saying what to do: the weight and the rep count the log button will record.
+ * What to do next: the weight and the rep count the log button will record, and — only while the
+ * app is guessing — the fact that it is.
  *
- * Written in the same shape as the logged sets below it, so accepting a recommendation and reading
- * back what was accepted look like the same thing rather than two different screens' vocabulary.
- * Read in the unit the fields are in — the machine's own, which is what the lifter is looking at.
+ * **In the normal state the screen says nothing about itself.** No badge, no hint, no label: the
+ * previous set is already printed under every row below, and a line repeating that the number came
+ * from it is noise. `calibrating` is the one mode that speaks, and knowing when the app is guessing
+ * is what makes the rest of the time trustworthy (`docs/design/logging-screen.md`).
+ *
+ * The value is written in the same shape as the logged sets below it, so accepting a recommendation
+ * and reading back what was accepted look like the same thing rather than two different screens'
+ * vocabulary. Read in the unit the fields are in — the machine's own, which is what the lifter is
+ * looking at.
  */
 @Composable
-private fun PrescribedSet(
-    prescription: Prescription,
+private fun NextSet(
+    recommendation: Recommendation,
     loggingType: LoggingType,
     displayUnit: WeightUnit,
 ) {
+    val prescription = recommendation.prescription
     val reps = prescription.reps ?: return
     val load = prescription.load
     val unit = stringResource(displayUnit.label)
-    Text(
-        text = when {
-            loggingType.recordsWeight && load != null ->
-                stringResource(R.string.set_summary, load.asTextIn(displayUnit), unit, reps)
+    val guessing = recommendation is Recommendation.Calibrating
 
-            // Help, written as the machine is set rather than as it is stored: the minus sign in
-            // front of it is the screen saying which way it counts, not a negative weight.
-            loggingType.recordsAssistance && load != null && load.value < 0.0 -> stringResource(
-                R.string.set_assisted_summary,
-                Kilograms(-load.value).asTextIn(displayUnit),
-                unit,
-                reps,
+    // Tight together rather than spaced as three things: the word, the number and the line under
+    // it are one message, and the number is the part read from the rack.
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (guessing) {
+            Text(
+                text = stringResource(R.string.session_calibrating),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        Text(
+            text = when {
+                loggingType.recordsWeight && load != null ->
+                    stringResource(R.string.set_summary, load.asTextIn(displayUnit), unit, reps)
 
-            loggingType.recordsAddedWeight && load != null && load.value > 0.0 -> stringResource(
-                R.string.set_added_weight_summary,
-                load.asTextIn(displayUnit),
-                unit,
-                reps,
+                // Help, written as the machine is set rather than as it is stored: the minus sign
+                // in front of it is the screen saying which way it counts, not a negative weight.
+                loggingType.recordsAssistance && load != null && load.value < 0.0 -> stringResource(
+                    R.string.set_assisted_summary,
+                    Kilograms(-load.value).asTextIn(displayUnit),
+                    unit,
+                    reps,
+                )
+
+                loggingType.recordsAddedWeight && load != null && load.value > 0.0 -> stringResource(
+                    R.string.set_added_weight_summary,
+                    load.asTextIn(displayUnit),
+                    unit,
+                    reps,
+                )
+
+                // A pull-up with no belt asks for reps and nothing else, which is the ordinary
+                // case on every exercise whose load is the lifter's own body.
+                else -> stringResource(R.string.set_reps_summary, reps)
+            },
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        // One line admitting the app expects to be wrong, and saying what to do about it. Without
+        // it the word above is the data model talking; with it, a lifter knows the number is a
+        // starting point and that correcting it is the point.
+        if (guessing) {
+            Text(
+                text = stringResource(R.string.session_calibrating_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
-            // A pull-up with no belt asks for reps and nothing else, which is the ordinary case on
-            // every exercise whose load is the lifter's own body.
-            else -> stringResource(R.string.set_reps_summary, reps)
-        },
-        style = MaterialTheme.typography.headlineSmall,
-    )
+        }
+    }
 }
 
 /**
