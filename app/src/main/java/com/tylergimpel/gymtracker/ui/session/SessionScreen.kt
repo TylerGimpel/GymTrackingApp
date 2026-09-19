@@ -1,6 +1,9 @@
 package com.tylergimpel.gymtracker.ui.session
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,7 +27,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -32,8 +37,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -69,6 +76,7 @@ import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asTimeText
+import kotlinx.coroutines.launch
 import java.time.Duration
 import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.ui.DayPickerDialog
@@ -131,6 +139,7 @@ fun SessionScreen(
         onFocusSet = viewModel::focusSet,
         onEndRest = viewModel::endRest,
         onAddRest = viewModel::addTimeToRest,
+        onJumpTo = viewModel::select,
         onEditRest = viewModel::startEditingRest,
         onRestThisSet = viewModel::restThisSetOnly,
         onRestAlways = viewModel::restFromNowOn,
@@ -182,6 +191,7 @@ fun SessionScreen(
     onFocusSet: (Int?) -> Unit = {},
     onEndRest: () -> Unit = {},
     onAddRest: () -> Unit = {},
+    onJumpTo: (Exercise) -> Unit = {},
     onEditRest: () -> Unit = {},
     onRestThisSet: () -> Unit = {},
     onRestAlways: () -> Unit = {},
@@ -193,7 +203,38 @@ fun SessionScreen(
     onOpenRoutine: () -> Unit = {},
     onOpenBodyweight: () -> Unit = {},
 ) {
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        // **Never from the edge.** On gesture navigation a left-edge swipe is the system Back
+        // gesture: an app can carve only narrow exclusion rectangles and the system takes the
+        // gesture first, so a drawer that opens that way is a drawer that mostly does not open.
+        // What opens this one is the handle in the top bar, or a horizontal swipe anywhere.
+        gesturesEnabled = false,
+        drawerContent = {
+            RoutineDrawer(
+                progress = state.routine,
+                performed = state.exercises.associate { it.exercise.id to it.sets.size },
+                onJumpTo = { exercise ->
+                    onJumpTo(exercise)
+                    scope.launch { drawer.close() }
+                },
+            )
+        },
+    ) {
     Scaffold(
+        modifier = Modifier.draggable(
+            orientation = Orientation.Horizontal,
+            state = rememberDraggableState { },
+            onDragStopped = { velocity ->
+                // Anywhere on the screen, in either direction: a phone is held in whichever hand
+                // is free, and a gesture that only works from one side is one a lifter has to
+                // think about.
+                if (velocity > SWIPE_TO_OPEN) drawer.open() else if (velocity < -SWIPE_TO_OPEN) drawer.close()
+            },
+        ),
         topBar = {
             TopAppBar(
                 title = {
@@ -221,6 +262,13 @@ fun SessionScreen(
                     }
                 },
                 actions = {
+                    // The handle. Tapping it is the other way in, for a lifter who would rather
+                    // not swipe, or has not been told there is a swipe. In the actions rather
+                    // than the navigation slot because a word does not fit in the navigation
+                    // slot, and a drawer nobody can hit is a drawer that does not open.
+                    TextButton(onClick = { scope.launch { drawer.open() } }) {
+                        Text(stringResource(R.string.drawer_open))
+                    }
                     TextButton(onClick = onOpenRoutine) {
                         Text(stringResource(R.string.session_open_routine))
                     }
@@ -345,6 +393,7 @@ fun SessionScreen(
                 item { SessionNote(session.id, session.note, onSessionNoteChange) }
             }
         }
+    }
     }
 
     state.editing?.let { editing ->
@@ -842,6 +891,14 @@ internal fun NextSet(
  * Not a tuning knob so much as where the evidence changes shape: below it, load does the work.
  */
 private const val REPS_THAT_NEED_EFFORT = 15
+
+/**
+ * How hard a horizontal swipe has to be thrown to open the routine.
+ *
+ * A velocity rather than a distance, so that a deliberate flick opens it and a thumb drifting
+ * sideways while reading a weight does not.
+ */
+private const val SWIPE_TO_OPEN = 300f
 
 /**
  * How long to rest, and for how long that answer holds.

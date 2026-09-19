@@ -8,12 +8,17 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RepRange
+import com.tylergimpel.gymtracker.domain.Routine
+import com.tylergimpel.gymtracker.domain.RoutineDay
+import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import org.junit.Assert.assertEquals
@@ -140,13 +145,43 @@ class SessionScreenTest {
         assertTrue(skipped)
     }
 
+
+    @Test
+    fun theRoutineIsOneTapAwayAndNeverNeedsAnEdgeSwipe() {
+        compose.setContent { SessionScreen(state = state()) }
+
+        // A handle, in the top bar, where a thumb can reach it. The swipe that also opens this
+        // is horizontal and works anywhere — what it must never be is a swipe from the left
+        // edge, which on gesture navigation is the system Back gesture and never reaches the app.
+        compose.onNodeWithText("Routine").performClick()
+
+        compose.onNodeWithTag(DRAWER).assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingAnExerciseInTheRoutineMovesTheSessionThere() {
+        var jumped: Exercise? = null
+        compose.setContent {
+            SessionScreen(state = state(routine = pushDay), onJumpTo = { jumped = it })
+        }
+
+        compose.onNodeWithText("Routine").performClick()
+        compose.onNodeWithText("Barbell Row").performClick()
+
+        // Training out of order is ordinary — a rack is busy, a machine is taken — and the
+        // cursor holds its place while the lifter moves around the session.
+        assertEquals("Row", jumped?.id)
+    }
+
     private fun state(
         recommendation: Recommendation = prescribed,
+        routine: RoutineProgress? = null,
     ): SessionUiState = SessionUiState(
         selected = bench,
         recommendation = recommendation,
         draft = SetDraft(weightText = "60", repsText = "8"),
         wheel = listOf(WheelSet.Pending(recommendation)),
+        routine = routine,
     )
 
     private companion object {
@@ -155,6 +190,20 @@ class SessionScreenTest {
         val prescribed = Recommendation.Prescribing(
             prescription = Prescription(load = Kilograms(60.0), reps = 8),
             repRange = RepRange(8, 12),
+        )
+
+        val row = Exercise(
+            id = "Row",
+            bankName = "Barbell Row",
+            primaryMuscles = listOf("middle back"),
+            secondaryMuscles = emptyList(),
+            equipment = "barbell",
+            mechanic = "compound",
+            force = "pull",
+            category = "strength",
+            level = "beginner",
+            loggingType = LoggingType.WEIGHT_REPS,
+            unilateral = false,
         )
 
         val bench = Exercise(
@@ -169,6 +218,27 @@ class SessionScreenTest {
             level = "beginner",
             loggingType = LoggingType.WEIGHT_REPS,
             unilateral = false,
+        )
+
+        /** A routine with one day in it, so the drawer has something to show. */
+        val pushDay = RoutineProgress(
+            routine = Routine(
+                id = 1,
+                name = "Push / Pull",
+                goal = RoutineGoal.HYPERTROPHY,
+                cadence = 3,
+                equipment = setOf("barbell"),
+                repPreference = RepPreference.MODERATE,
+                days = listOf(
+                    RoutineDay(
+                        id = 1,
+                        orderIndex = 1,
+                        name = "Push",
+                        exercises = listOf(bench, row),
+                    ),
+                ),
+            ),
+            cycle = null,
         )
     }
 }

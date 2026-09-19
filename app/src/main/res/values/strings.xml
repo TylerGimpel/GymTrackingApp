@@ -48,6 +48,9 @@
     <string name="rest_channel">Rest timer</string>
     <string name="rest_channel_description">Tells you when a rest is over, loudly enough for a gym.</string>
     <string name="rest_add_time">+1:00</string>
+    <string name="drawer_open">Routine</string>
+    <string name="drawer_sets_done">%1$d done</string>
+    <string name="drawer_day_next">%1$s · next</string>
     <string name="rest_unreliable">This phone will not let the app set an exact alarm, so a rest may reach you late. Allow alarms in Settings to fix it.</string>
     <string name="session_rest_title">How long to rest</string>
     <string name="session_rest_this_set">This set</string>
@@ -121,7 +124,7 @@
 
     <string name="session_next_up">Next up: %1$s</string>
     <string name="session_no_routine">No routine</string>
-    <string name="session_open_routine">Routine</string>
+    <string name="session_open_routine">Edit routine</string>
     <string name="session_which_day">Which day did this session realise?</string>
     <string name="session_no_day">No routine day</string>
     <string name="session_cycle">Cycle %1$d</string>
