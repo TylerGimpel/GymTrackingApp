@@ -130,6 +130,7 @@ fun SessionScreen(
         onCancelRefiling = viewModel::cancelRefiling,
         onFocusSet = viewModel::focusSet,
         onEndRest = viewModel::endRest,
+        onAddRest = viewModel::addTimeToRest,
         onEditRest = viewModel::startEditingRest,
         onRestThisSet = viewModel::restThisSetOnly,
         onRestAlways = viewModel::restFromNowOn,
@@ -180,6 +181,7 @@ fun SessionScreen(
     onCancelRefiling: () -> Unit = {},
     onFocusSet: (Int?) -> Unit = {},
     onEndRest: () -> Unit = {},
+    onAddRest: () -> Unit = {},
     onEditRest: () -> Unit = {},
     onRestThisSet: () -> Unit = {},
     onRestAlways: () -> Unit = {},
@@ -284,7 +286,7 @@ fun SessionScreen(
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
-                    WheelFooting(state, onEndRest)
+                    WheelFooting(state, onEndRest, onAddRest)
                     SetEntryControls(
                         exercise = selected,
                         recommendation = state.recommendation,
@@ -888,7 +890,7 @@ private fun RestDialog(
  * stating a plan nobody made.
  */
 @Composable
-private fun WheelFooting(state: SessionUiState, onEndRest: () -> Unit) {
+private fun WheelFooting(state: SessionUiState, onEndRest: () -> Unit, onAddRest: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -914,6 +916,17 @@ private fun WheelFooting(state: SessionUiState, onEndRest: () -> Unit) {
 
     // A rest that is running, and the way out of it. What reaches a lifter with the phone in a
     // pocket is the alarm (#57); this is the session saying one is going.
+    // Said where a lifter will read it, because the failure it warns about is silent: an alarm
+    // that never fires is discovered by missing a set rather than by an error.
+    if (!state.restAlarmsAreReliable) {
+        Text(
+            text = stringResource(R.string.rest_unreliable),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+    }
+
     state.resting?.let {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -925,7 +938,11 @@ private fun WheelFooting(state: SessionUiState, onEndRest: () -> Unit) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            TextButton(onClick = onEndRest) { Text(stringResource(R.string.wheel_skip_rest)) }
+            Row {
+                // The timer bends to the session rather than the other way round.
+                TextButton(onClick = onAddRest) { Text(stringResource(R.string.rest_add_time)) }
+                TextButton(onClick = onEndRest) { Text(stringResource(R.string.wheel_skip_rest)) }
+            }
         }
     }
 }

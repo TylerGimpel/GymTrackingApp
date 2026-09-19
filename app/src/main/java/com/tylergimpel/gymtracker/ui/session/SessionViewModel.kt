@@ -10,6 +10,8 @@ import com.tylergimpel.gymtracker.data.RecommendationRepository
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.SessionRepository
+import com.tylergimpel.gymtracker.rest.RestAlarmScheduler
+import com.tylergimpel.gymtracker.rest.RestNotifications
 import com.tylergimpel.gymtracker.data.profileRepository
 import com.tylergimpel.gymtracker.domain.DistanceUnit
 import com.tylergimpel.gymtracker.domain.Effort
@@ -21,6 +23,8 @@ import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.RestAlarms
+import com.tylergimpel.gymtracker.domain.restEnding
 import com.tylergimpel.gymtracker.domain.resting
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -80,7 +84,10 @@ data class EditingEffort(
  * lifter with the phone in their pocket is the alarm the rest timer schedules (#57); this is the
  * session's own record that one is running.
  */
-data class Resting(val startedAt: Instant, val length: Duration)
+data class Resting(val startedAt: Instant, val length: Duration) {
+    /** When it is over, which is what the alarm and the countdown are both drawn from. */
+    val endsAt: Instant get() = startedAt.plus(length)
+}
 
 /** The effort a drop is being added to, if one is open. */
 data class AddingDrop(val effortId: Long, val draft: SetDraft)
@@ -233,6 +240,15 @@ data class SessionUiState(
     val focusedSet: Int? = null,
     /** The rest running, if one is. */
     val resting: Resting? = null,
+    /**
+     * Whether the app can be trusted to wake the lifter on time.
+     *
+     * False where this phone will not let it schedule an exact alarm, which is the default on a
+     * fresh install and again after a backup restore. Surfaced in the product rather than
+     * swallowed: the failure it warns about is a timer that never fires, which a lifter discovers
+     * by missing a set rather than by seeing an error.
+     */
+    val restAlarmsAreReliable: Boolean = true,
     /** How far through the exercise, and how far through the work that counts. */
     val pace: SessionPace? = null,
     /** Roughly how much longer the session has to run, cardio included. */
@@ -268,6 +284,16 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     private val recommendations =
         RecommendationRepository(database, database.exerciseDao(), database.sessionDao(), clock)
+
+    /**
+     * What wakes the lifter when a rest is over.
+     *
+     * The alarm is the source of truth and this view model is not: the process can be killed
+     * between two sets, so what is handed to the platform is a moment rather than a countdown.
+     */
+    private val alarms: RestAlarms = RestAlarmScheduler(application)
+
+    private val notifications = RestNotifications(application)
 
     private val routines = RoutineRepository(
         database = database,
@@ -369,6 +395,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 } ?: false,
                 focusedSet = screen.focusedSet,
                 resting = screen.resting,
+                restAlarmsAreReliable = alarms.canWakeReliably(),
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(logged?.setsOf(chosen).orEmpty())
                 },
@@ -543,18 +570,50 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         when (val next = afterLogging(exercise, state.value.positions, rest)) {
             AfterLogging.PromptToFinish -> startFinishing()
             is AfterLogging.JumpTo -> select(next.exercise)
-            is AfterLogging.StartResting ->
-                screen.update { it.copy(resting = Resting(clock.instant(), next.length)) }
+            is AfterLogging.StartResting -> startResting(next.length)
 
             AfterLogging.Nothing -> Unit
         }
     }
 
+    /**
+     * Starts a rest: an alarm to wake the lifter, and a countdown they can read without opening
+     * anything.
+     */
+    private fun startResting(length: Duration) {
+        val resting = Resting(clock.instant(), length)
+        screen.update { it.copy(resting = resting) }
+        alarms.schedule(restEnding(resting.startedAt, length))
+        notifications.countDownTo(resting.endsAt)
+    }
+
+    /**
+     * Adds a minute to the rest that is running.
+     *
+     * The end moves rather than the rest restarting: a lifter tapping this is saying the set is
+     * not ready yet, not that the last two minutes did not happen.
+     */
+    fun addTimeToRest() {
+        val resting = screen.value.resting ?: return
+        val longer = resting.copy(length = resting.length.plus(MORE_REST))
+        screen.update { it.copy(resting = longer) }
+        alarms.schedule(restEnding(longer.startedAt, longer.length))
+        notifications.countDownTo(longer.endsAt)
+    }
+
     /** Points the wheel at one of its rungs. Null is the set about to be done. */
     fun focusSet(index: Int?) = screen.update { it.copy(focusedSet = index) }
 
-    /** Ends a rest, whether it ran out or the lifter had somewhere to be. */
-    fun endRest() = screen.update { it.copy(resting = null) }
+    /**
+     * Ends a rest, whether it ran out or the lifter had somewhere to be.
+     *
+     * Takes the alarm with it. Otherwise the lifter is three sets further on when the phone goes
+     * off in their pocket.
+     */
+    fun endRest() {
+        alarms.cancel()
+        screen.update { it.copy(resting = null) }
+    }
 
     fun startEditing(performed: SessionExercise, set: PerformedSet, effort: Effort) = screen.update {
         val displayUnit = performed.displayUnitFor(set)
@@ -870,5 +929,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+
+        /** What "+1:00" adds. A minute is the unit a lifter thinks in between sets. */
+        val MORE_REST: Duration = Duration.ofMinutes(1)
     }
 }
