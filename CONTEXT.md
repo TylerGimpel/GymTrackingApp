@@ -218,7 +218,17 @@ The load an exercise is currently being worked at — the **Anchor** read back d
 
 What double progression moves: the weight holds while the reps climb through the range, and steps by one **Increment** once the top has been beaten on two consecutive sessions. Held rather than followed — once the app has asked for a weight, that weight is what holds, and not whatever the **Anchor** currently says. The app's own working rather than anything the lifter chose, which is why it lives apart from both the shipped bank row and the lifter's preferences.
 
+**Plate inventory**:
+The plates the lifter owns and the bar they go on: one global, editable set, counted in **pairs** because a bar loaded at one end is not a lift. The single thing both the engine and the **Plate line** read, which is what stops the weight and the instructions for building it ever disagreeing.
+
+Empty means nobody has described their gym, not that there is nothing to lift: an ordinary rack for the unit they read in stands in until they say otherwise. Stored in canonical kilograms like every other weight, and seeded as the objects they are rather than as conversions — a 20 kg bar and a 45 lb bar are different bars.
+
+**Plate line**:
+What goes on one end of the bar to make the weight above it — `20 kg bar · 20, 10, 1.25 per side`. Sits under the prescription on barbell exercises, always visible and never interactive: it is not a choice, it is the rounding the engine already did, shown. Heaviest plate first and as few as will do it, because every plate is a trip to the rack.
+
 **Increment**:
 The smallest weight step actually achievable on a given exercise, set by the equipment rather than by arithmetic — plate pairs on a barbell, rack steps on dumbbells, and for machines, the stack positions the user has been observed to use.
 
 Distinct from the **step** a weight stepper takes, which is a round number in the display unit — 2.5 kg or 5 lb — and belongs to how a weight is read rather than to what the equipment can do. Converting one unit's step into the other is what the separate numbers exist to avoid.
+
+Where none of the three tiers knows better, the fallback is that same step in the unit the lifter reads: rounding in kilograms and converting afterwards is what produces 137.79 lb, a number that is exactly correct and exists nowhere. The lifter can also say outright what one exercise moves by, and their answer beats anything the app can work out — a rack going up in fours is a fact about their gym, and nothing can infer it.
