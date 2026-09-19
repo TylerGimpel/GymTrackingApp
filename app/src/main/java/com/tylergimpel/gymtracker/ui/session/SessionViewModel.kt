@@ -492,7 +492,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * Per-side entry collapses on the way: it is a property of the exercise being trained, and
      * carrying it across to the next one would silently write two rows for a barbell bench press.
      */
-    fun select(exercise: Exercise) = screen.update {
+    fun select(exercise: Exercise) {
+        // A rest the lifter set for one set belongs to that set, not to their evening, so it
+        // does not follow them to the next exercise.
+        restTimer.forgetThisSet()
+        selectOnScreen(exercise)
+    }
+
+    private fun selectOnScreen(exercise: Exercise) = screen.update {
         it.copy(
             selected = exercise,
             // The drafts start in the unit this exercise is read in, which is the point of
@@ -507,7 +514,6 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // Nothing typed yet, so the recommendation for this exercise is free to fill the
             // fields the moment it arrives.
             untouched = true,
-            // A rest set for one set belongs to that set, not to the lifter's evening.
             // Departing is a property of the machine in front of the lifter, so it does not
             // follow them to the next exercise any more than per-side entry does.
             overridingDisplayUnit = false,
@@ -613,6 +619,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     rightDraft = it.rightDraft.copy(note = null),
                 )
             }
+            // The set it was for is down, so it has said what it had to say. Leaving it
+            // standing would quietly make "just this set" mean "this exercise, tonight".
+            restTimer.forgetThisSet()
             advanceAfterLogging(exercise, asked.rest)
         }
     }

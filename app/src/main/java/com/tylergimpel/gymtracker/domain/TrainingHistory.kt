@@ -316,10 +316,10 @@ class TrainingHistory(val sessions: List<TrainedSession>) {
     /**
      * Whether the ladder wants to advance and the equipment has nowhere to go.
      *
-     * Only a machine can answer yes. A barbell runs out of plates and a dumbbell rack runs out of
-     * dumbbells, but a **Stack** runs out of *knowledge*: it offers only pin positions this
-     * exercise has been logged at, so at the heaviest one ever used there is nothing above to
-     * offer and the advance quietly does nothing.
+     * Only a machine can answer yes, and the check below says so rather than assuming it. A
+     * barbell that runs out of plates has also run out of advance, but that is a different
+     * sentence and wants a different one on screen — what a **Stack** runs out of is
+     * *knowledge*, and the way out of it is the lifter showing the app one more pin.
      *
      * That silence is the problem. A lifter who has beaten the target twice has earned more, and
      * a number that does not change reads as the engine having given up rather than as a machine
@@ -328,11 +328,11 @@ class TrainingHistory(val sessions: List<TrainedSession>) {
      * both in this layer and neither is in the other.
      */
     fun atTheTopOf(repRange: RepRange, rounding: Increment): Boolean {
+        if (rounding !is Increment.Stack) return false
+        // ADVANCE is also what rules out a re-anchor: a session that blew past the target puts
+        // the ladder on HOLD, so the screen can never say the machine is stuck under a number
+        // that has just jumped.
         if (ladderIn(repRange) != Ladder.ADVANCE) return false
-        // A session that blew past the target re-anchors instead of stepping, so the weight has
-        // moved and moved a long way. Saying the machine is stuck under a number that has just
-        // jumped would be the screen contradicting itself.
-        if (substantialBeat(repRange) != null) return false
 
         val held = lastPrescribedLoad ?: return false
         return rounding.oneStepAbove(held) == held

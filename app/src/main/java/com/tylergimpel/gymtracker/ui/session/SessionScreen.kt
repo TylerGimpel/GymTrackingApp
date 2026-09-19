@@ -232,8 +232,9 @@ fun SessionScreen(
  *
  * Every lambda defaults to doing nothing, so a preview or a test wires up the one it is about
  * and says nothing about the rest.
+ *
+ * Entering a set, and correcting one that is already down.
  */
-/** Entering a set, and correcting one that is already down. */
 data class SetEntryActions(
     val onDraftChange: (SetDraft) -> Unit = {},
     val onRightDraftChange: (SetDraft) -> Unit = {},
@@ -407,7 +408,9 @@ fun SessionScreen(
                         Text(stringResource(R.string.session_open_plates))
                     }
                     if (state.session != null) {
-                        TextButton(onClick = cycle.onFinish) { Text(stringResource(R.string.session_finish)) }
+                        TextButton(onClick = cycle.onFinish) {
+                            Text(stringResource(R.string.session_finish))
+                        }
                     }
                 },
             )
@@ -552,7 +555,13 @@ fun SessionScreen(
     }
 
     state.editing?.let { editing ->
-        EditSetDialog(editing, entry.onEditingDraftChange, entry.onSaveEditing, entry.onDeleteEditing, entry.onCancelEditing)
+        EditSetDialog(
+            editing,
+            entry.onEditingDraftChange,
+            entry.onSaveEditing,
+            entry.onDeleteEditing,
+            entry.onCancelEditing,
+        )
     }
 
     state.addingDrop?.let { drop ->
@@ -568,11 +577,22 @@ fun SessionScreen(
     state.skipping?.let { SkipDayDialog(it, cycle.onConfirmSkip, cycle.onCancelSkip) }
 
     state.avoided?.let {
-        AvoidedPrompt(it, exercises.onKeepAvoided, exercises.onSwapAvoided, exercises.onRemoveAvoided)
+        AvoidedPrompt(
+            it,
+            exercises.onKeepAvoided,
+            exercises.onSwapAvoided,
+            exercises.onRemoveAvoided,
+        )
     }
 
     state.swapCandidates?.let {
-        SwapSheet(it, state.swappingLeavesOnlyDisliked, exercises.onSwapTo, exercises.onPickExercise, exercises.onCancelSwap)
+        SwapSheet(
+            it,
+            state.swappingLeavesOnlyDisliked,
+            exercises.onSwapTo,
+            exercises.onPickExercise,
+            exercises.onCancelSwap,
+        )
     }
 
     state.editingRest?.let {

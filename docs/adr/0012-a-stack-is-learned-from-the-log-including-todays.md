@@ -24,6 +24,14 @@ None of that reasoning applies to *where the pin was*. A stack position is a fac
 
 The two together close the loop in a single set rather than a session: the lifter is told, they put the pin where they want it, the app sees that position immediately and offers it from then on.
 
+## The exception is narrower than the grid it creates
+
+Worth stating precisely, because the first draft of this decision claimed more separation than it has. What today's pin changes is the **set of notches**, and that set is read by more than the ladder: the working load is rounded to it, and a calibration ramp is built on it. So a pin logged tonight can move a number on screen tonight — not because today's *performance* counted, but because the app now knows the machine has a position it did not know about, and rounds to it.
+
+That is the intended behaviour and it is still not what ADR 0010 rules out. What 0010 prevents is a good set raising the weight within the session, arrived at sideways in minutes; nothing here lets a set do that. Rounding a held weight to a notch that exists, rather than to one the app had not heard of, is the app being less wrong.
+
+It costs a second read of the exercise's sessions on stacked exercises — one excluding the open session for the ladder and the anchor, one including it for the notches. Cheap, and the alternative is one read that is wrong for one of its two readers.
+
 ## What this costs
 
 The first time a lifter outgrows a machine, the app asks them to do something rather than doing it for them. That is a real cost and it is the point: the alternative is guessing at a notch, and a guess that is wrong is a lifter standing at a machine that does not have the setting the app just asked for.

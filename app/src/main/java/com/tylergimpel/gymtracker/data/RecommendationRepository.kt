@@ -75,7 +75,7 @@ class RecommendationRepository(
             val open = sessions.activeSession()?.id
             val history = historyOf(exercise.id, open)
             val repRange = repRangeFor(exercise.id)
-            val rounding = incrementFor(exercise, history)
+            val rounding = incrementFor(exercise)
             val progress = history.progressIn(repRange, rounding, decay, LocalDate.now(clock))
             remember(exercise.id, progress)
             recommendNextSet(
@@ -229,7 +229,7 @@ class RecommendationRepository(
      * - **Everything else** moves by a step: dumbbells really do come in even ones, and for
      *   whatever nobody has described a step is close enough to be corrected rather than resented.
      */
-    private suspend fun incrementFor(exercise: Exercise, history: TrainingHistory): Increment {
+    private suspend fun incrementFor(exercise: Exercise): Increment {
         // What the lifter said, over anything the app can work out. They are standing in front of
         // the rack: a gym that goes up in fours is a fact, not a tier to be inferred.
         exercise.chosenIncrement?.let { return Increment(it) }
