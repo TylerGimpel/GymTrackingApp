@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.CalibrationRamp
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.SetDraft
@@ -347,6 +348,38 @@ class RecommendationPersistenceTest {
         assertEquals(150, group.restSeconds)
     }
 
+
+    @Test
+    fun theTwoAssistedMachinesInTheBankPrescribeLessHelpAsTheLifterImproves() = runBlocking {
+        // The two rows that carry the logging type, by name, so this path is exercised against
+        // the bank that actually ships rather than against a hand-built exercise that agrees
+        // with the test.
+        listOf(ASSISTED_PULL_UP, ASSISTED_DIP).forEach { id ->
+            val machine = exercise(id)
+            assertEquals(LoggingType.ASSISTED, machine.loggingType)
+
+            // A first session with 30 kg of help, logged as help rather than as weight.
+            train("2026-09-14T18:00") { logSet(id, helpedSet(30.0, reps = 8)) }
+
+            val asked = recommendations.nextSet(machine)!!.prescription
+
+            // Negative, because help is weight taken off the lifter: a positive number here would
+            // be the app asking somebody to hang weight off a machine designed to take it off
+            // them. The same 30 kg comes back, because eight reps is what it was read down to.
+            assertEquals(-30.0, asked.load!!.value, TOLERANCE)
+
+            // Two sessions clearing the top of the range at that setting.
+            train("2026-09-16T18:00") { logSet(id, helpedSet(30.0, reps = 14), prescription = asked) }
+            val second = recommendations.nextSet(machine)!!.prescription
+            train("2026-09-18T18:00") { logSet(id, helpedSet(30.0, reps = 14), prescription = second) }
+
+            // And the machine gives less: 27.5 kg rather than 32.5. Every step of this ran
+            // through the same signed arithmetic as a barbell, on the rows that actually ship.
+            val advanced = recommendations.nextSet(machine)!!.prescription
+            assertEquals(-27.5, advanced.load!!.value, TOLERANCE)
+        }
+    }
+
     @Test
     fun whatTheAppWorkedOutSurvivesABankUpdate() = runBlocking {
         train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "8")) }
@@ -404,6 +437,13 @@ class RecommendationPersistenceTest {
         return sessions
     }
 
+    /** A set on a machine that is helping, typed as the plain amount the pin is set to. */
+    private fun helpedSet(help: Double, reps: Int) = SetDraft(
+        loggingType = LoggingType.ASSISTED,
+        addedWeightText = help.toString(),
+        repsText = reps.toString(),
+    )
+
     private suspend fun bank(): List<Exercise> = exercises.observeBank().first()
 
     private suspend fun exercise(id: String): Exercise = bank().single { it.id == id }
@@ -421,6 +461,8 @@ class RecommendationPersistenceTest {
         const val TEST_DATABASE = "recommendation-persistence-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val SQUAT = "Barbell_Squat"
+        const val ASSISTED_PULL_UP = "Assisted_Pull_Up_Machine"
+        const val ASSISTED_DIP = "Assisted_Dip_Machine"
 
         /** Five grams: far below the smallest plate, far above binary floating point. */
         const val TOLERANCE = 0.005
