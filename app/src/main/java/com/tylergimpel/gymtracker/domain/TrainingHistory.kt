@@ -189,14 +189,30 @@ class TrainingHistory(val sessions: List<TrainedSession>) {
     fun progressIn(
         repRange: RepRange = RepRange.DEFAULT,
         rounding: Increment = Increment.DEFAULT,
+        decay: LayoffDecay = LayoffDecay.DEFAULT,
+        asOf: LocalDate? = null,
     ): ExerciseProgress? {
-        val anchor = Anchor.from(sessions) ?: return null
+        val fresh = Anchor.from(sessions) ?: return null
+        val weeksAway = asOf?.let { today -> lastTrained()?.let { weeksBetween(it, today) } } ?: 0L
+        // Past the threshold there is no estimate worth prescribing from, and saying so is what
+        // puts the exercise back into calibrating rather than quietly guessing at it.
+        val anchor = decay.applyTo(fresh, weeksAway) ?: return null
+
         return ExerciseProgress(
             anchor = anchor,
             repRange = repRange,
-            workingLoad = workingLoad(anchor, repRange, rounding),
+            // A held weight is what the lifter was working at, and after a layoff that is exactly
+            // what they should not be handed back. Where the estimate has aged, it answers.
+            workingLoad = if (anchor != fresh) {
+                rounding.roundDown(anchor.workingLoadFor(repRange))
+            } else {
+                workingLoad(anchor, repRange, rounding)
+            },
         )
     }
+
+    /** The day this exercise was last trained, where it has been. */
+    fun lastTrained(): LocalDate? = chronological.lastOrNull()?.date
 
     /**
      * What the recent run of sessions says to do about the weight.

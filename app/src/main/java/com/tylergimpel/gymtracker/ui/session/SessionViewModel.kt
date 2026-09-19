@@ -258,7 +258,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
 
     private val recommendations =
-        RecommendationRepository(database, database.exerciseDao(), database.sessionDao())
+        RecommendationRepository(database, database.exerciseDao(), database.sessionDao(), clock)
 
     private val routines = RoutineRepository(
         database = database,

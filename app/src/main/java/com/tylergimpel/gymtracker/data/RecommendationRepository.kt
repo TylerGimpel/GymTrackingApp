@@ -5,6 +5,7 @@ import com.tylergimpel.gymtracker.domain.CalibrationRamp
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseProgress
 import com.tylergimpel.gymtracker.domain.Increment
+import com.tylergimpel.gymtracker.domain.LayoffDecay
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.SetType
@@ -12,7 +13,9 @@ import com.tylergimpel.gymtracker.domain.TrainingHistory
 import com.tylergimpel.gymtracker.domain.recommendNextSet
 import com.tylergimpel.gymtracker.domain.restFor
 import com.tylergimpel.gymtracker.domain.resting
+import java.time.Clock
 import java.time.Duration
+import java.time.LocalDate
 
 /**
  * Tells the lifter what to lift: from what they have lifted before, or from a ramp where there is
@@ -33,6 +36,15 @@ class RecommendationRepository(
     private val database: GymDatabase,
     private val exercises: ExerciseDao,
     private val sessions: SessionDao,
+    /** What day it is, which is half of how long a lifter has been away from an exercise. */
+    private val clock: Clock = Clock.systemDefaultZone(),
+    /**
+     * How an estimate ages while an exercise goes untrained.
+     *
+     * Passed in rather than reached for, because every number in it is invented and a policy that
+     * can be handed to the engine is a policy a test can state rather than assert around.
+     */
+    private val decay: LayoffDecay = LayoffDecay.DEFAULT,
 ) {
 
     /**
@@ -50,7 +62,7 @@ class RecommendationRepository(
             val open = sessions.activeSession()?.id
             val history = historyOf(exercise.id, open)
             val repRange = repRangeFor(exercise.id)
-            val progress = history.progressIn(repRange, ROUNDING)
+            val progress = history.progressIn(repRange, ROUNDING, decay, LocalDate.now(clock))
             remember(exercise.id, progress)
             recommendNextSet(
                 history = history,
