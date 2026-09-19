@@ -49,6 +49,15 @@ sealed interface Recommendation {
          * mistake, and a lifter who cannot tell a jump from a bug loads the old weight instead.
          */
         val reAnchored: Boolean = false,
+        /**
+         * Whether this weight held because the machine has nowhere known above it.
+         *
+         * The lifter earned an advance and the stack could not give one. Said out loud, because
+         * the alternative is a number that does not move after two good sessions and no reason
+         * offered — and because the way out is something only they can do: put the pin one notch
+         * lower and log it, which is how the app finds out that notch exists (#65).
+         */
+        val atTheTopOfTheStack: Boolean = false,
     ) : Recommendation {
         override val setType: SetType get() = SetType.WORKING
     }
@@ -160,6 +169,8 @@ fun recommendNextSet(
     progress: ExerciseProgress?,
     calibration: CalibrationRamp?,
     setsToday: Int,
+    /** What the exercise can be loaded to, which decides whether an advance can happen at all. */
+    rounding: Increment = Increment.DEFAULT,
 ): Recommendation? {
     if (progress == null) return calibration?.nextSet(setsToday)
 
@@ -174,6 +185,7 @@ fun recommendNextSet(
             prescription = history.nextSetOf(progress),
             repRange = progress.repRange,
             reAnchored = history.reAnchoredIn(progress.repRange),
+            atTheTopOfTheStack = history.atTheTopOf(progress.repRange, rounding),
         )
     }
 }

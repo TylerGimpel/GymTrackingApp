@@ -87,6 +87,7 @@ class RecommendationRepository(
                     bar = plates.barbell(exercise.displayUnit).bar.takeIf { exercise.isBarbell },
                 ),
                 setsToday = open?.let { sessions.setsLoggedInSession(exercise.id, it) } ?: 0,
+                rounding = rounding,
             )
                 ?.let { warmUpFirst(it, exercise, open, rounding) }
                 ?.let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) }
@@ -241,10 +242,17 @@ class RecommendationRepository(
         return when {
             exercise.isBarbell -> plates.barbell(readIn)
 
+            // Read from every session including the one open right now, which is the one
+            // place today's sets are not held back. A pin position is not a claim about what the
+            // lifter has proved — that is what ADR 0010 keeps out of today — it is a fact about
+            // the machine the moment somebody sets it, and waiting until the session is over to
+            // believe in it would leave a lifter who has just outgrown a setting being offered
+            // the old one for the rest of the evening (#65).
+            //
             // Two, not one: a single logged position says where the pin was once and nothing
             // about where the next notch is. Until there are two the app knows no more about
             // this stack than about a dumbbell rack, and a step is the honest stand-in.
-            exercise.isStacked -> history.observedLoads()
+            exercise.isStacked -> historyOf(exercise.id, open = null).observedLoads()
                 .takeIf { it.size >= STACK_IS_KNOWN_FROM }
                 ?.let(Increment::Stack)
                 ?: stepFor(readIn)

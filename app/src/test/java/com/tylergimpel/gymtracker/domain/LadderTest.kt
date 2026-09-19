@@ -84,6 +84,39 @@ class LadderTest {
     }
 
     @Test
+    fun `a machine with nothing above its heaviest notch says so rather than repeating itself`() {
+        val stack = Increment.Stack(listOf(Kilograms(50.0), Kilograms(60.0)))
+        val history = trained(
+            session(asked(60.0, reps = 8, did = 9)),
+            session(asked(60.0, reps = 8, did = 9)),
+        )
+
+        val next = history.next(SIX_TO_EIGHT, stack) as Recommendation.Prescribing
+
+        // Beaten twice, so the ladder wants to advance, and the stack has no pin above 60 that
+        // anybody has been seen using. The weight cannot move — and the lifter has to be told,
+        // because a number that does not change after two good sessions reads as the engine
+        // having quietly given up rather than as a machine the app has not finished learning.
+        assertLoad(60.0, next)
+        assertTrue(next.atTheTopOfTheStack)
+    }
+
+    @Test
+    fun `a machine with a notch above it just advances`() {
+        val stack = Increment.Stack(listOf(Kilograms(50.0), Kilograms(60.0), Kilograms(70.0)))
+        val history = trained(
+            session(asked(60.0, reps = 8, did = 9)),
+            session(asked(60.0, reps = 8, did = 9)),
+        )
+
+        val next = history.next(SIX_TO_EIGHT, stack) as Recommendation.Prescribing
+
+        // Nothing to say: the stack knew where to go and went there.
+        assertLoad(70.0, next)
+        assertFalse(next.atTheTopOfTheStack)
+    }
+
+    @Test
     fun `an ordinary step says nothing about itself`() {
         val history = trained(
             session(asked(60.0, reps = 8, did = 8)),
@@ -308,11 +341,15 @@ class LadderTest {
 
     private fun TrainingHistory.next(): Recommendation = next(SIX_TO_EIGHT)
 
-    private fun TrainingHistory.next(repRange: RepRange): Recommendation = recommendNextSet(
+    private fun TrainingHistory.next(
+        repRange: RepRange,
+        rounding: Increment = Increment.DEFAULT,
+    ): Recommendation = recommendNextSet(
         history = this,
-        progress = progressIn(repRange),
+        progress = progressIn(repRange, rounding),
         calibration = null,
         setsToday = 0,
+        rounding = rounding,
     )!!
 
     private fun assertLoad(expected: Double, recommendation: Recommendation) =

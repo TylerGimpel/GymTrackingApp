@@ -231,4 +231,6 @@ The smallest weight step actually achievable on a given exercise, set by the equ
 
 Distinct from the **step** a weight stepper takes, which is a round number in the display unit — 2.5 kg or 5 lb — and belongs to how a weight is read rather than to what the equipment can do. Converting one unit's step into the other is what the separate numbers exist to avoid.
 
+A machine's tier is learned from the log and needs two distinct positions before it is believed at all — one says where the pin was once and nothing about where the next notch is. **Today's pin counts**, unlike everything else about today: where the pin was is a fact about the machine the moment it is set, not a claim about what the lifter has proved (`docs/adr/0012-a-stack-is-learned-from-the-log-including-todays.md`). At the heaviest position it has seen, the app holds rather than inventing one above, and says so.
+
 Where none of the three tiers knows better, the fallback is that same step in the unit the lifter reads: rounding in kilograms and converting afterwards is what produces 137.79 lb, a number that is exactly correct and exists nowhere. The lifter can also say outright what one exercise moves by, and their answer beats anything the app can work out — a rack going up in fours is a fact about their gym, and nothing can infer it.

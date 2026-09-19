@@ -1052,12 +1052,17 @@ internal fun NextSet(
             Recommendation.Stopped -> R.string.session_stopped
             // A rung of a ramp says what it is above and needs no explaining under.
             is Recommendation.WarmingUp -> null
-            // The one thing a prescription ever says about itself, and only when the number has
-            // moved by more than a step. #25 asks for a re-anchor to be surfaced, and the reason
-            // is the lifter standing at the rack: a weight that jumped reads as a bug, and the
-            // safe thing to do about a bug is load what you lifted last time instead.
-            is Recommendation.Prescribing ->
-                R.string.session_re_anchored.takeIf { recommendation.reAnchored }
+            // The two things a prescription says about itself, both of them cases where the
+            // number alone would be read as something it is not. A weight that jumped reads as a
+            // bug, and the safe thing to do about a bug is load what you lifted last time (#25).
+            // A weight that has *not* moved after two good sessions reads as the engine having
+            // given up, when what has actually happened is that the app has run out of pin
+            // positions it has seen and needs the lifter to show it one more (#65).
+            is Recommendation.Prescribing -> when {
+                recommendation.reAnchored -> R.string.session_re_anchored
+                recommendation.atTheTopOfTheStack -> R.string.session_top_of_stack
+                else -> null
+            }
         }
         line?.let {
             Text(

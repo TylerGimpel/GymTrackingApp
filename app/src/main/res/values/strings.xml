@@ -84,6 +84,7 @@
     <string name="session_rest_always">Always on this one</string>
     <string name="session_calibrating_hint">Stop when it gets hard. Being wrong here is expected.</string>
     <string name="session_cutting_volume">Same weight, fewer sets — this one has been hard three sessions running.</string>
+    <string name="session_top_of_stack">This is the heaviest pin the app has seen you use here. You have earned more — move it up one and log what you lift.</string>
     <string name="session_re_anchored">Your last session went well past the target, so this is a jump rather than a step.</string>
     <string name="session_stopped">No suggestion for this lift: it has come up short too many sessions running. Pick a weight that works today.</string>
     <string name="session_edit_set">Edit set</string>

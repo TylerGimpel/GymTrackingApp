@@ -314,6 +314,31 @@ class TrainingHistory(val sessions: List<TrainedSession>) {
     fun reAnchoredIn(repRange: RepRange): Boolean = substantialBeat(repRange) != null
 
     /**
+     * Whether the ladder wants to advance and the equipment has nowhere to go.
+     *
+     * Only a machine can answer yes. A barbell runs out of plates and a dumbbell rack runs out of
+     * dumbbells, but a **Stack** runs out of *knowledge*: it offers only pin positions this
+     * exercise has been logged at, so at the heaviest one ever used there is nothing above to
+     * offer and the advance quietly does nothing.
+     *
+     * That silence is the problem. A lifter who has beaten the target twice has earned more, and
+     * a number that does not change reads as the engine having given up rather than as a machine
+     * the app has not finished learning. Asked here rather than inferred on screen, because the
+     * two things that make it true — the rung of the ladder and what the equipment can do — are
+     * both in this layer and neither is in the other.
+     */
+    fun atTheTopOf(repRange: RepRange, rounding: Increment): Boolean {
+        if (ladderIn(repRange) != Ladder.ADVANCE) return false
+        // A session that blew past the target re-anchors instead of stepping, so the weight has
+        // moved and moved a long way. Saying the machine is stuck under a number that has just
+        // jumped would be the screen contradicting itself.
+        if (substantialBeat(repRange) != null) return false
+
+        val held = lastPrescribedLoad ?: return false
+        return rounding.oneStepAbove(held) == held
+    }
+
+    /**
      * What the last session proved the estimate wrong by, or null where it did not.
      *
      * Two ways to be wrong, and each catches what the other cannot. A lifter can blow past a
