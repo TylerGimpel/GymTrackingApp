@@ -85,8 +85,10 @@ class SessionScreenTest {
     fun theThumbZoneStaysPutWhileTheSessionScrolls() {
         compose.setContent { SessionScreen(state = state(logged = 12)) }
 
-        // A dozen sets below and the controls have not gone anywhere: they are not in the list.
-        compose.onNodeWithTag(WHEEL).performTouchInput { swipeUp() }
+        // The session itself, not the wheel: the wheel is its own little scroller and moving
+        // it proves nothing about the page. Scroll the page and the controls are still there,
+        // because they were never in it.
+        compose.onNodeWithTag(SESSION_LIST).performTouchInput { swipeUp() }
         compose.onNodeWithTag(LOG_SET).assertIsDisplayed()
         compose.onNodeWithTag(WEIGHT_FIELD).assertIsDisplayed()
     }

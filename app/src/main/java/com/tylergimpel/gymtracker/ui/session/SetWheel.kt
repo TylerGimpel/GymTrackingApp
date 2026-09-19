@@ -175,3 +175,6 @@ const val WHEEL = "set-wheel"
 const val PENDING = "pending-set"
 const val WEIGHT_FIELD = "weight-field"
 const val LOG_SET = "log-set"
+
+/** The session itself, which scrolls — as distinct from the controls, which do not. */
+const val SESSION_LIST = "session-list"

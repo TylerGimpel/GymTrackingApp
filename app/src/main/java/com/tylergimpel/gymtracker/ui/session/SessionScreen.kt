@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -368,12 +370,22 @@ fun SessionScreen(
             // Fixed, in the thumb zone, and only what belongs there: the numbers, the steppers
             // and the log button (`docs/design/logging-screen.md`). What scrolls above is the
             // session and everything about the exercise a lifter is not touching mid-set.
-            state.selected?.let {
+            if (state.selected != null) {
                 // Opaque, because it is on top of a list that scrolls underneath it: a
                 // transparent strip shows the session through the controls and reads as a
                 // rendering fault rather than as a fixed bar.
+                //
+                // And it carries its own insets. The app draws edge to edge and a Scaffold insets
+                // its content rather than this slot, so without them the strip sits under the
+                // gesture bar — and the keyboard covers the very fields tap-to-type opens.
+                // Both insets pad the contents *inside* the background, and it was worth trying
+                // the other way round to find out why: padding the Surface moves the background
+                // with it, so the bar stops reaching the bottom of the screen and the session
+                // scrolls visibly through the gap it leaves — under the gesture bar with no
+                // keyboard, and under half the screen with one. Padded inside, the bar always
+                // reaches the edge and its contents sit above whatever is in the way.
                 Surface(tonalElevation = 3.dp) {
-                    Column {
+                    Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
                         HorizontalDivider()
                         SetEntryThumbZone(
                             draft = state.draft,
@@ -406,7 +418,7 @@ fun SessionScreen(
         },
     ) { insets ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().testTag(SESSION_LIST),
             contentPadding = insets,
         ) {
             item {
@@ -828,6 +840,15 @@ private fun SetEntryDetails(
             }
         }
 
+        // Labelled only where there are two of them, and then both: an unlabelled block above
+        // one headed "Right" reads as a heading somebody forgot rather than as the left side.
+        if (perSide) {
+            Text(
+                text = stringResource(R.string.set_side_left),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         SetDetailFields(
             draft,
             onDraftChange,
@@ -877,8 +898,11 @@ private fun SetEntryDetails(
  * hand, and they have to be in the same place every time. Everything else about the exercise
  * scrolls in [SetEntryDetails] above.
  *
- * It keeps a constant height on purpose: the running rest and the pace line stay up with the
- * wheel rather than appearing here, because a strip that grows and shrinks moves the log button.
+ * The running rest and the pace line stay up with the wheel rather than appearing here, so that
+ * a rest starting and ending does not move the log button under the lifter's thumb. It is not
+ * fixed in height outright — a per-side exercise shows two of everything, and an exercise that
+ * records a duration grows a line under the field — but neither of those changes between the
+ * sets of one exercise, which is when a control moving is a control you have to look at.
  */
 @Composable
 private fun SetEntryThumbZone(
@@ -1365,14 +1389,14 @@ private data class UnitChoice(
 /**
  * The numbers a set is logged as, and the steppers that move them.
  *
- * **The thumb zone.** Everything here is touched between sets with a bar in the other hand, which
- * is why it is the part that stays fixed below the wheel while the session scrolls
- * (`docs/design/logging-screen.md`). A control that shifts position between sets is a control you
- * have to look at.
+ * Separate from the rest of a set's fields because it is the half a lifter touches *during* one,
+ * with a bar in the other hand. On the logging screen that earns it a fixed place below the
+ * wheel (`docs/design/logging-screen.md`); in a dialog correcting a set it is simply the top of
+ * the form. Neither placement is decided here.
  */
 @Composable
 private fun SetValueFields(draft: SetDraft, onChange: (SetDraft) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // What the exercise records decides what is on screen. A plank offered a weight field is
         // asking for a number that means nothing, and one that reaches storage is worse than one
         // that does not.
@@ -1456,9 +1480,9 @@ private fun SetValueFields(draft: SetDraft, onChange: (SetDraft) -> Unit) {
 /**
  * Everything about a set that is not the numbers: the unit, what was measured, a note, the type.
  *
- * Scrolls with the session rather than sitting under the lifter's thumb. None of it is touched
- * mid-set — a unit is settled once for a machine, an effort rating is given after the fact, and a
- * set type is chosen when it changes rather than every set.
+ * The half nobody touches mid-set — a unit is settled once for a machine, an effort rating is
+ * given after the fact, and a set type is chosen when it changes rather than every set. Which is
+ * why the logging screen lets this scroll away while it pins the numbers.
  */
 @Composable
 private fun SetDetailFields(
@@ -1466,6 +1490,13 @@ private fun SetDetailFields(
     onChange: (SetDraft) -> Unit,
     showType: Boolean = true,
     showNote: Boolean = true,
+    /**
+     * Whether to offer what the lifter measured about the set.
+     *
+     * Off for the second side of a per-side set, which is one set and felt one way: offering
+     * fields there that the left-hand side's answers overwrite would discard what was typed
+     * into them.
+     */
     showMeasurements: Boolean = showNote,
     unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
 ) {
@@ -1543,12 +1574,6 @@ private fun SetDraftFields(
     onChange: (SetDraft) -> Unit,
     showType: Boolean = true,
     showNote: Boolean = true,
-    /**
-     * Whether to offer what the lifter measured about the set.
-     *
-     * Off for the second side of a per-side set, which is one set and felt one way: offering fields
-     * there that the left-hand side's answers overwrite would discard what was typed into them.
-     */
     showMeasurements: Boolean = showNote,
     unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
 ) {
@@ -1559,15 +1584,12 @@ private fun SetDraftFields(
 }
 
 /**
- * Stepping the weight, and saying what unit it is read in.
+ * Up and down by the step of the unit the number is read in.
  *
- * The steps are the display unit's own — 2.5 kg or 5 lb — and are written on the buttons, because a
- * lifter who has just switched to pounds needs to see that the step came with it. Converting one
- * unit's step into the other would offer weights no barbell can be loaded to.
- *
- * A unit chip is remembered for the exercise (`docs/design/logging-screen.md`), which is right for
- * a machine that carries its label whoever walks up to it. The chip beside them is the exception
- * the spec also asks for: one set read off the odd machine, changing nothing else.
+ * The step rather than the **Increment**: this is the stepper's round number — 2.5 kg or 5 lb —
+ * and belongs to how a weight is typed rather than to what the equipment can be loaded to. What
+ * the equipment can do is the engine's business, and it has already done it by the time a
+ * prescription reaches this field.
  */
 @Composable
 private fun WeightSteppers(draft: SetDraft, onChange: (SetDraft) -> Unit) {
