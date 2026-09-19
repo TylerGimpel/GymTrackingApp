@@ -5,8 +5,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.Exercise
@@ -68,17 +69,26 @@ class SessionScreenTest {
     }
 
     @Test
-    fun loggingASetIsOneTap() {
+    fun loggingASetIsOneTapOnAControlThatDoesNotMove() {
         var logged = 0
         compose.setContent { SessionScreen(state = state(), onLogSet = { logged++ }) }
 
-        compose.onNodeWithTag(LOG_SET).performScrollTo().performClick()
+        // No scrolling to reach it. The button is pinned below the wheel, so the common path is
+        // one tap from wherever the session happens to be scrolled to — which is the whole
+        // reason the thumb zone is a separate strip.
+        compose.onNodeWithTag(LOG_SET).performClick()
 
-        // One tap on the button: a screen that takes three taps per set is a screen somebody
-        // stops using by week three. The scroll is the test reaching the button in a viewport
-        // this size, and it is also the thing #53 still wants fixed — the controls are a whole
-        // entry form rather than the thumb-zone strip the prototype pinned.
         assertEquals(1, logged)
+    }
+
+    @Test
+    fun theThumbZoneStaysPutWhileTheSessionScrolls() {
+        compose.setContent { SessionScreen(state = state(logged = 12)) }
+
+        // A dozen sets below and the controls have not gone anywhere: they are not in the list.
+        compose.onNodeWithTag(WHEEL).performTouchInput { swipeUp() }
+        compose.onNodeWithTag(LOG_SET).assertIsDisplayed()
+        compose.onNodeWithTag(WEIGHT_FIELD).assertIsDisplayed()
     }
 
     @Test
@@ -88,7 +98,7 @@ class SessionScreenTest {
             SessionScreen(state = state(), onDraftChange = { typed = it })
         }
 
-        compose.onNodeWithTag(WEIGHT_FIELD).performScrollTo().performTextReplacement("62.5")
+        compose.onNodeWithTag(WEIGHT_FIELD).performTextReplacement("62.5")
 
         // Stepping from 20 to 60 is absurd, and overriding is the expected path while the app is
         // still guessing rather than an exception.

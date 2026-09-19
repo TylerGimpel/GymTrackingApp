@@ -51,6 +51,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -363,6 +364,29 @@ fun SessionScreen(
                 },
             )
         },
+        bottomBar = {
+            // Fixed, in the thumb zone, and only what belongs there: the numbers, the steppers
+            // and the log button (`docs/design/logging-screen.md`). What scrolls above is the
+            // session and everything about the exercise a lifter is not touching mid-set.
+            state.selected?.let {
+                // Opaque, because it is on top of a list that scrolls underneath it: a
+                // transparent strip shows the session through the controls and reads as a
+                // rendering fault rather than as a fixed bar.
+                Surface(tonalElevation = 3.dp) {
+                    Column {
+                        HorizontalDivider()
+                        SetEntryThumbZone(
+                            draft = state.draft,
+                            rightDraft = state.rightDraft,
+                            perSide = state.perSide,
+                            onDraftChange = onDraftChange,
+                            onRightDraftChange = onRightDraftChange,
+                            onLogSet = onLogSet,
+                        )
+                    }
+                }
+            }
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onPickExercise,
@@ -408,7 +432,7 @@ fun SessionScreen(
                     // pounds is labelled in pounds whoever is reading.
                     state.plateLine?.let { PlateLineRow(it, selected.displayUnit) }
                     WheelFooting(state, onEndRest, onAddRest, onFixRestAlerts)
-                    SetEntryControls(
+                    SetEntryDetails(
                         exercise = selected,
                         recommendation = state.recommendation,
                         onEditRest = onEditRest,
@@ -423,7 +447,6 @@ fun SessionScreen(
                         onEditExercise = onEditExercise,
                         onReadIn = onReadIn,
                         onToggleDisplayUnitOverride = onToggleDisplayUnitOverride,
-                        onLogSet = onLogSet,
                     )
                     HorizontalDivider()
                 }
@@ -745,8 +768,16 @@ private fun EmptySession(
     }
 }
 
+/**
+ * Everything about the exercise in front of the lifter that is not the numbers.
+ *
+ * Scrolls with the session. What is *not* here is the point: the fields, the steppers and the log
+ * button sit in [SetEntryThumbZone], fixed below, because those are what a thumb finds without
+ * looking and a control that moves between sets is one you have to look at
+ * (`docs/design/logging-screen.md`).
+ */
 @Composable
-private fun SetEntryControls(
+private fun SetEntryDetails(
     exercise: Exercise,
     recommendation: Recommendation?,
     onEditRest: () -> Unit,
@@ -761,7 +792,6 @@ private fun SetEntryControls(
     onEditExercise: () -> Unit,
     onReadIn: (WeightUnit) -> Unit,
     onToggleDisplayUnitOverride: () -> Unit,
-    onLogSet: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -790,23 +820,15 @@ private fun SetEntryControls(
             )
         }
 
-        // What is being asked for is on the wheel above, where it is readable from the rack.
-        // What belongs down here is only what a thumb acts on — and the rest, which is the one
-        // part of a prescription a lifter changes rather than answers.
+        // The one part of a prescription a lifter changes rather than answers — and changes once,
+        // which is why it is here rather than under their thumb.
         recommendation?.prescription?.rest?.let { rest ->
             TextButton(onClick = onEditRest, contentPadding = PaddingValues(0.dp)) {
                 Text(stringResource(R.string.session_rest, rest.asTimeText()))
             }
         }
 
-        if (perSide) {
-            Text(
-                text = stringResource(R.string.set_side_left),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        SetDraftFields(
+        SetDetailFields(
             draft,
             onDraftChange,
             // Here a unit is a statement about the machine, so it settles the exercise — unless
@@ -818,22 +840,18 @@ private fun SetEntryControls(
             ),
         )
 
-        // A single entry by default; expanding is for tracking an imbalance, and the two sides carry
-        // their own weights because that is the only reason to bother.
+        // One set, felt one way: what the lifter measured is taken from the left-hand side, so
+        // the right side carries nothing but a note of its own.
         if (perSide) {
             Text(
                 text = stringResource(R.string.set_side_right),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            // The unit belongs to the set rather than to one of its rows, so it is chosen once
-            // above and this side follows it.
-            SetDraftFields(
+            SetDetailFields(
                 rightDraft,
                 onRightDraftChange,
                 showType = false,
-                // One set, felt one way: what the lifter measured is taken from the left-hand side,
-                // so offering the fields again here would discard whatever was typed into them.
                 showMeasurements = false,
                 unitChoice = null,
             )
@@ -847,6 +865,49 @@ private fun SetEntryControls(
                 onClick = onTogglePerSide,
                 label = { Text(stringResource(R.string.set_per_side)) },
             )
+        }
+    }
+}
+
+/**
+ * The controls a thumb acts on, fixed below the wheel.
+ *
+ * **The whole of the thumb zone, and nothing else.** The design settled on the value fields,
+ * their steppers and the log button — a lifter mid-set reaches for these with a bar in the other
+ * hand, and they have to be in the same place every time. Everything else about the exercise
+ * scrolls in [SetEntryDetails] above.
+ *
+ * It keeps a constant height on purpose: the running rest and the pace line stay up with the
+ * wheel rather than appearing here, because a strip that grows and shrinks moves the log button.
+ */
+@Composable
+private fun SetEntryThumbZone(
+    draft: SetDraft,
+    rightDraft: SetDraft,
+    perSide: Boolean,
+    onDraftChange: (SetDraft) -> Unit,
+    onRightDraftChange: (SetDraft) -> Unit,
+    onLogSet: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (perSide) {
+            Text(
+                text = stringResource(R.string.set_side_left),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SetValueFields(draft, onDraftChange)
+
+        // A single entry by default; expanding is for tracking an imbalance, and the two sides
+        // carry their own weights because that is the only reason to bother.
+        if (perSide) {
+            Text(
+                text = stringResource(R.string.set_side_right),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SetValueFields(rightDraft, onRightDraftChange)
         }
 
         Button(
@@ -1301,23 +1362,17 @@ private data class UnitChoice(
     }
 }
 
-/** The weight, reps, note, unit and type fields, shared by the entry controls and the dialogs. */
+/**
+ * The numbers a set is logged as, and the steppers that move them.
+ *
+ * **The thumb zone.** Everything here is touched between sets with a bar in the other hand, which
+ * is why it is the part that stays fixed below the wheel while the session scrolls
+ * (`docs/design/logging-screen.md`). A control that shifts position between sets is a control you
+ * have to look at.
+ */
 @Composable
-private fun SetDraftFields(
-    draft: SetDraft,
-    onChange: (SetDraft) -> Unit,
-    showType: Boolean = true,
-    showNote: Boolean = true,
-    /**
-     * Whether to offer what the lifter measured about the set.
-     *
-     * Off for the second side of a per-side set, which is one set and felt one way: offering fields
-     * there that the left-hand side's answers overwrite would discard what was typed into them.
-     */
-    showMeasurements: Boolean = showNote,
-    unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun SetValueFields(draft: SetDraft, onChange: (SetDraft) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // What the exercise records decides what is on screen. A plank offered a weight field is
         // asking for a number that means nothing, and one that reaches storage is worse than one
         // that does not.
@@ -1391,10 +1446,32 @@ private fun SetDraftFields(
                 )
             }
         }
-        // The steppers and the unit chips are about a weight — and a belt and a machine's help are
-        // weights, read in the same unit and stepped by the same plates.
+        // A belt and a machine's help are weights too, stepped by the same plates.
         if (draft.loggingType.recordsAnyWeight) {
-            WeightControls(draft, onChange, unitChoice)
+            WeightSteppers(draft, onChange)
+        }
+    }
+}
+
+/**
+ * Everything about a set that is not the numbers: the unit, what was measured, a note, the type.
+ *
+ * Scrolls with the session rather than sitting under the lifter's thumb. None of it is touched
+ * mid-set — a unit is settled once for a machine, an effort rating is given after the fact, and a
+ * set type is chosen when it changes rather than every set.
+ */
+@Composable
+private fun SetDetailFields(
+    draft: SetDraft,
+    onChange: (SetDraft) -> Unit,
+    showType: Boolean = true,
+    showNote: Boolean = true,
+    showMeasurements: Boolean = showNote,
+    unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (draft.loggingType.recordsAnyWeight) {
+            unitChoice?.let { UnitChoiceRow(draft, it) }
         }
         if (showMeasurements) {
             // All three optional and all three the lifter's own: an effort rating is a judgement
@@ -1459,6 +1536,28 @@ private fun SetDraftFields(
     }
 }
 
+/** The numbers and the rest of it together, which is what a dialog editing one set wants. */
+@Composable
+private fun SetDraftFields(
+    draft: SetDraft,
+    onChange: (SetDraft) -> Unit,
+    showType: Boolean = true,
+    showNote: Boolean = true,
+    /**
+     * Whether to offer what the lifter measured about the set.
+     *
+     * Off for the second side of a per-side set, which is one set and felt one way: offering fields
+     * there that the left-hand side's answers overwrite would discard what was typed into them.
+     */
+    showMeasurements: Boolean = showNote,
+    unitChoice: UnitChoice? = UnitChoice.forThisSetAlone(draft, onChange),
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SetValueFields(draft, onChange)
+        SetDetailFields(draft, onChange, showType, showNote, showMeasurements, unitChoice)
+    }
+}
+
 /**
  * Stepping the weight, and saying what unit it is read in.
  *
@@ -1471,41 +1570,41 @@ private fun SetDraftFields(
  * the spec also asks for: one set read off the odd machine, changing nothing else.
  */
 @Composable
-private fun WeightControls(
-    draft: SetDraft,
-    onChange: (SetDraft) -> Unit,
-    unitChoice: UnitChoice?,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedButton(onClick = { onChange(draft.stepWeight(-1)) }) {
-                Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asAmountText()))
-            }
-            OutlinedButton(onClick = { onChange(draft.stepWeight(1)) }) {
-                Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asAmountText()))
-            }
+private fun WeightSteppers(draft: SetDraft, onChange: (SetDraft) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(onClick = { onChange(draft.stepWeight(-1)) }) {
+            Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asAmountText()))
         }
+        OutlinedButton(onClick = { onChange(draft.stepWeight(1)) }) {
+            Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asAmountText()))
+        }
+    }
+}
 
-        // A row of its own rather than trailing the steppers: "This set only" is the whole of the
-        // override and is useless half off the edge of a phone.
-        unitChoice?.let { choice ->
-            WeightUnitChips(
-                selected = draft.displayUnit,
-                // A reading, not a value: the number in the field is rewritten and what it weighs
-                // is untouched, whichever of the two this settles.
-                onReadIn = choice.onReadIn,
-            ) {
-                choice.overriding?.let { overriding ->
-                    FilterChip(
-                        selected = overriding,
-                        onClick = choice.onToggleOverride,
-                        label = { Text(stringResource(R.string.set_unit_this_set_only)) },
-                    )
-                }
-            }
+/**
+ * What the number in the field is read in.
+ *
+ * A row of its own rather than trailing the steppers: "This set only" is the whole of the
+ * override and is useless half off the edge of a phone. Not a thumb-zone control — a unit is
+ * settled once for a machine and then left alone, which is why it scrolls with the rest.
+ */
+@Composable
+private fun UnitChoiceRow(draft: SetDraft, choice: UnitChoice) {
+    WeightUnitChips(
+        selected = draft.displayUnit,
+        // A reading, not a value: the number in the field is rewritten and what it weighs
+        // is untouched, whichever of the two this settles.
+        onReadIn = choice.onReadIn,
+    ) {
+        choice.overriding?.let { overriding ->
+            FilterChip(
+                selected = overriding,
+                onClick = choice.onToggleOverride,
+                label = { Text(stringResource(R.string.set_unit_this_set_only)) },
+            )
         }
     }
 }
