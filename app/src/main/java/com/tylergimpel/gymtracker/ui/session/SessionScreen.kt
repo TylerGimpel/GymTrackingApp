@@ -157,117 +157,163 @@ fun SessionScreen(
 
     SessionScreen(
         state = state,
-        onPickExercise = onPickExercise,
-        onDraftChange = viewModel::changeDraft,
-        onRightDraftChange = viewModel::changeRightDraft,
-        onTogglePerSide = viewModel::togglePerSide,
-        onReadIn = viewModel::readIn,
-        onToggleDisplayUnitOverride = viewModel::toggleDisplayUnitOverride,
-        onLogSet = viewModel::logSet,
-        onEditEffort = viewModel::startEditing,
-        onEditingDraftChange = viewModel::changeEditingDraft,
-        onSaveEditing = viewModel::saveEditing,
-        onDeleteEditing = viewModel::deleteEditing,
-        onCancelEditing = viewModel::cancelEditing,
-        onAddDrop = viewModel::startAddingDrop,
-        onDropDraftChange = viewModel::changeDropDraft,
-        onSaveDrop = viewModel::saveDrop,
-        onCancelDrop = viewModel::cancelAddingDrop,
-        onGroupWithNext = viewModel::groupWithNext,
-        onUngroup = viewModel::ungroup,
-        onSetAutoJump = viewModel::setAutoJump,
-        onSessionNoteChange = viewModel::noteSession,
-        onStartDay = viewModel::startCursorDay,
-        onEditExercise = viewModel::startEditingExercise,
-        onExerciseDetailsChange = viewModel::changeExerciseDetails,
-        onSaveExerciseDetails = viewModel::saveExerciseDetails,
-        onCancelExerciseDetails = viewModel::cancelEditingExercise,
-        onSkipDay = viewModel::startSkipping,
-        onConfirmSkip = viewModel::skipDay,
-        onCancelSkip = viewModel::cancelSkipping,
-        onStartRefiling = viewModel::startRefiling,
-        onRefileOn = viewModel::refileOn,
-        onCancelRefiling = viewModel::cancelRefiling,
-        onEndRest = viewModel::endRest,
-        onAddRest = viewModel::addTimeToRest,
-        onFixRestAlerts = { fix -> context.startActivity(settingsFor(fix, context)) },
-        onJumpTo = viewModel::select,
-        onSwap = viewModel::startSwapping,
-        onSwapTo = viewModel::swapTo,
-        onCancelSwap = viewModel::cancelSwapping,
-        onKeepAvoided = viewModel::keepAvoided,
-        onSwapAvoided = viewModel::swapAvoided,
-        onRemoveAvoided = viewModel::removeAvoided,
-        onEditRest = viewModel::startEditingRest,
-        onRestThisSet = viewModel::restThisSetOnly,
-        onRestAlways = viewModel::restFromNowOn,
-        onRestChange = viewModel::changeEditingRest,
-        onCancelRest = viewModel::cancelEditingRest,
-        onFinish = viewModel::startFinishing,
-        onFinishAs = viewModel::finishSession,
-        onCancelFinishing = viewModel::cancelFinishing,
-        onOpenRoutine = onOpenRoutine,
-        onOpenBodyweight = onOpenBodyweight,
-        onOpenPlates = onOpenPlates,
+        entry = SetEntryActions(
+            onDraftChange = viewModel::changeDraft,
+            onRightDraftChange = viewModel::changeRightDraft,
+            onTogglePerSide = viewModel::togglePerSide,
+            onReadIn = viewModel::readIn,
+            onToggleDisplayUnitOverride = viewModel::toggleDisplayUnitOverride,
+            onLogSet = viewModel::logSet,
+            onEditEffort = viewModel::startEditing,
+            onEditingDraftChange = viewModel::changeEditingDraft,
+            onSaveEditing = viewModel::saveEditing,
+            onDeleteEditing = viewModel::deleteEditing,
+            onCancelEditing = viewModel::cancelEditing,
+            onAddDrop = viewModel::startAddingDrop,
+            onDropDraftChange = viewModel::changeDropDraft,
+            onSaveDrop = viewModel::saveDrop,
+            onCancelDrop = viewModel::cancelAddingDrop,
+        ),
+        rest = RestActions(
+            onEndRest = viewModel::endRest,
+            onAddRest = viewModel::addTimeToRest,
+            onFixRestAlerts = { fix: RestFix -> context.startActivity(settingsFor(fix, context)) },
+            onEditRest = viewModel::startEditingRest,
+            onRestThisSet = viewModel::restThisSetOnly,
+            onRestAlways = viewModel::restFromNowOn,
+            onRestChange = viewModel::changeEditingRest,
+            onCancelRest = viewModel::cancelEditingRest,
+        ),
+        cycle = CycleActions(
+            onStartDay = viewModel::startCursorDay,
+            onSkipDay = viewModel::startSkipping,
+            onConfirmSkip = viewModel::skipDay,
+            onCancelSkip = viewModel::cancelSkipping,
+            onStartRefiling = viewModel::startRefiling,
+            onRefileOn = viewModel::refileOn,
+            onCancelRefiling = viewModel::cancelRefiling,
+            onFinish = viewModel::startFinishing,
+            onFinishAs = viewModel::finishSession,
+            onCancelFinishing = viewModel::cancelFinishing,
+        ),
+        exercises = ExerciseActions(
+            onPickExercise = onPickExercise,
+            onEditExercise = viewModel::startEditingExercise,
+            onExerciseDetailsChange = viewModel::changeExerciseDetails,
+            onSaveExerciseDetails = viewModel::saveExerciseDetails,
+            onCancelExerciseDetails = viewModel::cancelEditingExercise,
+            onJumpTo = viewModel::select,
+            onSwap = viewModel::startSwapping,
+            onSwapTo = viewModel::swapTo,
+            onCancelSwap = viewModel::cancelSwapping,
+            onKeepAvoided = viewModel::keepAvoided,
+            onSwapAvoided = viewModel::swapAvoided,
+            onRemoveAvoided = viewModel::removeAvoided,
+        ),
+        wholeSession = SessionActions(
+            onGroupWithNext = viewModel::groupWithNext,
+            onUngroup = viewModel::ungroup,
+            onSetAutoJump = viewModel::setAutoJump,
+            onSessionNoteChange = viewModel::noteSession,
+            onOpenRoutine = onOpenRoutine,
+            onOpenBodyweight = onOpenBodyweight,
+            onOpenPlates = onOpenPlates,
+        ),
     )
 }
+
+/**
+ * What the logging screen can be asked to do, grouped by what it is about.
+ *
+ * Five bundles rather than fifty parameters. The screen had grown one argument per interaction
+ * until the list was longer than most of the composables reading it, and a flat list of lambdas
+ * tells a reader nothing about which of them belong together (#63). These do: each group is the
+ * surface of one thing the session view model holds.
+ *
+ * Every lambda defaults to doing nothing, so a preview or a test wires up the one it is about
+ * and says nothing about the rest.
+ */
+/** Entering a set, and correcting one that is already down. */
+data class SetEntryActions(
+    val onDraftChange: (SetDraft) -> Unit = {},
+    val onRightDraftChange: (SetDraft) -> Unit = {},
+    val onTogglePerSide: () -> Unit = {},
+    val onReadIn: (WeightUnit) -> Unit = {},
+    val onToggleDisplayUnitOverride: () -> Unit = {},
+    val onLogSet: () -> Unit = {},
+    val onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit = { _, _, _ -> },
+    val onEditingDraftChange: (SetDraft) -> Unit = {},
+    val onSaveEditing: () -> Unit = {},
+    val onDeleteEditing: () -> Unit = {},
+    val onCancelEditing: () -> Unit = {},
+    val onAddDrop: (WeightUnit, Effort) -> Unit = { _, _ -> },
+    val onDropDraftChange: (SetDraft) -> Unit = {},
+    val onSaveDrop: () -> Unit = {},
+    val onCancelDrop: () -> Unit = {},
+)
+
+/** The rest timer: the one running, and the length the lifter is arguing with. */
+data class RestActions(
+    val onEndRest: () -> Unit = {},
+    val onAddRest: () -> Unit = {},
+    val onFixRestAlerts: (RestFix) -> Unit = {},
+    val onEditRest: () -> Unit = {},
+    val onRestThisSet: () -> Unit = {},
+    val onRestAlways: () -> Unit = {},
+    val onRestChange: (Duration) -> Unit = {},
+    val onCancelRest: () -> Unit = {},
+)
+
+/** Where this session sits in the **Cycle** — starting a day, skipping, refiling, ending. */
+data class CycleActions(
+    val onStartDay: () -> Unit = {},
+    val onSkipDay: () -> Unit = {},
+    val onConfirmSkip: () -> Unit = {},
+    val onCancelSkip: () -> Unit = {},
+    val onStartRefiling: (Session) -> Unit = {},
+    val onRefileOn: (LocalDate) -> Unit = {},
+    val onCancelRefiling: () -> Unit = {},
+    val onFinish: () -> Unit = {},
+    val onFinishAs: (RoutineDay?) -> Unit = {},
+    val onCancelFinishing: () -> Unit = {},
+)
+
+/** Which exercise is in front of the lifter, and everything they can say about it. */
+data class ExerciseActions(
+    val onPickExercise: () -> Unit = {},
+    val onEditExercise: () -> Unit = {},
+    val onExerciseDetailsChange: (ExerciseDetails) -> Unit = {},
+    val onSaveExerciseDetails: () -> Unit = {},
+    val onCancelExerciseDetails: () -> Unit = {},
+    val onJumpTo: (Exercise) -> Unit = {},
+    val onSwap: () -> Unit = {},
+    val onSwapTo: (Exercise) -> Unit = {},
+    val onCancelSwap: () -> Unit = {},
+    val onKeepAvoided: (Avoided) -> Unit = {},
+    val onSwapAvoided: (Avoided) -> Unit = {},
+    val onRemoveAvoided: (Avoided) -> Unit = {},
+)
+
+/** The session as a whole, and the way out to the other screens. */
+data class SessionActions(
+    val onGroupWithNext: (Long) -> Unit = {},
+    val onUngroup: (Long) -> Unit = {},
+    val onSetAutoJump: (Long, Boolean) -> Unit = { _, _ -> },
+    val onSessionNoteChange: (String) -> Unit = {},
+    val onOpenRoutine: () -> Unit = {},
+    val onOpenBodyweight: () -> Unit = {},
+    val onOpenPlates: () -> Unit = {},
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(
-    state: SessionUiState,
-    onPickExercise: () -> Unit = {},
-    onDraftChange: (SetDraft) -> Unit = {},
-    onRightDraftChange: (SetDraft) -> Unit = {},
-    onTogglePerSide: () -> Unit = {},
-    onReadIn: (WeightUnit) -> Unit = {},
-    onToggleDisplayUnitOverride: () -> Unit = {},
-    onLogSet: () -> Unit = {},
-    onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit = { _, _, _ -> },
-    onEditingDraftChange: (SetDraft) -> Unit = {},
-    onSaveEditing: () -> Unit = {},
-    onDeleteEditing: () -> Unit = {},
-    onCancelEditing: () -> Unit = {},
-    onAddDrop: (WeightUnit, Effort) -> Unit = { _, _ -> },
-    onDropDraftChange: (SetDraft) -> Unit = {},
-    onSaveDrop: () -> Unit = {},
-    onCancelDrop: () -> Unit = {},
-    onGroupWithNext: (Long) -> Unit = {},
-    onUngroup: (Long) -> Unit = {},
-    onSetAutoJump: (Long, Boolean) -> Unit = { _, _ -> },
-    onSessionNoteChange: (String) -> Unit = {},
-    onStartDay: () -> Unit = {},
-    onEditExercise: () -> Unit = {},
-    onExerciseDetailsChange: (ExerciseDetails) -> Unit = {},
-    onSaveExerciseDetails: () -> Unit = {},
-    onCancelExerciseDetails: () -> Unit = {},
-    onSkipDay: () -> Unit = {},
-    onConfirmSkip: () -> Unit = {},
-    onCancelSkip: () -> Unit = {},
-    onStartRefiling: (Session) -> Unit = {},
-    onRefileOn: (LocalDate) -> Unit = {},
-    onCancelRefiling: () -> Unit = {},
-    onEndRest: () -> Unit = {},
-    onAddRest: () -> Unit = {},
-    onFixRestAlerts: (RestFix) -> Unit = {},
-    onJumpTo: (Exercise) -> Unit = {},
-    onSwap: () -> Unit = {},
-    onSwapTo: (Exercise) -> Unit = {},
-    onCancelSwap: () -> Unit = {},
-    onKeepAvoided: (Avoided) -> Unit = {},
-    onSwapAvoided: (Avoided) -> Unit = {},
-    onRemoveAvoided: (Avoided) -> Unit = {},
-    onEditRest: () -> Unit = {},
-    onRestThisSet: () -> Unit = {},
-    onRestAlways: () -> Unit = {},
-    onRestChange: (Duration) -> Unit = {},
-    onCancelRest: () -> Unit = {},
-    onFinish: () -> Unit = {},
-    onFinishAs: (RoutineDay?) -> Unit = {},
-    onCancelFinishing: () -> Unit = {},
-    onOpenRoutine: () -> Unit = {},
-    onOpenBodyweight: () -> Unit = {},
-    onOpenPlates: () -> Unit = {},
+    state: SessionUiState = SessionUiState(),
+    entry: SetEntryActions = SetEntryActions(),
+    rest: RestActions = RestActions(),
+    cycle: CycleActions = CycleActions(),
+    exercises: ExerciseActions = ExerciseActions(),
+    wholeSession: SessionActions = SessionActions(),
 ) {
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -290,7 +336,7 @@ fun SessionScreen(
                 progress = state.routine,
                 performed = state.exercises.associate { it.exercise.id to it.sets.size },
                 onJumpTo = { exercise ->
-                    onJumpTo(exercise)
+                    exercises.onJumpTo(exercise)
                     scope.launch { drawer.close() }
                 },
             )
@@ -329,7 +375,7 @@ fun SessionScreen(
                                         // A label, because the date alone says nothing about being
                                         // tappable to anyone who cannot see where it sits.
                                         onClickLabel = stringResource(R.string.session_refile),
-                                        onClick = { onStartRefiling(it) },
+                                        onClick = { cycle.onStartRefiling(it) },
                                     )
                                     // Padding rather than a button: it keeps the top bar quiet
                                     // while giving the target something to be hit with.
@@ -346,22 +392,22 @@ fun SessionScreen(
                     TextButton(onClick = { scope.launch { drawer.open() } }) {
                         Text(stringResource(R.string.drawer_open))
                     }
-                    TextButton(onClick = onOpenRoutine) {
+                    TextButton(onClick = wholeSession.onOpenRoutine) {
                         Text(stringResource(R.string.session_open_routine))
                     }
                     // Bodyweight lives beside the routine rather than inside a session: it is
                     // recorded on mornings there is no session to put it in, and it is not
                     // training when there is.
-                    TextButton(onClick = onOpenBodyweight) {
+                    TextButton(onClick = wholeSession.onOpenBodyweight) {
                         Text(stringResource(R.string.session_open_bodyweight))
                     }
                     // Where the plates live. Global equipment rather than anything about today,
                     // so it sits beside the routine and the weigh-ins rather than in a session.
-                    TextButton(onClick = onOpenPlates) {
+                    TextButton(onClick = wholeSession.onOpenPlates) {
                         Text(stringResource(R.string.session_open_plates))
                     }
                     if (state.session != null) {
-                        TextButton(onClick = onFinish) { Text(stringResource(R.string.session_finish)) }
+                        TextButton(onClick = cycle.onFinish) { Text(stringResource(R.string.session_finish)) }
                     }
                 },
             )
@@ -391,9 +437,9 @@ fun SessionScreen(
                             draft = state.draft,
                             rightDraft = state.rightDraft,
                             perSide = state.perSide,
-                            onDraftChange = onDraftChange,
-                            onRightDraftChange = onRightDraftChange,
-                            onLogSet = onLogSet,
+                            onDraftChange = entry.onDraftChange,
+                            onRightDraftChange = entry.onRightDraftChange,
+                            onLogSet = entry.onLogSet,
                         )
                     }
                 }
@@ -401,7 +447,7 @@ fun SessionScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = onPickExercise,
+                onClick = exercises.onPickExercise,
                 text = {
                     Text(
                         stringResource(
@@ -425,8 +471,8 @@ fun SessionScreen(
                 NextUp(
                     progress = state.routine,
                     canStart = state.session == null,
-                    onStartDay = onStartDay,
-                    onSkipDay = onSkipDay,
+                    onStartDay = cycle.onStartDay,
+                    onSkipDay = cycle.onSkipDay,
                 )
             }
 
@@ -443,22 +489,22 @@ fun SessionScreen(
                     // The exercise's unit, like the weight above it: a machine labelled in
                     // pounds is labelled in pounds whoever is reading.
                     state.plateLine?.let { PlateLineRow(it, selected.displayUnit) }
-                    WheelFooting(state, onEndRest, onAddRest, onFixRestAlerts)
+                    WheelFooting(state, rest.onEndRest, rest.onAddRest, rest.onFixRestAlerts)
                     SetEntryDetails(
                         exercise = selected,
                         recommendation = state.recommendation,
-                        onEditRest = onEditRest,
-                        onSwap = onSwap,
+                        onEditRest = rest.onEditRest,
+                        onSwap = exercises.onSwap,
                         draft = state.draft,
                         rightDraft = state.rightDraft,
                         perSide = state.perSide,
                         overridingDisplayUnit = state.overridingDisplayUnit,
-                        onDraftChange = onDraftChange,
-                        onRightDraftChange = onRightDraftChange,
-                        onTogglePerSide = onTogglePerSide,
-                        onEditExercise = onEditExercise,
-                        onReadIn = onReadIn,
-                        onToggleDisplayUnitOverride = onToggleDisplayUnitOverride,
+                        onDraftChange = entry.onDraftChange,
+                        onRightDraftChange = entry.onRightDraftChange,
+                        onTogglePerSide = entry.onTogglePerSide,
+                        onEditExercise = exercises.onEditExercise,
+                        onReadIn = entry.onReadIn,
+                        onToggleDisplayUnitOverride = entry.onToggleDisplayUnitOverride,
                     )
                     HorizontalDivider()
                 }
@@ -469,7 +515,7 @@ fun SessionScreen(
                     EmptySession(
                         hasSelection = state.selected != null,
                         lastFinished = state.lastFinished,
-                        onStartRefiling = onStartRefiling,
+                        onStartRefiling = cycle.onStartRefiling,
                     )
                 }
             }
@@ -482,11 +528,11 @@ fun SessionScreen(
                     position = position,
                     isLast = index == state.positions.lastIndex,
                     lifterUnit = state.lifterUnit,
-                    onEditEffort = onEditEffort,
-                    onAddDrop = onAddDrop,
-                    onGroupWithNext = onGroupWithNext,
-                    onUngroup = onUngroup,
-                    onSetAutoJump = onSetAutoJump,
+                    onEditEffort = entry.onEditEffort,
+                    onAddDrop = entry.onAddDrop,
+                    onGroupWithNext = wholeSession.onGroupWithNext,
+                    onUngroup = wholeSession.onUngroup,
+                    onSetAutoJump = wholeSession.onSetAutoJump,
                 )
                 HorizontalDivider()
             }
@@ -499,46 +545,46 @@ fun SessionScreen(
             }
 
             state.session?.let { session ->
-                item { SessionNote(session.id, session.note, onSessionNoteChange) }
+                item { SessionNote(session.id, session.note, wholeSession.onSessionNoteChange) }
             }
         }
     }
     }
 
     state.editing?.let { editing ->
-        EditSetDialog(editing, onEditingDraftChange, onSaveEditing, onDeleteEditing, onCancelEditing)
+        EditSetDialog(editing, entry.onEditingDraftChange, entry.onSaveEditing, entry.onDeleteEditing, entry.onCancelEditing)
     }
 
     state.addingDrop?.let { drop ->
-        AddDropDialog(drop, onDropDraftChange, onSaveDrop, onCancelDrop)
+        AddDropDialog(drop, entry.onDropDraftChange, entry.onSaveDrop, entry.onCancelDrop)
     }
 
     if (state.finishing) {
-        WhichDayDialog(state.routine, onFinishAs, onCancelFinishing)
+        WhichDayDialog(state.routine, cycle.onFinishAs, cycle.onCancelFinishing)
     }
 
-    state.refiling?.let { RefileSessionDialog(it.date, onRefileOn, onCancelRefiling) }
+    state.refiling?.let { RefileSessionDialog(it.date, cycle.onRefileOn, cycle.onCancelRefiling) }
 
-    state.skipping?.let { SkipDayDialog(it, onConfirmSkip, onCancelSkip) }
+    state.skipping?.let { SkipDayDialog(it, cycle.onConfirmSkip, cycle.onCancelSkip) }
 
     state.avoided?.let {
-        AvoidedPrompt(it, onKeepAvoided, onSwapAvoided, onRemoveAvoided)
+        AvoidedPrompt(it, exercises.onKeepAvoided, exercises.onSwapAvoided, exercises.onRemoveAvoided)
     }
 
     state.swapCandidates?.let {
-        SwapSheet(it, state.swappingLeavesOnlyDisliked, onSwapTo, onPickExercise, onCancelSwap)
+        SwapSheet(it, state.swappingLeavesOnlyDisliked, exercises.onSwapTo, exercises.onPickExercise, exercises.onCancelSwap)
     }
 
     state.editingRest?.let {
-        RestDialog(it, onRestChange, onRestThisSet, onRestAlways, onCancelRest)
+        RestDialog(it, rest.onRestChange, rest.onRestThisSet, rest.onRestAlways, rest.onCancelRest)
     }
 
     state.editingExercise?.let { details ->
         ExerciseDetailsDialog(
             details = details,
-            onChange = onExerciseDetailsChange,
-            onSave = onSaveExerciseDetails,
-            onCancel = onCancelExerciseDetails,
+            onChange = exercises.onExerciseDetailsChange,
+            onSave = exercises.onSaveExerciseDetails,
+            onCancel = exercises.onCancelExerciseDetails,
         )
     }
 }

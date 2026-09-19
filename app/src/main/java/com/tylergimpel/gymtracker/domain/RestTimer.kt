@@ -55,6 +55,25 @@ private val LONG_ENOUGH_TO_DOZE: Duration = Duration.ofMinutes(3)
  * Android complies** — permission denied, idle quotas, an OEM process killer, the restricted
  * bucket after days unused. Those need a real device, ideally an aggressive one.
  */
+interface RestCountdown {
+
+    /**
+     * Draws the rest ending at [endsAt] where a lifter can read it without opening anything.
+     *
+     * The moment rather than a duration, because whatever draws it outlives this app: the
+     * process can be killed between two sets and the number has to keep going down.
+     */
+    fun countDownTo(endsAt: Instant)
+
+    /**
+     * Whether any of it would actually reach the lifter.
+     *
+     * False where notifications are off, which on recent Android is the default until asked. A
+     * feature that fails by being invisible has to be able to say so while the app is open.
+     */
+    fun canBeSeen(): Boolean
+}
+
 interface RestAlarms {
 
     /**

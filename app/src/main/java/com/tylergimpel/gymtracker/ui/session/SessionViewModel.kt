@@ -25,7 +25,6 @@ import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.PlateLine
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RestAlarms
-import com.tylergimpel.gymtracker.domain.restEnding
 import com.tylergimpel.gymtracker.domain.resting
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
@@ -97,14 +96,6 @@ data class Resting(val startedAt: Instant, val length: Duration) {
 /** The effort a drop is being added to, if one is open. */
 data class AddingDrop(val effortId: Long, val draft: SetDraft)
 
-/**
- * The session whose date is being changed, if one is.
- *
- * Carries the id rather than the session, because the one being refiled is not always the one on
- * screen: a date is most often found to be wrong just after Finish, when the session has already
- * stopped being the active one.
- */
-data class Refiling(val sessionId: Long, val date: LocalDate)
 
 /**
  * What the lifter calls an exercise and what they wrote about it, while they are editing them.
@@ -136,39 +127,16 @@ data class ExerciseDetails(
  * Held as one object rather than as a flow each, because `combine` runs out of typed overloads at
  * five and the alternative is packing values into pairs to smuggle them past it.
  */
-/**
- * What the platform will currently let a rest do: wake the lifter, and be seen while it runs.
- *
- * Two answers together because they fail the same way — silently, discovered by missing a set —
- * and are surfaced together in the same corner of the screen.
- */
-data class RestAlerts(
-    val alarmsAreReliable: Boolean = true,
-    val countdownVisible: Boolean = true,
+/** What no database supplies: what the screen holds, the rest timer, and where the cycle is. */
+private data class OnScreen(
+    val screen: ScreenState,
+    val rest: RestState,
+    val cycle: CycleState,
 )
 
 private data class ScreenState(
     val selected: Exercise? = null,
     val draft: SetDraft = SetDraft(),
-    /**
-     * A rest the lifter set for the set being entered, overruling what the app asked for.
-     *
-     * Cleared when the exercise changes, like everything else about the set in front of them: it
-     * is a statement about this set rather than about the lifter.
-     */
-    val restForThisSet: Duration? = null,
-    /** The rest being edited, while the lifter is changing one. */
-    val editingRest: Duration? = null,
-    /** The rest running, if one is. */
-    val resting: Resting? = null,
-    /**
-     * What the rest timer is currently able to do, as last read from the platform.
-     *
-     * Held here rather than asked on every emission, because the answer changes while the app is
-     * in the background — a lifter who has just been sent to Settings comes back having changed
-     * it — and a value sampled inside the stream would keep reporting what was true at launch.
-     */
-    val restAlerts: RestAlerts = RestAlerts(),
     /**
      * Whether the drafts still hold what the app put in them rather than something typed.
      *
@@ -182,9 +150,6 @@ private data class ScreenState(
     val rightDraft: SetDraft = SetDraft(),
     val editing: EditingEffort? = null,
     val addingDrop: AddingDrop? = null,
-    val finishing: Boolean = false,
-    val refiling: Refiling? = null,
-    val skipping: RoutineDay? = null,
     val editingExercise: ExerciseDetails? = null,
     /**
      * What to train instead, while the lifter is looking for something else to do.
@@ -361,11 +326,23 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         clock = Clock.systemDefaultZone(),
     )
 
-    private val screen = MutableStateFlow(ScreenState())
+    /**
+     * The rest timer, which is its own thing and delegated to rather than reimplemented here.
+     *
+     * It shares nothing with entering a set but the exercise it is about, so it keeps its own
+     * state and this view model passes the screen's taps along (#63).
+     */
+    private val restTimer = SessionRest(alarms, notifications, clock)
 
-    init {
-        recheckRestAlerts()
-    }
+    /**
+     * Where this session sits in the **Cycle**: starting a day, skipping one, refiling, ending.
+     *
+     * Delegated to for the same reason the rest timer is — none of it is about the set in front
+     * of the lifter, and holding it here was most of what made this class unreadable (#63).
+     */
+    private val cycle = SessionCycle(viewModelScope, database, repository, routines)
+
+    private val screen = MutableStateFlow(ScreenState())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val logged: StateFlow<LoggedSession?> = repository.observeActiveSession()
@@ -430,9 +407,15 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             combine(logged, recommended, repository.observeRecent(), ::Training),
             repository.observeLastFinished(),
             routines.observeProgress(),
-            screen,
+            // Paired rather than passed separately: `combine` runs out of typed overloads at
+            // five, and what these two have in common is only that neither comes from the
+            // database.
+            combine(screen, restTimer.state, cycle.state, ::OnScreen),
             profile.observeDisplayUnit(),
-        ) { training, lastFinished, routine, screen, lifterUnit ->
+        ) { training, lastFinished, routine, onScreen, lifterUnit ->
+            val screen = onScreen.screen
+            val rest = onScreen.rest
+            val cycle = onScreen.cycle
             val logged = training.logged
             val recent = training.recent
             // Only where it is about the exercise in front of the lifter right now.
@@ -441,7 +424,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             val recommendation = forThisExercise
                 ?.recommendation
                 // What the lifter said about this one set has the last word over the table.
-                ?.let { if (screen.restForThisSet != null) it.resting(screen.restForThisSet) else it }
+                ?.let { if (rest.forThisSet != null) it.resting(rest.forThisSet) else it }
             SessionUiState(
                 lifterUnit = lifterUnit,
                 session = logged?.session,
@@ -462,19 +445,19 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 editing = screen.editing?.let { it.copy(draft = it.draft.copy(lifterUnit = lifterUnit)) },
                 addingDrop = screen.addingDrop,
                 routine = routine,
-                finishing = screen.finishing,
-                refiling = screen.refiling,
-                skipping = screen.skipping,
+                finishing = cycle.finishing,
+                refiling = cycle.refiling,
+                skipping = cycle.skipping,
                 editingExercise = screen.editingExercise,
                 swapCandidates = screen.swapCandidates,
                 swappingLeavesOnlyDisliked = screen.swappingLeavesOnlyDisliked,
                 // The first one they have not answered about yet, and only one at a time.
                 avoided = avoidedExercises(recent)
                     .firstOrNull { it.exercise.id !in screen.askedAbout },
-                editingRest = screen.editingRest,
-                resting = screen.resting,
-                restAlarmsAreReliable = screen.restAlerts.alarmsAreReliable,
-                restCountdownVisible = screen.restAlerts.countdownVisible,
+                editingRest = rest.editing,
+                resting = rest.running,
+                restAlarmsAreReliable = rest.alerts.alarmsAreReliable,
+                restCountdownVisible = rest.alerts.countdownVisible,
                 plateLine = forThisExercise?.plateLine,
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(logged?.setsOf(chosen).orEmpty(), recommendation?.setType)
@@ -525,7 +508,6 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // fields the moment it arrives.
             untouched = true,
             // A rest set for one set belongs to that set, not to the lifter's evening.
-            restForThisSet = null,
             // Departing is a property of the machine in front of the lifter, so it does not
             // follow them to the next exercise any more than per-side entry does.
             overridingDisplayUnit = false,
@@ -629,9 +611,6 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     draft = it.draft.copy(note = null),
                     rightDraft = it.rightDraft.copy(note = null),
-                    // The set it was for is down, so it has said what it had to say. Leaving it
-                    // standing would quietly make "just this set" mean "this exercise, tonight".
-                    restForThisSet = null,
                 )
             }
             advanceAfterLogging(exercise, asked.rest)
@@ -653,65 +632,19 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 // Focus first and rest second, which is the ordering this whole type exists for.
                 // The rest is only ever present on the jump that closes the group's round.
                 select(next.exercise)
-                next.rest?.let(::startResting)
+                next.rest?.let(restTimer::start)
             }
-            is AfterLogging.StartResting -> startResting(next.length)
+            is AfterLogging.StartResting -> restTimer.start(next.length)
 
             AfterLogging.Nothing -> Unit
         }
     }
 
-    /**
-     * Re-reads what the rest timer is allowed to do.
-     *
-     * Called when the screen is shown and every time it is returned to, because both permissions
-     * are revocable and the way either gets granted is the lifter leaving the app and coming
-     * back. Nothing here asks for anything: asking belongs to the screen, which has an activity.
-     */
-    fun recheckRestAlerts() = screen.update {
-        it.copy(
-            restAlerts = RestAlerts(
-                alarmsAreReliable = alarms.canWakeReliably(),
-                countdownVisible = notifications.canBeSeen(),
-            ),
-        )
-    }
+    fun recheckRestAlerts() = restTimer.recheckAlerts()
 
-    /**
-     * Starts a rest: an alarm to wake the lifter, and a countdown they can read without opening
-     * anything.
-     */
-    private fun startResting(length: Duration) {
-        val resting = Resting(clock.instant(), length)
-        screen.update { it.copy(resting = resting) }
-        alarms.schedule(restEnding(resting.startedAt, length))
-        notifications.countDownTo(resting.endsAt)
-    }
+    fun addTimeToRest() = restTimer.addTime()
 
-    /**
-     * Adds a minute to the rest that is running.
-     *
-     * The end moves rather than the rest restarting: a lifter tapping this is saying the set is
-     * not ready yet, not that the last two minutes did not happen.
-     */
-    fun addTimeToRest() {
-        val resting = screen.value.resting ?: return
-        val longer = resting.copy(length = resting.length.plus(MORE_REST))
-        screen.update { it.copy(resting = longer) }
-        alarms.schedule(restEnding(longer.startedAt, longer.length))
-        notifications.countDownTo(longer.endsAt)
-    }
-
-    /**
-     * Ends a rest, whether it ran out or the lifter had somewhere to be.
-     *
-     * Takes the alarm with it. Otherwise the lifter is three sets further on when the phone goes
-     * off in their pocket.
-     */
-    fun endRest() {
-        alarms.cancel()
-        screen.update { it.copy(resting = null) }
-    }
+    fun endRest() = restTimer.end()
 
     fun startEditing(performed: SessionExercise, set: PerformedSet, effort: Effort) = screen.update {
         val displayUnit = performed.displayUnitFor(set)
@@ -815,10 +748,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * The only moment a plan is taken. A session started by simply logging a set has none, which is
      * what training with no routine looks like and is not a lesser session for it.
      */
-    fun startCursorDay() {
-        val day = state.value.routine?.cursor ?: return
-        viewModelScope.launch { repository.startSession(SessionPlan(day.exercises)) }
-    }
+    fun startCursorDay() = cycle.startDay(state.value.routine)
 
     /** Opens what the lifter calls the selected exercise, and the note they keep on it. */
     fun startEditingExercise() {
@@ -983,17 +913,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /** Opens what the app is asking the lifter to rest for, so they can disagree with it. */
-    fun startEditingRest() = screen.update {
-        it.copy(editingRest = state.value.recommendation?.prescription?.rest ?: Duration.ZERO)
-    }
+    fun startEditingRest() = restTimer.startEditing(state.value.recommendation?.prescription?.rest)
 
-    fun changeEditingRest(rest: Duration) = screen.update { it.copy(editingRest = rest) }
+    fun changeEditingRest(rest: Duration) = restTimer.changeEditing(rest)
 
-    fun cancelEditingRest() = screen.update { it.copy(editingRest = null) }
+    fun cancelEditingRest() = restTimer.cancelEditing()
 
     /** Rests for this long after the set being entered, and says nothing about the next one. */
-    fun restThisSetOnly() =
-        screen.update { it.copy(restForThisSet = it.editingRest, editingRest = null) }
+    fun restThisSetOnly() = restTimer.thisSetOnly()
 
     /**
      * Rests for this long on this exercise from now on.
@@ -1003,98 +930,43 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      */
     fun restFromNowOn() {
         val exercise = screen.value.selected ?: return
-        val rest = screen.value.editingRest ?: return
+        val rest = restTimer.editedLength() ?: return
         viewModelScope.launch {
             exercises.setRest(exercise.id, rest)
-            screen.update {
-                it.copy(
-                    editingRest = null,
-                    restForThisSet = null,
-                    // Carried across rather than re-read, as the unit and the name are.
-                    selected = it.selected?.copy(chosenRest = rest),
-                )
-            }
+            restTimer.settledOnTheExercise()
+            // Carried across rather than re-read, as the unit and the name are.
+            screen.update { it.copy(selected = it.selected?.copy(chosenRest = rest)) }
         }
     }
 
-    /** Opens the question of skipping the day the cursor points at. */
-    fun startSkipping() {
-        val day = state.value.routine?.cursor ?: return
-        screen.update { it.copy(skipping = day) }
-    }
+    fun startSkipping() = cycle.startSkipping(state.value.routine)
 
-    fun cancelSkipping() = screen.update { it.copy(skipping = null) }
+    fun cancelSkipping() = cycle.cancelSkipping()
 
-    /**
-     * Marks the day as dealt with, without a session.
-     *
-     * The escape hatch a derived cursor structurally requires: without it the only way past a day
-     * is to train it, and a lifter who is never going to do day 2 as written would have nowhere to
-     * go short of revising the routine (ADR 0001). Recorded apart from any session, so history
-     * never claims training that did not happen.
-     *
-     * Asked before it is written, because there is no unskipping it: the record is permanent for
-     * that cycle, and repeated skips of one day are meant to become a signal about the routine
-     * rather than a tally of mis-taps.
-     */
-    fun skipDay() {
-        val progress = state.value.routine ?: return
-        val day = screen.value.skipping ?: return
-        viewModelScope.launch {
-            routines.recordSkip(progress.routine.id, day)
-            screen.update { it.copy(skipping = null) }
-        }
-    }
+    fun skipDay() = cycle.skipDay(state.value.routine)
 
-    fun startRefiling(session: Session) =
-        screen.update { it.copy(refiling = Refiling(session.id, session.date)) }
+    fun startRefiling(session: Session) = cycle.startRefiling(session)
 
-    fun cancelRefiling() = screen.update { it.copy(refiling = null) }
+    fun cancelRefiling() = cycle.cancelRefiling()
 
-    /**
-     * Refiles the session onto [date] — the fix for training on Saturday and remembering on Monday.
-     *
-     * When it was trained is untouched, and so is the cursor: a session filed on a day other than
-     * the one it was trained on records no completion when it finishes.
-     */
-    fun refileOn(date: LocalDate) {
-        val open = screen.value.refiling ?: return
-        viewModelScope.launch {
-            repository.refile(open.sessionId, date)
-            screen.update { it.copy(refiling = null) }
-        }
-    }
+    fun refileOn(date: LocalDate) = cycle.refileOn(date)
 
-    /** Opens the question of which routine day this session realised, or just finishes it. */
-    fun startFinishing() {
-        if (state.value.routine?.routine?.days.orEmpty().isEmpty()) {
-            finishSession(null)
-        } else {
-            screen.update { it.copy(finishing = true) }
-        }
-    }
+    fun startFinishing() = cycle.startFinishing(state.value.routine) { finishSession(null) }
 
-    fun cancelFinishing() = screen.update { it.copy(finishing = false) }
+    fun cancelFinishing() = cycle.cancelFinishing()
 
     /**
      * Closes the session, and records [day] as trained if one was named.
      *
-     * Both writes go in one transaction: a finished session that failed to advance the cycle would
-     * leave the cursor pointing at work already done, with nothing to show why.
+     * What is left here is what a session ending does to the set being entered: the exercise is
+     * put away and the fields go back to empty, which is the screen's business rather than the
+     * cycle's.
      */
     fun finishSession(day: RoutineDay?) {
         val session = logged.value?.session ?: return
-        val routine = state.value.routine?.routine
-        viewModelScope.launch {
-            database.withTransaction {
-                repository.finishSession(session.id, routine.takeIf { day != null }, day)
-                if (routine != null && day != null) {
-                    routines.recordCompletion(routine.id, day, session.id)
-                }
-            }
+        cycle.finish(session.id, state.value.routine, day) {
             screen.update {
                 it.copy(
-                    finishing = false,
                     selected = null,
                     draft = SetDraft(),
                     perSide = false,
@@ -1131,7 +1003,5 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
 
-        /** What "+1:00" adds. A minute is the unit a lifter thinks in between sets. */
-        val MORE_REST: Duration = Duration.ofMinutes(1)
     }
 }

@@ -71,7 +71,7 @@ class SessionScreenTest {
     @Test
     fun loggingASetIsOneTapOnAControlThatDoesNotMove() {
         var logged = 0
-        compose.setContent { SessionScreen(state = state(), onLogSet = { logged++ }) }
+        compose.setContent { SessionScreen(state = state(), entry = SetEntryActions(onLogSet = { logged++ })) }
 
         // No scrolling to reach it. The button is pinned below the wheel, so the common path is
         // one tap from wherever the session happens to be scrolled to — which is the whole
@@ -97,7 +97,7 @@ class SessionScreenTest {
     fun aValueCanBeTypedRatherThanStepped() {
         var typed: SetDraft? = null
         compose.setContent {
-            SessionScreen(state = state(), onDraftChange = { typed = it })
+            SessionScreen(state = state(), entry = SetEntryActions(onDraftChange = { typed = it }))
         }
 
         compose.onNodeWithTag(WEIGHT_FIELD).performTextReplacement("62.5")
@@ -110,7 +110,7 @@ class SessionScreenTest {
     @Test
     fun theUnitToggleChangesWhatIsShownAndNotWhatIsStored() {
         var read: WeightUnit? = null
-        compose.setContent { SessionScreen(state = state(), onReadIn = { read = it }) }
+        compose.setContent { SessionScreen(state = state(), entry = SetEntryActions(onReadIn = { read = it })) }
 
         compose.onNodeWithText("lb").performClick()
 
@@ -163,7 +163,7 @@ class SessionScreenTest {
                 state = state().copy(
                     resting = Resting(java.time.Instant.parse("2026-09-14T18:00:00Z"), REST),
                 ),
-                onEndRest = { skipped = true },
+                rest = RestActions(onEndRest = { skipped = true }),
             )
         }
 
@@ -190,7 +190,7 @@ class SessionScreenTest {
     fun tappingAnExerciseInTheRoutineMovesTheSessionThere() {
         var jumped: Exercise? = null
         compose.setContent {
-            SessionScreen(state = state(routine = pushDay), onJumpTo = { jumped = it })
+            SessionScreen(state = state(routine = pushDay), exercises = ExerciseActions(onJumpTo = { jumped = it }))
         }
 
         compose.onNodeWithText("Routine").performClick()

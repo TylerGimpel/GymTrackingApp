@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import com.tylergimpel.gymtracker.R
+import com.tylergimpel.gymtracker.domain.RestCountdown
 import java.time.Instant
 
 /**
@@ -30,12 +31,12 @@ import java.time.Instant
  * Android is entitled to deliver without alerting anybody, and that is exactly the way this
  * feature fails invisibly.
  */
-class RestNotifications(private val context: Context) {
+class RestNotifications(private val context: Context) : RestCountdown {
 
     private val manager = NotificationManagerCompat.from(context)
 
     /** Shows the rest counting down, where a lifter can read it without opening anything. */
-    fun countDownTo(endsAt: Instant) {
+    override fun countDownTo(endsAt: Instant) {
         ensureChannel()
         manager.cancel(REST_OVER)
         val notification = base()
@@ -77,7 +78,7 @@ class RestNotifications(private val context: Context) {
      * countdown *is* the rest timer as far as a lifter with a phone in their pocket is concerned,
      * and a feature that fails by being invisible has to say so while the app is open.
      */
-    fun canBeSeen(): Boolean = manager.areNotificationsEnabled()
+    override fun canBeSeen(): Boolean = manager.areNotificationsEnabled()
 
     /** Takes both away: the rest was skipped, or the next set is already being logged. */
     fun clear() {
