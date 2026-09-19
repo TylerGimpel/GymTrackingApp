@@ -52,8 +52,12 @@ sealed interface WheelSet {
  * zoomed prescription and the sets around it at once (`docs/design/logging-screen.md`).
  *
  * **The focused set is large and its neighbours recede**, so what is coming is visible without
- * navigating anywhere. Scrolling changes which set is focused; the controls below never move, and
- * act on whatever is focused — a lifter should not have to look at their thumb.
+ * navigating anywhere, and the wheel sits on the set about to be done — on opening an exercise
+ * with four sets behind it, and again the moment a fifth goes down. That is what "logging
+ * advances focus" amounts to in a list, and it is what keeps the common path free of scrolling.
+ *
+ * Scrolling back to read a set that is already down is a look rather than a move: the controls
+ * are fixed below and go on acting on the pending set, which is where the wheel returns to.
  *
  * The falloff is drawn rather than recomposed. Each item reads the scroll position inside its
  * [graphicsLayer] block, which defers the read to the draw phase: recomposing the list every
@@ -65,14 +69,13 @@ fun SetWheel(
     exercise: Exercise,
     sets: List<WheelSet>,
     lifterUnit: WeightUnit,
-    onFocus: (Int) -> Unit,
     modifier: Modifier = Modifier,
     state: LazyListState = rememberLazyListState(),
 ) {
-    LaunchedEffect(state, sets.size) {
-        snapshotFlow { state.centredItem() }
-            .distinctUntilChanged()
-            .collect { centred -> centred?.let(onFocus) }
+    // The pending set is the last rung, and where the lifter is. Anything else would have
+    // somebody with four sets behind them scrolling down to find out what to do next.
+    LaunchedEffect(sets.size) {
+        if (sets.isNotEmpty()) state.animateScrollToItem(sets.lastIndex)
     }
 
     LazyColumn(
@@ -149,18 +152,6 @@ private fun PendingRung(recommendation: Recommendation?, exercise: Exercise) {
     } else {
         NextSet(recommendation, exercise.loggingType, exercise.displayUnit)
     }
-}
-
-/**
- * Which item is nearest the middle of the viewport, or null before anything is laid out.
- *
- * The middle rather than the first visible, because the middle is what a wheel focuses and what
- * the lifter is reading.
- */
-private fun LazyListState.centredItem(): Int? {
-    val info = layoutInfo
-    val centre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-    return info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2f - centre) }?.index
 }
 
 /** How close item [index] is to the middle, from 0 at the edges to 1 in the centre. */

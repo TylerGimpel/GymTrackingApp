@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -76,6 +77,23 @@ class LadderTest {
 
         assertTrue(next.prescription.load!!.value > 80.0 * 0.9)
         assertEquals(6, next.prescription.reps)
+        // And the screen is told (#25). A weight that has moved by forty kilograms since last
+        // week reads as a bug to the lifter standing at the rack, and the safe thing to do about
+        // a bug is to load what you lifted last time instead.
+        assertTrue((next as Recommendation.Prescribing).reAnchored)
+    }
+
+    @Test
+    fun `an ordinary step says nothing about itself`() {
+        val history = trained(
+            session(asked(60.0, reps = 8, did = 8)),
+            session(asked(60.0, reps = 8, did = 8)),
+        )
+
+        // Two sessions at the top of the range earn one increment, which is the engine working
+        // as advertised rather than news. In the normal state the screen says nothing.
+        val next = history.next() as Recommendation.Prescribing
+        assertFalse(next.reAnchored)
     }
 
     @Test

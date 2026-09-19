@@ -290,6 +290,17 @@ class TrainingHistory(val sessions: List<TrainedSession>) {
         get() = chronological.lastNotNullOfOrNull { it.prescribedWorkingLoad }
 
     /**
+     * Whether the weight now being prescribed is a jump rather than a step.
+     *
+     * The parent spec (#25) asks for this to be surfaced as it happens, and what "as it happens"
+     * means was settled by #50: today is not history, so a session that blows past its target
+     * moves nothing until the next one. The jump therefore shows up at the start of the session
+     * that inherits it, which is the first moment a lifter sees the number it produced — and a
+     * number that has moved by more than an **Increment** reads as a mistake without a word.
+     */
+    fun reAnchoredIn(repRange: RepRange): Boolean = substantialBeat(repRange) != null
+
+    /**
      * What the last session proved the estimate wrong by, or null where it did not.
      *
      * Two ways to be wrong, and each catches what the other cannot. A lifter can blow past a

@@ -150,14 +150,6 @@ private data class ScreenState(
     val restForThisSet: Duration? = null,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
-    /**
-     * Which rung of the wheel the controls are acting on.
-     *
-     * An index into the sets the wheel shows — the logged ones and then the pending one — or null
-     * for the pending set, which is where focus sits whenever a lifter is doing the ordinary
-     * thing. Scrolling moves it; logging leaves it where it was, on the set about to be done.
-     */
-    val focusedSet: Int? = null,
     /** The rest running, if one is. */
     val resting: Resting? = null,
     /**
@@ -281,17 +273,6 @@ data class SessionUiState(
     val avoided: Avoided? = null,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
-    /**
-     * Whether this exercise is starting without a ramp because the muscle is already warm.
-     *
-     * Said out loud for one reason: a lifter who got three warm-ups on their first chest movement
-     * and none on their third needs the second answer to read as deliberate rather than as the
-     * app having forgotten. Only while they are starting the exercise — once the sets are going,
-     * saying it again is noise.
-     */
-    val muscleAlreadyWarm: Boolean = false,
-    /** Which rung of the wheel the controls are acting on; null is the set about to be done. */
-    val focusedSet: Int? = null,
     /** The rest running, if one is. */
     val resting: Resting? = null,
     /**
@@ -462,15 +443,6 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 avoided = avoidedExercises(recent)
                     .firstOrNull { it.exercise.id !in screen.askedAbout },
                 editingRest = screen.editingRest,
-                muscleAlreadyWarm = screen.selected?.let { chosen ->
-                    recommendation !is Recommendation.WarmingUp &&
-                        logged?.setsOf(chosen).isNullOrEmpty() &&
-                        logged?.exercises.orEmpty().any { performed ->
-                            performed.exercise.id != chosen.id &&
-                                performed.exercise.primaryMuscles.any { it in chosen.primaryMuscles }
-                        }
-                } ?: false,
-                focusedSet = screen.focusedSet,
                 resting = screen.resting,
                 restAlarmsAreReliable = screen.restAlerts.alarmsAreReliable,
                 restCountdownVisible = screen.restAlerts.countdownVisible,
@@ -627,9 +599,6 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     draft = it.draft.copy(note = null),
                     rightDraft = it.rightDraft.copy(note = null),
-                    // Focus stays on the set about to be done, which is now the next one. This is
-                    // what makes the common path a single tap with no scrolling.
-                    focusedSet = null,
                     // The set it was for is down, so it has said what it had to say. Leaving it
                     // standing would quietly make "just this set" mean "this exercise, tonight".
                     restForThisSet = null,
@@ -702,9 +671,6 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         alarms.schedule(restEnding(longer.startedAt, longer.length))
         notifications.countDownTo(longer.endsAt)
     }
-
-    /** Points the wheel at one of its rungs. Null is the set about to be done. */
-    fun focusSet(index: Int?) = screen.update { it.copy(focusedSet = index) }
 
     /**
      * Ends a rest, whether it ran out or the lifter had somewhere to be.

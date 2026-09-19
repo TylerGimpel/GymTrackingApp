@@ -12,6 +12,10 @@ import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.Effort
+import com.tylergimpel.gymtracker.domain.Performance
+import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepPreference
@@ -54,14 +58,26 @@ class SessionScreenTest {
     }
 
     @Test
-    fun loggingASetIsOneTapOnAControlThatDoesNotMove() {
+    fun theWheelSitsOnTheSetAboutToBeDoneWithSetsBehindIt() {
+        compose.setContent { SessionScreen(state = state(logged = 4)) }
+
+        // Four sets down and the fifth is the one on screen. A wheel that opened at the top
+        // would have a lifter scrolling past their own history to find out what to do next,
+        // which is the scrolling the whole layout exists to avoid.
+        compose.onNodeWithTag(PENDING).assertIsDisplayed()
+    }
+
+    @Test
+    fun loggingASetIsOneTap() {
         var logged = 0
         compose.setContent { SessionScreen(state = state(), onLogSet = { logged++ }) }
 
         compose.onNodeWithTag(LOG_SET).performScrollTo().performClick()
 
-        // One tap, and nothing to scroll to first: a screen that takes three taps per set is a
-        // screen somebody stops using by week three.
+        // One tap on the button: a screen that takes three taps per set is a screen somebody
+        // stops using by week three. The scroll is the test reaching the button in a viewport
+        // this size, and it is also the thing #53 still wants fixed — the controls are a whole
+        // entry form rather than the thumb-zone strip the prototype pinned.
         assertEquals(1, logged)
     }
 
@@ -176,12 +192,27 @@ class SessionScreenTest {
     private fun state(
         recommendation: Recommendation = prescribed,
         routine: RoutineProgress? = null,
+        logged: Int = 0,
     ): SessionUiState = SessionUiState(
         selected = bench,
         recommendation = recommendation,
         draft = SetDraft(weightText = "60", repsText = "8"),
-        wheel = listOf(WheelSet.Pending(recommendation)),
+        wheel = (0 until logged).map { WheelSet.Logged(it, loggedSet(it + 1)) } +
+            WheelSet.Pending(recommendation),
         routine = routine,
+    )
+
+    private fun loggedSet(index: Int) = PerformedSet(
+        setIndex = index,
+        type = SetType.WORKING,
+        efforts = listOf(
+            Effort(
+                id = index.toLong(),
+                side = null,
+                performance = Performance.WeightAndReps(Kilograms(60.0), 8),
+                note = null,
+            ),
+        ),
     )
 
     private companion object {

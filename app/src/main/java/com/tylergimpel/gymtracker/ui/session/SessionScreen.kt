@@ -57,6 +57,9 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -179,7 +182,6 @@ fun SessionScreen(
         onStartRefiling = viewModel::startRefiling,
         onRefileOn = viewModel::refileOn,
         onCancelRefiling = viewModel::cancelRefiling,
-        onFocusSet = viewModel::focusSet,
         onEndRest = viewModel::endRest,
         onAddRest = viewModel::addTimeToRest,
         onFixRestAlerts = { fix -> context.startActivity(settingsFor(fix, context)) },
@@ -238,7 +240,6 @@ fun SessionScreen(
     onStartRefiling: (Session) -> Unit = {},
     onRefileOn: (LocalDate) -> Unit = {},
     onCancelRefiling: () -> Unit = {},
-    onFocusSet: (Int?) -> Unit = {},
     onEndRest: () -> Unit = {},
     onAddRest: () -> Unit = {},
     onFixRestAlerts: (RestFix) -> Unit = {},
@@ -263,6 +264,12 @@ fun SessionScreen(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    // How far the current horizontal drag has travelled, so that a slow pull opens the routine
+    // as a thrown one does. Reset when a drag starts rather than when it ends, because a drag
+    // that ends off the edge of the screen never reports its finish.
+    var dragged by remember { mutableFloatStateOf(0f) }
+    val dragToOpen = with(LocalDensity.current) { DRAG_TO_OPEN.toPx() }
+
     ModalNavigationDrawer(
         drawerState = drawer,
         // **Never from the edge.** On gesture navigation a left-edge swipe is the system Back
@@ -284,12 +291,17 @@ fun SessionScreen(
     Scaffold(
         modifier = Modifier.draggable(
             orientation = Orientation.Horizontal,
-            state = rememberDraggableState { },
+            state = rememberDraggableState { delta -> dragged += delta },
+            onDragStarted = { dragged = 0f },
             onDragStopped = { velocity ->
                 // Anywhere on the screen, in either direction: a phone is held in whichever hand
                 // is free, and a gesture that only works from one side is one a lifter has to
-                // think about.
-                if (velocity > SWIPE_TO_OPEN) drawer.open() else if (velocity < -SWIPE_TO_OPEN) drawer.close()
+                // think about. Thrown or dragged, too — a flick has velocity and a deliberate
+                // pull across the screen has distance, and only counting the first leaves a slow
+                // swipe doing nothing at all.
+                val opening = velocity > SWIPE_TO_OPEN || dragged > dragToOpen
+                val closing = velocity < -SWIPE_TO_OPEN || dragged < -dragToOpen
+                if (opening) drawer.open() else if (closing) drawer.close()
             },
         ),
         topBar = {
@@ -379,18 +391,8 @@ fun SessionScreen(
                         exercise = selected,
                         sets = state.wheel,
                         lifterUnit = state.lifterUnit,
-                        onFocus = { onFocusSet(it.takeIf { index -> index < state.wheel.lastIndex }) },
                         modifier = Modifier.height(WHEEL_HEIGHT),
                     )
-                    // Why there is no ramp on this one, at the moment a lifter would wonder.
-                    if (state.muscleAlreadyWarm) {
-                        Text(
-                            text = stringResource(R.string.wheel_already_warm),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
                     WheelFooting(state, onEndRest, onAddRest, onFixRestAlerts)
                     SetEntryControls(
                         exercise = selected,
@@ -940,7 +942,13 @@ internal fun NextSet(
             // it has nothing to say about this lift at all.
             Recommendation.Stopped -> R.string.session_stopped
             // A rung of a ramp says what it is above and needs no explaining under.
-            is Recommendation.WarmingUp, is Recommendation.Prescribing -> null
+            is Recommendation.WarmingUp -> null
+            // The one thing a prescription ever says about itself, and only when the number has
+            // moved by more than a step. #25 asks for a re-anchor to be surfaced, and the reason
+            // is the lifter standing at the rack: a weight that jumped reads as a bug, and the
+            // safe thing to do about a bug is load what you lifted last time instead.
+            is Recommendation.Prescribing ->
+                R.string.session_re_anchored.takeIf { recommendation.reAnchored }
         }
         line?.let {
             Text(
@@ -978,6 +986,15 @@ private const val REPS_THAT_NEED_EFFORT = 15
  * sideways while reading a weight does not.
  */
 private const val SWIPE_TO_OPEN = 300f
+
+/**
+ * How far a horizontal drag has to travel to open the routine.
+ *
+ * The other half of the gesture. A lifter mid-session drags as often as they flick — a thumb
+ * already resting on the screen has no velocity to give — and a swipe that only answers to speed
+ * is one that does nothing at all about half the time it is tried.
+ */
+private val DRAG_TO_OPEN = 72.dp
 
 /**
  * The question the app asks about an exercise a lifter keeps not doing.

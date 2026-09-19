@@ -42,7 +42,6 @@
     <string name="wheel_effort">Take this close to failure — high reps only work hard.</string>
     <string name="wheel_resting">resting %1$s</string>
     <string name="wheel_skip_rest">Skip</string>
-    <string name="wheel_already_warm">No warm-up: this muscle is already warm.</string>
     <string name="rest_running">Resting</string>
     <string name="rest_over">Rest over — next set.</string>
     <string name="rest_channel">Rest timer</string>
@@ -70,6 +69,7 @@
     <string name="session_rest_always">Always on this one</string>
     <string name="session_calibrating_hint">Stop when it gets hard. Being wrong here is expected.</string>
     <string name="session_cutting_volume">Same weight, fewer sets — this one has been hard three sessions running.</string>
+    <string name="session_re_anchored">Your last session went well past the target, so this is a jump rather than a step.</string>
     <string name="session_stopped">No suggestion for this lift: it has come up short too many sessions running. Pick a weight that works today.</string>
     <string name="session_edit_set">Edit set</string>
     <string name="session_save">Save</string>

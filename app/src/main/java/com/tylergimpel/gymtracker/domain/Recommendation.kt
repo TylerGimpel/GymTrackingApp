@@ -41,6 +41,14 @@ sealed interface Recommendation {
          * enough to need saying out loud that the reps only work if the effort is there.
          */
         val repRange: RepRange = RepRange.DEFAULT,
+        /**
+         * Whether this weight arrived by re-anchoring rather than by stepping.
+         *
+         * The one thing a **Prescribing** screen does say about itself, and only when it has to:
+         * a weight that has moved by more than one **Increment** since last time looks like a
+         * mistake, and a lifter who cannot tell a jump from a bug loads the old weight instead.
+         */
+        val reAnchored: Boolean = false,
     ) : Recommendation {
         override val setType: SetType get() = SetType.WORKING
     }
@@ -162,7 +170,10 @@ fun recommendNextSet(
 
         // The other rungs have already moved the weight this prescribes, and say nothing further:
         // in the normal state the screen says nothing about itself.
-        Ladder.HOLD, Ladder.ADVANCE, Ladder.BACK_OFF ->
-            Recommendation.Prescribing(history.nextSetOf(progress), progress.repRange)
+        Ladder.HOLD, Ladder.ADVANCE, Ladder.BACK_OFF -> Recommendation.Prescribing(
+            prescription = history.nextSetOf(progress),
+            repRange = progress.repRange,
+            reAnchored = history.reAnchoredIn(progress.repRange),
+        )
     }
 }
