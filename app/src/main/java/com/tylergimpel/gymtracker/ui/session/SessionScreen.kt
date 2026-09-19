@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.tylergimpel.gymtracker.domain.PlateLine
+import androidx.compose.ui.text.style.TextAlign
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -393,6 +395,8 @@ fun SessionScreen(
                         lifterUnit = state.lifterUnit,
                         modifier = Modifier.height(WHEEL_HEIGHT),
                     )
+                    // Under the prescription, where somebody standing at the bar reads it.
+                    state.plateLine?.let { PlateLineRow(it, state.lifterUnit) }
                     WheelFooting(state, onEndRest, onAddRest, onFixRestAlerts)
                     SetEntryControls(
                         exercise = selected,
@@ -1159,6 +1163,35 @@ private fun RestAlertWarning(
             Text(stringResource(fix))
         }
     }
+}
+
+/**
+ * How to load the bar, under the weight it makes.
+ *
+ * **Always visible and never interactive.** A lifter reads it and loads the bar; there is nothing
+ * to tap, because it is not a choice — it is the rounding the engine already did, shown. The
+ * numbers come from the same inventory the rounding read, so the line always adds up to the
+ * weight above it.
+ */
+@Composable
+private fun PlateLineRow(line: PlateLine, unit: WeightUnit) {
+    val label = stringResource(unit.label)
+    Text(
+        text = if (line.perSide.isEmpty()) {
+            stringResource(R.string.wheel_bar_only, line.bar.asTextIn(unit), label)
+        } else {
+            stringResource(
+                R.string.wheel_plate_line,
+                line.bar.asTextIn(unit),
+                label,
+                line.perSide.joinToString { it.asTextIn(unit) },
+            )
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

@@ -73,6 +73,7 @@ class RecommendationPersistenceTest {
             // asserts, and the device's locale deciding it would make these numbers move by
             // emulator.
             plates = PlateRepository(database.plateDao(), profile),
+            profile = profile,
         )
     }
 

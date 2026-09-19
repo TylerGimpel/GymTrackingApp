@@ -22,6 +22,7 @@ import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
+import com.tylergimpel.gymtracker.domain.PlateLine
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RestAlarms
 import com.tylergimpel.gymtracker.domain.restEnding
@@ -292,6 +293,13 @@ data class SessionUiState(
      * phone in a pocket, the notification *is* the rest timer.
      */
     val restCountdownVisible: Boolean = true,
+    /**
+     * How to load the bar for what is being asked, where the exercise is a barbell.
+     *
+     * Always visible and never interactive: a view onto rounding the engine has already done,
+     * reading the inventory it rounded against, so the line and the number can never disagree.
+     */
+    val plateLine: PlateLine? = null,
     /** How far through the exercise, and how far through the work that counts. */
     val pace: SessionPace? = null,
     /** Roughly how much longer the session has to run, cardio included. */
@@ -365,7 +373,12 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * to the next machine by then, and a recommendation shown — or recorded — against the wrong
      * exercise is worse than none at all.
      */
-    private data class Recommended(val exerciseId: String, val recommendation: Recommendation)
+    private data class Recommended(
+        val exerciseId: String,
+        val recommendation: Recommendation,
+        /** How to load the bar for it, where it is a bar. Computed with the weight it explains. */
+        val plateLine: PlateLine? = null,
+    )
 
     /**
      * Re-asked whenever the selection changes or the log does.
@@ -380,7 +393,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             selected
         }.mapLatest { selected ->
             selected?.let { exercise ->
-                recommendations.nextSet(exercise)?.let { Recommended(exercise.id, it) }
+                recommendations.nextSet(exercise)?.let { next ->
+                    Recommended(
+                        exerciseId = exercise.id,
+                        recommendation = next,
+                        plateLine = next.prescription.load
+                            ?.let { recommendations.plateLine(exercise, it) },
+                    )
+                }
             }
         }
 
@@ -408,8 +428,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             val logged = training.logged
             val recent = training.recent
             // Only where it is about the exercise in front of the lifter right now.
-            val recommendation = training.recommended
+            val forThisExercise = training.recommended
                 ?.takeIf { it.exerciseId == screen.selected?.id }
+            val recommendation = forThisExercise
                 ?.recommendation
                 // What the lifter said about this one set has the last word over the table.
                 ?.let { if (screen.restForThisSet != null) it.resting(screen.restForThisSet) else it }
@@ -446,6 +467,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 resting = screen.resting,
                 restAlarmsAreReliable = screen.restAlerts.alarmsAreReliable,
                 restCountdownVisible = screen.restAlerts.countdownVisible,
+                plateLine = forThisExercise?.plateLine,
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(logged?.setsOf(chosen).orEmpty(), recommendation?.setType)
                 },

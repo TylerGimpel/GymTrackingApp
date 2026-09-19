@@ -39,6 +39,8 @@
     <string name="wheel_pace">set %1$d · working %2$d</string>
     <string name="wheel_time_left">~%1$s left</string>
     <string name="wheel_range">%1$d - %2$d reps</string>
+    <string name="wheel_plate_line">%1$s %2$s bar · %3$s per side</string>
+    <string name="wheel_bar_only">%1$s %2$s bar, nothing on it</string>
     <string name="wheel_effort">Take this close to failure — high reps only work hard.</string>
     <string name="wheel_resting">resting %1$s</string>
     <string name="wheel_skip_rest">Skip</string>

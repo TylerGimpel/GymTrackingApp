@@ -50,3 +50,21 @@ fun rackFor(unit: WeightUnit): Increment.Plates =
 
 /** A weight cast in pounds, stored in kilograms like everything else. */
 private fun pounds(amount: Double): Kilograms = WeightUnit.POUNDS.toKilograms(amount)
+
+/**
+ * The step to round to where the equipment has not been described: theirs, not a converted one.
+ *
+ * 2.5 kg or 5 lb — [WeightUnit.step] already knows which, and it is the whole of #64 for
+ * everything that is not a barbell. Rounding a kilogram step and reading it in pounds is what
+ * produces 137.79: a number that is precisely correct, exists nowhere, and asks the lifter to do
+ * the arithmetic the app is for.
+ */
+fun stepFor(unit: WeightUnit): Increment = Increment(unit.toKilograms(unit.step))
+
+/**
+ * How to load the bar: what it weighs empty, and what goes on one end.
+ *
+ * Held together because the line means nothing apart — "20, 10, 1.25" is only a weight once it is
+ * known what it is going on. Empty [perSide] is a bar with nothing on it, which is a real answer.
+ */
+data class PlateLine(val bar: Kilograms, val perSide: List<Kilograms>)

@@ -6,6 +6,9 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseProgress
 import com.tylergimpel.gymtracker.domain.Increment
 import com.tylergimpel.gymtracker.domain.LayoffDecay
+import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.PlateLine
+import com.tylergimpel.gymtracker.domain.stepFor
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.SetType
@@ -54,6 +57,8 @@ class RecommendationRepository(
      */
     private val plates: PlateRepository =
         PlateRepository(database.plateDao(), database.profileRepository()),
+    /** What the lifter reads in, which decides the step where no equipment has been described. */
+    private val profile: ProfileRepository = database.profileRepository(),
 ) {
 
     /**
@@ -230,10 +235,24 @@ class RecommendationRepository(
             in STACKED -> history.observedLoads()
                 .takeIf { it.size >= STACK_IS_KNOWN_FROM }
                 ?.let(Increment::Stack)
-                ?: Increment.DEFAULT
+                ?: stepFor(profile.displayUnit())
 
-            else -> Increment.DEFAULT
+            else -> stepFor(profile.displayUnit())
         }
+
+    /**
+     * How to load the bar for [load], or null where this exercise is not one.
+     *
+     * The same inventory the rounding above read, which is the point of it being one inventory:
+     * the line under a prescription always adds up to the number above it, because the two are
+     * one answer asked twice. A view onto work already done rather than a second opinion.
+     */
+    suspend fun plateLine(exercise: Exercise, load: Kilograms): PlateLine? {
+        if (exercise.equipment != BARBELL) return null
+
+        val barbell = plates.barbell()
+        return PlateLine(barbell.bar, barbell.perSide(load))
+    }
 
     private companion object {
         /** What the bank calls the thing built from the plate inventory. */
