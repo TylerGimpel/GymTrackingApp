@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -38,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -126,6 +128,8 @@ fun SessionScreen(
         onStartRefiling = viewModel::startRefiling,
         onRefileOn = viewModel::refileOn,
         onCancelRefiling = viewModel::cancelRefiling,
+        onFocusSet = viewModel::focusSet,
+        onEndRest = viewModel::endRest,
         onEditRest = viewModel::startEditingRest,
         onRestThisSet = viewModel::restThisSetOnly,
         onRestAlways = viewModel::restFromNowOn,
@@ -174,6 +178,8 @@ fun SessionScreen(
     onStartRefiling: (Session) -> Unit = {},
     onRefileOn: (LocalDate) -> Unit = {},
     onCancelRefiling: () -> Unit = {},
+    onFocusSet: (Int?) -> Unit = {},
+    onEndRest: () -> Unit = {},
     onEditRest: () -> Unit = {},
     onRestThisSet: () -> Unit = {},
     onRestAlways: () -> Unit = {},
@@ -261,6 +267,15 @@ fun SessionScreen(
 
             state.selected?.let { selected ->
                 item {
+                    // What is coming, what is now, and what just went — read at arm's length.
+                    SetWheel(
+                        exercise = selected,
+                        sets = state.wheel,
+                        lifterUnit = state.lifterUnit,
+                        onFocus = { onFocusSet(it.takeIf { index -> index < state.wheel.lastIndex }) },
+                        modifier = Modifier.height(WHEEL_HEIGHT),
+                    )
+                    WheelFooting(state, onEndRest)
                     SetEntryControls(
                         exercise = selected,
                         recommendation = state.recommendation,
@@ -610,15 +625,12 @@ private fun SetEntryControls(
             )
         }
 
-        // What the app is asking for, above the fields that already hold it.
-        recommendation?.let {
-            NextSet(it, exercise.loggingType, draft.displayUnit)
-            // Tappable, because the table is a starting point: a lifter who needs longer on this
-            // machine than the research says is right about their own gym.
-            it.prescription.rest?.let { rest ->
-                TextButton(onClick = onEditRest, contentPadding = PaddingValues(0.dp)) {
-                    Text(stringResource(R.string.session_rest, rest.asTimeText()))
-                }
+        // What is being asked for is on the wheel above, where it is readable from the rack.
+        // What belongs down here is only what a thumb acts on — and the rest, which is the one
+        // part of a prescription a lifter changes rather than answers.
+        recommendation?.prescription?.rest?.let { rest ->
+            TextButton(onClick = onEditRest, contentPadding = PaddingValues(0.dp)) {
+                Text(stringResource(R.string.session_rest, rest.asTimeText()))
             }
         }
 
@@ -675,7 +687,7 @@ private fun SetEntryControls(
         Button(
             onClick = onLogSet,
             enabled = draft.isLoggable && (!perSide || rightDraft.isLoggable),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag(LOG_SET),
         ) {
             Text(stringResource(R.string.session_log_set))
         }
@@ -698,7 +710,7 @@ private fun SetEntryControls(
  * looking at.
  */
 @Composable
-private fun NextSet(
+internal fun NextSet(
     recommendation: Recommendation,
     loggingType: LoggingType,
     displayUnit: WeightUnit,
@@ -709,10 +721,26 @@ private fun NextSet(
 
     // Tight together rather than spaced as three things: the word, the number and the line under
     // it are one message, and the number is the part read from the rack.
+    val repRange = when (recommendation) {
+        is Recommendation.Prescribing -> recommendation.repRange
+        is Recommendation.CuttingVolume -> recommendation.repRange
+        is Recommendation.Calibrating, Recommendation.Stopped -> null
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (recommendation is Recommendation.Calibrating) {
             Text(
                 text = stringResource(R.string.session_calibrating),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The band, small and above the number: it reads top to bottom as what to stay inside,
+        // what to go and do, and then what the set before this one did. A warm-up and a ramp rung
+        // get no band at all, because neither is progressed and neither has a top to reach.
+        repRange?.let {
+            Text(
+                text = stringResource(R.string.wheel_range, it.bottom, it.top),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -770,8 +798,27 @@ private fun NextSet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        // The second thing the screen breaks its silence for. Hypertrophy is load-independent
+        // above about a third of a maximum *only if the effort is high*, so a set of fifteen
+        // prescribed without saying so is not the intervention the evidence supports. It keys off
+        // the top of the band rather than the number offered: a 12 - 15 set is asking for 15.
+        if (repRange != null && repRange.top >= REPS_THAT_NEED_EFFORT) {
+            Text(
+                text = stringResource(R.string.wheel_effort),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
+
+/**
+ * The top of a rep range at which the prescription has to say that effort is the point.
+ *
+ * Not a tuning knob so much as where the evidence changes shape: below it, load does the work.
+ */
+private const val REPS_THAT_NEED_EFFORT = 15
 
 /**
  * How long to rest, and for how long that answer holds.
@@ -809,6 +856,57 @@ private fun RestDialog(
             TextButton(onClick = onAlways) { Text(stringResource(R.string.session_rest_always)) }
         },
     )
+}
+
+/**
+ * The line under the wheel: where the lifter is, how long is left, and any rest that is running.
+ *
+ * Both halves of "where" together — "set 4 · working 2" — because a ramp of three warm-ups and one
+ * working set is not four sets of training, and a screen that counts them as four makes it look
+ * like one. Totals appear only where something has actually planned them; inventing one would be
+ * stating a plan nobody made.
+ */
+@Composable
+private fun WheelFooting(state: SessionUiState, onEndRest: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        state.pace?.let {
+            Text(
+                text = stringResource(R.string.wheel_pace, it.setsDone, it.workingDone),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The tilde is the point: it reads as an estimate rather than a deadline, which is what
+        // made it acceptable to look at mid-session rather than stressful.
+        state.timeLeft?.let {
+            Text(
+                text = stringResource(R.string.wheel_time_left, it.asTimeText()),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    // A rest that is running, and the way out of it. What reaches a lifter with the phone in a
+    // pocket is the alarm (#57); this is the session saying one is going.
+    state.resting?.let {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.wheel_resting, it.length.asTimeText()),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            TextButton(onClick = onEndRest) { Text(stringResource(R.string.wheel_skip_rest)) }
+        }
+    }
 }
 
 /**
@@ -863,7 +961,7 @@ private fun SetDraftFields(
                     label = { Text(stringResource(draft.displayUnit.label)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).testTag(WEIGHT_FIELD),
                 )
             }
             if (draft.loggingType.recordsReps) {
@@ -1398,7 +1496,7 @@ private fun WhichDayDialog(
 
 /** What one effort reads as: what it recorded, written the way the lifter entered it. */
 @Composable
-private fun Effort.summary(displayUnit: WeightUnit, lifterUnit: WeightUnit): String =
+internal fun Effort.summary(displayUnit: WeightUnit, lifterUnit: WeightUnit): String =
     when (val done = performance) {
         // A weight is read in the machine's unit and a distance in the lifter's own: the gym's lb
         // lat pulldown carries its label whoever walks up to it, while five kilometres is five

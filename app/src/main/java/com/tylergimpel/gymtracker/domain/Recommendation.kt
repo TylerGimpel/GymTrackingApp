@@ -30,7 +30,18 @@ sealed interface Recommendation {
      * and the second repeated what the previous set shown under every row already said. In the
      * normal state there is nothing to announce (`docs/design/logging-screen.md`).
      */
-    data class Prescribing(override val prescription: Prescription) : Recommendation {
+    data class Prescribing(
+        override val prescription: Prescription,
+        /**
+         * The band this set is being worked in.
+         *
+         * Carried because the lifter has to see it: the number offered is one count inside a
+         * range, and without the range a set of eight looks like a target rather than a rung of
+         * something being climbed. It is also what tells the screen when a prescription is high
+         * enough to need saying out loud that the reps only work if the effort is there.
+         */
+        val repRange: RepRange = RepRange.DEFAULT,
+    ) : Recommendation {
         override val setType: SetType get() = SetType.WORKING
     }
 
@@ -67,7 +78,10 @@ sealed interface Recommendation {
      * two the screen breaks its silence for: a weight that has not moved looks like nothing
      * happening.
      */
-    data class CuttingVolume(override val prescription: Prescription) : Recommendation {
+    data class CuttingVolume(
+        override val prescription: Prescription,
+        val repRange: RepRange = RepRange.DEFAULT,
+    ) : Recommendation {
         override val setType: SetType get() = SetType.WORKING
     }
 
@@ -131,10 +145,12 @@ fun recommendNextSet(
 
     return when (history.ladderIn(progress.repRange)) {
         Ladder.STOP -> Recommendation.Stopped
-        Ladder.CUT_VOLUME -> Recommendation.CuttingVolume(history.nextSetOf(progress))
+        Ladder.CUT_VOLUME ->
+            Recommendation.CuttingVolume(history.nextSetOf(progress), progress.repRange)
+
         // The other rungs have already moved the weight this prescribes, and say nothing further:
         // in the normal state the screen says nothing about itself.
         Ladder.HOLD, Ladder.ADVANCE, Ladder.BACK_OFF ->
-            Recommendation.Prescribing(history.nextSetOf(progress))
+            Recommendation.Prescribing(history.nextSetOf(progress), progress.repRange)
     }
 }

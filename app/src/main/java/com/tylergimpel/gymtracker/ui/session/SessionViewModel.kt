@@ -26,6 +26,9 @@ import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.AfterLogging
+import com.tylergimpel.gymtracker.domain.SessionPace
+import com.tylergimpel.gymtracker.domain.afterLogging
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -34,6 +37,7 @@ import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.distanceOrNull
 import com.tylergimpel.gymtracker.domain.durationOrNull
 import com.tylergimpel.gymtracker.domain.repsOrNull
+import com.tylergimpel.gymtracker.domain.timeLeftIn
 import com.tylergimpel.gymtracker.domain.weightOrNull
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +55,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -66,6 +71,16 @@ data class EditingEffort(
      */
     val exerciseUnit: WeightUnit,
 )
+
+/**
+ * A rest the app has started, and how long it runs for.
+ *
+ * Held here so that the ordering the prototype pinned is observable: a rest begins only after
+ * focus has advanced, and never between the members of a **Superset**. What actually reaches a
+ * lifter with the phone in their pocket is the alarm the rest timer schedules (#57); this is the
+ * session's own record that one is running.
+ */
+data class Resting(val startedAt: Instant, val length: Duration)
 
 /** The effort a drop is being added to, if one is open. */
 data class AddingDrop(val effortId: Long, val draft: SetDraft)
@@ -111,6 +126,16 @@ private data class ScreenState(
     val restForThisSet: Duration? = null,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
+    /**
+     * Which rung of the wheel the controls are acting on.
+     *
+     * An index into the sets the wheel shows — the logged ones and then the pending one — or null
+     * for the pending set, which is where focus sits whenever a lifter is doing the ordinary
+     * thing. Scrolling moves it; logging leaves it where it was, on the set about to be done.
+     */
+    val focusedSet: Int? = null,
+    /** The rest running, if one is. */
+    val resting: Resting? = null,
     /**
      * Whether the drafts still hold what the app put in them rather than something typed.
      *
@@ -195,9 +220,27 @@ data class SessionUiState(
     val editingExercise: ExerciseDetails? = null,
     /** The rest being edited, while the lifter is changing one. */
     val editingRest: Duration? = null,
+    /** Which rung of the wheel the controls are acting on; null is the set about to be done. */
+    val focusedSet: Int? = null,
+    /** The rest running, if one is. */
+    val resting: Resting? = null,
+    /** How far through the exercise, and how far through the work that counts. */
+    val pace: SessionPace? = null,
+    /** Roughly how much longer the session has to run, cardio included. */
+    val timeLeft: Duration? = null,
+    /**
+     * The rungs of the wheel: the sets logged against the selected exercise, then the one about
+     * to be done.
+     *
+     * Assembled here rather than in the screen so that what the wheel shows and what the controls
+     * act on cannot disagree about how many sets there are.
+     */
+    val wheel: List<WheelSet> = emptyList(),
 )
 
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val clock: Clock = Clock.systemDefaultZone()
 
     private val database = GymDatabase.getInstance(application)
 
@@ -206,7 +249,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     private val repository = SessionRepository(
         database = database,
         sessions = database.sessionDao(),
-        clock = Clock.systemDefaultZone(),
+        clock = clock,
         zone = ZoneId.systemDefault(),
         profile = profile,
     )
@@ -307,6 +350,19 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 skipping = screen.skipping,
                 editingExercise = screen.editingExercise,
                 editingRest = screen.editingRest,
+                focusedSet = screen.focusedSet,
+                resting = screen.resting,
+                pace = screen.selected?.let { chosen ->
+                    SessionPace.of(logged?.setsOf(chosen).orEmpty())
+                },
+                wheel = screen.selected?.let { chosen ->
+                    logged?.setsOf(chosen).orEmpty()
+                        .mapIndexed { index, set -> WheelSet.Logged(index, set) } +
+                        WheelSet.Pending(recommendation)
+                }.orEmpty(),
+                // What is left of what the session was for. An estimate and shown as one: nothing
+                // knows how many sets an exercise gets until the generator does (#26).
+                timeLeft = logged?.unperformed?.takeIf { it.isNotEmpty() }?.let(::timeLeftIn),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
@@ -449,10 +505,39 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     draft = it.draft.copy(note = null),
                     rightDraft = it.rightDraft.copy(note = null),
+                    // Focus stays on the set about to be done, which is now the next one. This is
+                    // what makes the common path a single tap with no scrolling.
+                    focusedSet = null,
                 )
             }
+            advanceAfterLogging(exercise, asked.rest)
         }
     }
+
+    /**
+     * Where the session goes once a set is down, in the order the prototype pinned.
+     *
+     * The ordering is easy to get wrong and expensive to get wrong: a **Superset** jump takes
+     * precedence over resting, because the point of alternating is not stopping, and a rest that
+     * started between two members would have the lifter standing still in the middle of the one
+     * thing that is supposed to keep moving. Rest begins only after focus has gone somewhere.
+     */
+    private fun advanceAfterLogging(exercise: Exercise, rest: Duration?) {
+        when (val next = afterLogging(exercise, state.value.positions, rest)) {
+            AfterLogging.PromptToFinish -> startFinishing()
+            is AfterLogging.JumpTo -> select(next.exercise)
+            is AfterLogging.StartResting ->
+                screen.update { it.copy(resting = Resting(clock.instant(), next.length)) }
+
+            AfterLogging.Nothing -> Unit
+        }
+    }
+
+    /** Points the wheel at one of its rungs. Null is the set about to be done. */
+    fun focusSet(index: Int?) = screen.update { it.copy(focusedSet = index) }
+
+    /** Ends a rest, whether it ran out or the lifter had somewhere to be. */
+    fun endRest() = screen.update { it.copy(resting = null) }
 
     fun startEditing(performed: SessionExercise, set: PerformedSet, effort: Effort) = screen.update {
         val displayUnit = performed.displayUnitFor(set)

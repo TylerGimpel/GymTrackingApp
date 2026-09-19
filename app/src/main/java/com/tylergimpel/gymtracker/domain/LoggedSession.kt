@@ -17,6 +17,10 @@ data class LoggedSession(
     /** The planned exercises that went untrained — what "I did four of six" is counted from. */
     val unperformed: List<Exercise> get() = plan.unperformed(exercises)
 
+    /** The sets logged against [exercise] in this session, in the order they were performed. */
+    fun setsOf(exercise: Exercise): List<PerformedSet> =
+        exercises.filter { it.exercise.id == exercise.id }.flatMap(SessionExercise::sets)
+
     /** The session laid out as it was performed, with superset members gathered. */
     val positions: List<SessionPosition> get() = exercises.asPositions(supersets)
 }

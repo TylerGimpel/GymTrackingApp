@@ -33,6 +33,15 @@
     <string name="session_log_set">Log set</string>
     <string name="session_calibrating">calibrating</string>
     <string name="session_rest">rest %1$s</string>
+    <string name="wheel_set_number">set %1$d</string>
+    <string name="wheel_next_set">next set</string>
+    <string name="wheel_nothing_asked">Log what you do.</string>
+    <string name="wheel_pace">set %1$d · working %2$d</string>
+    <string name="wheel_time_left">~%1$s left</string>
+    <string name="wheel_range">%1$d - %2$d reps</string>
+    <string name="wheel_effort">Take this close to failure — high reps only work hard.</string>
+    <string name="wheel_resting">resting %1$s</string>
+    <string name="wheel_skip_rest">Skip</string>
     <string name="session_rest_title">How long to rest</string>
     <string name="session_rest_this_set">This set</string>
     <string name="session_rest_always">Always on this one</string>
