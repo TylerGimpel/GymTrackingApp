@@ -55,20 +55,6 @@ class RestTest {
         assertEquals(Duration.ofSeconds(60), restFor(squat(), SetType.CALIBRATION, RepRange(3, 6)))
     }
 
-    @Test
-    fun `a superset rests once, for as long as the hardest thing in it asked`() {
-        val rests = listOf(Duration.ofSeconds(90), Duration.ofSeconds(150))
-
-        // Rest after the group rather than inside it — the point of alternating is not stopping —
-        // and the lifter is recovering from the heaviest of what they just did.
-        assertEquals(Duration.ofSeconds(150), restAfterSuperset(rests))
-    }
-
-    @Test
-    fun `a group with nothing in it asks for no rest`() {
-        assertNull(restAfterSuperset(emptyList()))
-    }
-
     private companion object {
         fun squat() = exercise(mechanic = "compound")
 

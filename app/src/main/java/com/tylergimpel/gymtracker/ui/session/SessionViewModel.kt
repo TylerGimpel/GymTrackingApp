@@ -443,7 +443,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 resting = screen.resting,
                 restAlarmsAreReliable = alarms.canWakeReliably(),
                 pace = screen.selected?.let { chosen ->
-                    SessionPace.of(logged?.setsOf(chosen).orEmpty())
+                    SessionPace.of(logged?.setsOf(chosen).orEmpty(), recommendation?.setType)
                 },
                 wheel = screen.selected?.let { chosen ->
                     logged?.setsOf(chosen).orEmpty()
@@ -598,6 +598,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     // Focus stays on the set about to be done, which is now the next one. This is
                     // what makes the common path a single tap with no scrolling.
                     focusedSet = null,
+                    // The set it was for is down, so it has said what it had to say. Leaving it
+                    // standing would quietly make "just this set" mean "this exercise, tonight".
+                    restForThisSet = null,
                 )
             }
             advanceAfterLogging(exercise, asked.rest)
@@ -615,7 +618,12 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     private fun advanceAfterLogging(exercise: Exercise, rest: Duration?) {
         when (val next = afterLogging(exercise, state.value.positions, rest)) {
             AfterLogging.PromptToFinish -> startFinishing()
-            is AfterLogging.JumpTo -> select(next.exercise)
+            is AfterLogging.JumpTo -> {
+                // Focus first and rest second, which is the ordering this whole type exists for.
+                // The rest is only ever present on the jump that closes the group's round.
+                select(next.exercise)
+                next.rest?.let(::startResting)
+            }
             is AfterLogging.StartResting -> startResting(next.length)
 
             AfterLogging.Nothing -> Unit
@@ -850,18 +858,16 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // rather than silently including one — which would break the promise a dislike makes
             // — or silently skipping the muscle, which would quietly leave a hole in the
             // training. The decision is the lifter's; only they can make it.
-            val banned = candidates.isEmpty() &&
+            val leastBad = if (candidates.isEmpty()) {
                 swapCandidatesFor(replacing, bank, equipment, trained, includeDisliked = true)
-                    .isNotEmpty()
+            } else {
+                emptyList()
+            }
 
             screen.update {
                 it.copy(
-                    swapCandidates = if (banned) {
-                        swapCandidatesFor(replacing, bank, equipment, trained, includeDisliked = true)
-                    } else {
-                        candidates
-                    },
-                    swappingLeavesOnlyDisliked = banned,
+                    swapCandidates = candidates.ifEmpty { leastBad },
+                    swappingLeavesOnlyDisliked = leastBad.isNotEmpty(),
                 )
             }
         }

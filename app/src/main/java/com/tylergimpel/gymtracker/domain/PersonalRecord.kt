@@ -43,10 +43,11 @@ fun personalRecords(history: TrainingHistory): List<PersonalRecord> = history.se
 /**
  * Whether [set] is a better set than the best this exercise had at that rep count.
  *
- * The comparison every graph, badge and congratulation is built on, in one place so that there is
- * one place to get it wrong — and it cannot be got wrong here, because the load it compares is
- * signed. Anybody "fixing" this to read the other way breaks the assisted machines loudly rather
- * than quietly, which is the point of having it at all.
+ * Nothing shows a record yet — the graphs and the badges arrive with the analytics (#28), and
+ * this is here so that when they do, the comparison is already written once and already signed.
+ * Signed is the whole point: more weight on a bar and less help on a machine are the same "better"
+ * to `>`, and anybody "fixing" this to read the other way breaks assisted machines loudly rather
+ * than quietly. If #28 lands and does not want it, delete it.
  */
 fun TrainingHistory.beatsRecord(set: PersonalRecord): Boolean {
     val standing = personalRecords(this).firstOrNull { it.reps == set.reps } ?: return true

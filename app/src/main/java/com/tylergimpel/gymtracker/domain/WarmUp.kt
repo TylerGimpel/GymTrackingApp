@@ -59,7 +59,7 @@ private fun rungsFor(workingLoad: Kilograms, exercise: Exercise): Int {
         bars <= 4.0 -> 3
         else -> MOST_RUNGS
     }
-    return if (exercise.mechanic == COMPOUND) full else full - RUNGS_OFF_FOR_SMALL_MOVEMENTS
+    return if (exercise.isCompound) full else full - RUNGS_OFF_FOR_SMALL_MOVEMENTS
 }
 
 /** One rung: how much of the working weight, and how many reps of it. */
@@ -88,6 +88,3 @@ private const val MOST_RUNGS = 4
 
 /** What isolation and machine work gives up, which is what leaves light ones with no ramp. */
 private const val RUNGS_OFF_FOR_SMALL_MOVEMENTS = 2
-
-/** What the bank calls a movement that asks for more than one joint. */
-private const val COMPOUND = "compound"

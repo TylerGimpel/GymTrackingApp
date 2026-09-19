@@ -48,12 +48,11 @@ data class LayoffDecay(
 ) {
 
     /**
-     * The estimate [anchor] has aged into after [away], or null once it is not worth having.
+     * The estimate [anchor] has aged into after [weeks] away, or null once it is not worth having.
      *
      * Signed, like everything else: a barbell estimate comes down toward nothing and an assisted
      * machine's comes down toward more help, which is the same direction written once.
      */
-    /** The estimate after [weeks] away, or null once it is not worth having. */
     fun applyTo(anchor: Anchor, weeks: Long): Anchor? = when {
         weeks >= forgetAfterWeeks -> null
         weeks <= graceWeeks -> anchor

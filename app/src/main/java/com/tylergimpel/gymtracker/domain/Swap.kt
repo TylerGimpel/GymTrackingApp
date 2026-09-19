@@ -40,7 +40,6 @@ fun swapCandidatesFor(
         // it asks for. A substitute that works a different muscle is not a substitute.
         .filter { candidate -> candidate.primaryMuscles.any { it in muscles } }
         .filter { it.mechanic == replacing.mechanic }
-        .filter { it.loggingType == replacing.loggingType }
         // Equipment the lifter actually has. An empty checklist means nothing has been said about
         // their gym yet, and offering everything beats offering nothing.
         .filter { equipment.isEmpty() || it.equipment == null || it.equipment in equipment }

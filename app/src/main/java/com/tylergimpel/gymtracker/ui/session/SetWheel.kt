@@ -78,9 +78,9 @@ fun SetWheel(
     LazyColumn(
         state = state,
         modifier = modifier.fillMaxWidth().testTag(WHEEL),
-        // Half the wheel's height of padding at each end, so the first and last sets can both
-        // reach the middle: a wheel whose last rung cannot be focused is a wheel with a set on it
-        // nobody can log.
+        // One set's worth of padding at each end — a third of a wheel that stands three sets
+        // tall — so the first and last can both reach the middle. A wheel whose last rung cannot
+        // be centred is a wheel with a set on it nobody can log.
         contentPadding = PaddingValues(vertical = WHEEL_HEIGHT / 3),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),

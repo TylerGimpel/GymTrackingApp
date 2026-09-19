@@ -91,8 +91,14 @@ class RecommendationRepository(
         exercise: Exercise,
         open: Long?,
     ): Recommendation {
-        val load = (recommendation as? Recommendation.Prescribing)?.prescription?.load
-            ?: return recommendation
+        val load = when (recommendation) {
+            // Both prescribe a real working load. Holding the weight and cutting the volume is
+            // still the weight, and a lifter on the rung that says so needs the same ramp.
+            is Recommendation.Prescribing, is Recommendation.CuttingVolume ->
+                recommendation.prescription.load
+
+            else -> null
+        } ?: return recommendation
         val session = open ?: return recommendation
 
         // A ramp leads up to the work and is over once the work starts. Offering one to a
@@ -126,7 +132,7 @@ class RecommendationRepository(
             .filterNot { it == exercise.id }
             .distinct()
             .count { other ->
-                exercises.byId(other)?.toDomain()?.primaryMuscles.orEmpty().any { it in muscles }
+                exercises.byId(other)?.toDomain()?.let(exercise::sharesPrimaryMuscleWith) == true
             }
     }
 

@@ -10,22 +10,29 @@ import java.time.Duration
  * working set is not four sets of training, and a screen that says `set 4` alone makes it look
  * like one.
  *
- * The totals are nullable and usually absent. Nothing prescribes how many sets an exercise gets
- * until the generator does (#26), and a screen that invented one would be stating a plan nobody
- * made. Where a total is known — a generated ramp knows how many rungs it has — it is shown.
+ * Two numbers and no totals. Nothing prescribes how many sets an exercise gets until the
+ * generator does (#26), and a screen that invented one would be stating a plan nobody made — so
+ * `set 3` is the honest thing to say and `set 3 of 5` waits for something that knows.
  */
 data class SessionPace(
     val setsDone: Int,
     val workingDone: Int,
-    val setsPlanned: Int? = null,
-    val workingPlanned: Int? = null,
 ) {
     companion object {
-        /** Where [sets] leaves the lifter, counting the one they are about to do. */
-        fun of(sets: List<PerformedSet>, planned: Int? = null): SessionPace = SessionPace(
+        /**
+         * Where [sets] leaves the lifter, counting the [pending] one they are about to do.
+         *
+         * Which counts toward the working total only if it is training: a lifter on the second
+         * rung of a ramp is on their second set and none of it has been work yet, and a screen
+         * that said otherwise would be making the exact claim the two numbers exist to separate.
+         *
+         * A [pending] nothing prescribed counts as work, because a set the lifter chose to do
+         * with the app saying nothing is training they did.
+         */
+        fun of(sets: List<PerformedSet>, pending: SetType?): SessionPace = SessionPace(
             setsDone = sets.size + 1,
-            workingDone = sets.count { it.type.countsTowardVolume } + 1,
-            setsPlanned = planned,
+            workingDone = sets.count { it.type.countsTowardVolume } +
+                if (pending?.countsTowardVolume != false) 1 else 0,
         )
     }
 }
@@ -43,7 +50,7 @@ data class SessionPace(
  * is with a `~` in front of it.
  */
 fun timeLeftIn(remaining: List<Exercise>): Duration = remaining.fold(Duration.ZERO) { total, exercise ->
-    total + if (exercise.loggingType.recordsDuration) TYPICAL_CARDIO else TYPICAL_LIFT
+    total + if (exercise.isCardio) TYPICAL_CARDIO else TYPICAL_LIFT
 }
 
 /** How long an ordinary exercise takes: a few sets, each with its rest. */

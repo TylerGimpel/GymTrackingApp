@@ -137,6 +137,32 @@ data class Exercise(
     val primaryMuscle: String? get() = primaryMuscles.firstOrNull()
 
     /**
+     * Whether this asks for more than one joint, which is what the bank means by `compound`.
+     *
+     * On the exercise rather than at each place that asks: rest and warm-ups both branch on it,
+     * and the same string compared in two files is a typo waiting to answer "no" quietly.
+     */
+    val isCompound: Boolean get() = mechanic == COMPOUND
+
+    /**
+     * Whether this is cardio, which is the one kind of exercise a session usually ends on.
+     *
+     * A distance as well as a duration, or the bank saying so outright. Not "records a duration"
+     * on its own: a plank is timed and is nobody's last exercise of the evening, and asking a
+     * lifter who has just held one whether that was the session reads a hold as a treadmill.
+     */
+    val isCardio: Boolean get() = category == CARDIO || loggingType.recordsDistance
+
+    /**
+     * Whether training [other] trains the same thing this trains.
+     *
+     * Primary muscles only. The incidental work a bench press does on triceps is not what warms
+     * them up, and counting it would talk a lifter out of a ramp they need.
+     */
+    fun sharesPrimaryMuscleWith(other: Exercise): Boolean =
+        primaryMuscles.any { it in other.primaryMuscles }
+
+    /**
      * This exercise as the bank now has it, carrying forward everything [chosen] decided about it.
      *
      * Those fields are stored apart and an update never writes them, so this is not what keeps them
@@ -152,3 +178,9 @@ data class Exercise(
         isDisliked = chosen.isDisliked,
     )
 }
+
+/** What the bank calls a movement that asks for more than one joint. */
+private const val COMPOUND = "compound"
+
+/** What the bank calls the fourteen of its rows that are cardio. */
+private const val CARDIO = "cardio"

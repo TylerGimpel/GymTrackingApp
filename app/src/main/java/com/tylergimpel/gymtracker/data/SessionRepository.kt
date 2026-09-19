@@ -52,7 +52,7 @@ class SessionRepository(
         sessions.observeLastFinished().withLifterUnit { last, unit -> last?.toLoggedSession(unit) }
 
     /**
-     * The most recent finished sessions, newest first — what [unperformedExerciseCounts] reads.
+     * The most recent finished sessions, newest first — what [avoidedExercises] reads.
      *
      * A window rather than everything: what a lifter has been avoiding lately is the question, and
      * a routine they abandoned a year ago should not answer it.

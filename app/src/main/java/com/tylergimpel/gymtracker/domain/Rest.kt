@@ -33,7 +33,7 @@ fun restFor(exercise: Exercise, setType: SetType, repRange: RepRange): Duration 
 
     // In between, what governs is how much of the lifter the movement asks for. A squat takes
     // more putting back together than a curl does.
-    exercise.mechanic == COMPOUND -> MULTI_JOINT
+    exercise.isCompound -> MULTI_JOINT
 
     else -> SINGLE_JOINT
 }
@@ -58,15 +58,3 @@ private const val HEAVY_TOP = 6
 
 /** The bottom of a range at or above which a set is endurance work. */
 private const val ENDURANCE_BOTTOM = 12
-
-/** What the bank calls a movement that asks for more than one joint. */
-private const val COMPOUND = "compound"
-
-/**
- * The rest a **Superset** group takes, once, after all of it.
- *
- * The point of alternating is not stopping, so no member carries a rest of its own — and the
- * group's own rest is the longest any of its members would have asked for, because the hardest
- * thing in it is what the lifter is recovering from.
- */
-fun restAfterSuperset(memberRests: List<Duration>): Duration? = memberRests.maxOrNull()

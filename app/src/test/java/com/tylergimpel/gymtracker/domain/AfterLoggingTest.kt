@@ -34,6 +34,59 @@ class AfterLoggingTest {
     }
 
     @Test
+    fun `the group rests once it has come round`() {
+        val positions = grouped(bench, row, groupRest = Duration.ofSeconds(150))
+
+        // Logging the last member is the moment every member has been trained once, which is the
+        // "after the group" a superset's rest is named for. Focus still goes back to the top:
+        // the lifter rests where the next set is, not where the last one was.
+        assertEquals(
+            AfterLogging.JumpTo(bench, Duration.ofSeconds(150)),
+            afterLogging(row, positions, null),
+        )
+    }
+
+    @Test
+    fun `nothing rests between the members of a group`() {
+        val positions = grouped(bench, row, groupRest = Duration.ofSeconds(150))
+
+        // The group has a rest and the lifter is halfway round it. A timer started here would be
+        // counting down while they are mid-superset, which is the opposite of what one is.
+        assertEquals(AfterLogging.JumpTo(row), afterLogging(bench, positions, null))
+    }
+
+    @Test
+    fun `a group of one still takes the rest it carries`() {
+        val positions = grouped(bench, groupRest = Duration.ofSeconds(90))
+
+        // What ungrouping down to a single member leaves. There is nowhere to jump, and every set
+        // closes a round of one.
+        assertEquals(
+            AfterLogging.StartResting(Duration.ofSeconds(90)),
+            afterLogging(bench, positions, null),
+        )
+    }
+
+    @Test
+    fun `a plank is not a treadmill`() {
+        val plank = exercise("Plank", LoggingType.TIME)
+
+        // Timed, and nobody's last exercise of the evening. Asking whether that was the session
+        // would be the app reading a hold as cardio because both are measured in seconds.
+        assertEquals(
+            AfterLogging.StartResting(Duration.ofSeconds(90)),
+            afterLogging(plank, alone(plank), Duration.ofSeconds(90)),
+        )
+    }
+
+    @Test
+    fun `the bank calling something cardio is enough`() {
+        val rope = exercise("Skipping", LoggingType.TIME).copy(category = "cardio")
+
+        assertEquals(AfterLogging.PromptToFinish, afterLogging(rope, alone(rope), null))
+    }
+
+    @Test
     fun `a group told not to jump rests like anything else`() {
         val positions = grouped(bench, row, autoJump = false)
 
@@ -83,9 +136,18 @@ class AfterLoggingTest {
 
         fun alone(exercise: Exercise) = listOf(SessionPosition.Alone(performed(exercise, 1)))
 
-        fun grouped(vararg members: Exercise, autoJump: Boolean = true) = listOf(
+        fun grouped(
+            vararg members: Exercise,
+            autoJump: Boolean = true,
+            groupRest: Duration? = null,
+        ) = listOf(
             SessionPosition.Grouped(
-                superset = Superset(id = 1, orderIndex = 1, autoJump = autoJump, restSeconds = null),
+                superset = Superset(
+                    id = 1,
+                    orderIndex = 1,
+                    autoJump = autoJump,
+                    restSeconds = groupRest?.seconds?.toInt(),
+                ),
                 exercises = members.mapIndexed { index, member -> performed(member, index + 1) },
             ),
         )
