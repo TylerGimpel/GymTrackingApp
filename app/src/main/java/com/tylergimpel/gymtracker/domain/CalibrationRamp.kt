@@ -71,10 +71,14 @@ data class CalibrationRamp(
          * cannot be made lighter. A hold and a run are recorded rather than prescribed, so there
          * is no weight to go looking for at all.
          */
-        fun of(exercise: Exercise, rounding: Increment = Increment.DEFAULT): CalibrationRamp? =
+        fun of(
+            exercise: Exercise,
+            rounding: Increment = Increment.DEFAULT,
+            bar: Kilograms? = null,
+        ): CalibrationRamp? =
             when (exercise.loggingType) {
                 LoggingType.WEIGHT_REPS ->
-                    climbing(seedFor(exercise.equipment, rounding), LOADED_STEPS, rounding)
+                    climbing(seedFor(exercise, bar), LOADED_STEPS, rounding)
 
                 LoggingType.ASSISTED ->
                     climbing(Kilograms(-ASSISTED_SEED), ASSISTED_STEPS, rounding)
@@ -128,18 +132,17 @@ data class CalibrationRamp(
          * the profile holds neither until onboarding does (#29), and the research is explicit that
          * the raise is optional because the ramp corrects it either way.
          */
-        private fun seedFor(equipment: String?, rounding: Increment): Kilograms =
+        private fun seedFor(exercise: Exercise, bar: Kilograms?): Kilograms =
             // A barbell starts at the bar, and the bar is a thing in the room rather than a
             // constant: 20 kg and 45 lb are different bars, and seeding one for a lifter who owns
-            // the other is how a first prescription ends up reading 44.09 (#64).
-            if (rounding is Increment.Plates && equipment == BARBELL) {
-                rounding.bar
+            // the other is how a first prescription ends up reading 44.09 (#64). Taken from the
+            // inventory rather than from the rounding, so that a lifter who has overruled the
+            // step on a barbell still starts at their own bar.
+            if (exercise.isBarbell && bar != null) {
+                bar
             } else {
-                Kilograms(SEEDS[equipment] ?: UNKNOWN_EQUIPMENT_SEED)
+                Kilograms(SEEDS[exercise.equipment] ?: UNKNOWN_EQUIPMENT_SEED)
             }
-
-        /** What the bank calls the thing whose seed is the bar itself. */
-        private const val BARBELL = "barbell"
 
         private val SEEDS = mapOf(
             "barbell" to 20.0,

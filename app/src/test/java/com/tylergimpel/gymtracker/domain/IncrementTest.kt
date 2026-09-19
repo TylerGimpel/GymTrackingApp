@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -69,7 +70,7 @@ class IncrementTest {
         // as few plates as will do it, because every one is a trip to the rack.
         assertEquals(
             listOf(20.0, 15.0),
-            rack.perSide(Kilograms(90.0)).map { it.value },
+            rack.perSide(Kilograms(90.0))?.map { it.value },
         )
     }
 
@@ -80,8 +81,31 @@ class IncrementTest {
 
         // The rounding and the plate line read the same inventory, so the line always adds up to
         // the weight above it. Two answers from one source is the point of it being one source.
-        val built = rack.bar.value + 2 * rack.perSide(awkward).sumOf { it.value }
+        val perSide = requireNotNull(rack.perSide(awkward)) { "the rounding built nothing" }
+        val built = rack.bar.value + 2 * perSide.sumOf { it.value }
         assertKilograms(awkward.value, Kilograms(built))
+    }
+
+    @Test
+    fun `a weight these plates cannot build gets no line at all`() {
+        val rack = ordinaryRack()
+
+        // Not an empty list, which is a bar with nothing on it and a real answer. A caller that
+        // could not tell the two apart would print "bar only" under a number that is not one.
+        assertNull(rack.perSide(Kilograms(77.3)))
+        assertEquals(emptyList<Kilograms>(), rack.perSide(rack.bar))
+    }
+
+    @Test
+    fun `a rack cast in pounds adds up to whole pounds`() {
+        // 45 lb is 20.41165665 kg, and a bar plus eight plates of it is nine chances to lose a
+        // fraction. Rounded to the gram it came out at 345.01 lb on screen, which is exactly the
+        // unloadable nonsense the whole tier exists to end.
+        val fourPlates = WeightUnit.POUNDS.toKilograms(345.0)
+        val everything = WeightUnit.POUNDS.toKilograms(400.0)
+
+        assertEquals(345.0, WeightUnit.POUNDS.fromKilograms(IMPERIAL_RACK.roundDown(fourPlates)), 0.0)
+        assertEquals(400.0, WeightUnit.POUNDS.fromKilograms(IMPERIAL_RACK.roundDown(everything)), 0.0)
     }
 
     @Test

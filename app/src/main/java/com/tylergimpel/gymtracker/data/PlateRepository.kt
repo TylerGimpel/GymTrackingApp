@@ -27,10 +27,10 @@ class PlateRepository(
      * That is also the only thing that can work on a fresh install, which arrives already built
      * from the asset and runs no migration that could have seeded it.
      */
-    suspend fun barbell(): Increment.Plates = assembled(
+    suspend fun barbell(readIn: WeightUnit? = null): Increment.Plates = assembled(
         bar = profile.bar(),
         pairs = plates.all().map(PlateInventoryEntity::toDomain),
-        unit = profile.displayUnit(),
+        unit = readIn ?: profile.displayUnit(),
     )
 
     /** The same, watched, for a settings screen that edits it while the engine reads it. */
@@ -72,3 +72,7 @@ class PlateRepository(
     /** Every pair, heaviest first, for a screen that lists them. */
     suspend fun pairs(): List<PlatePair> = plates.all().map(PlateInventoryEntity::toDomain)
 }
+
+/** The plates in the room, assembled the one way, so nothing has to remember the two halves. */
+fun GymDatabase.plateRepository(): PlateRepository =
+    PlateRepository(plateDao(), profileRepository())

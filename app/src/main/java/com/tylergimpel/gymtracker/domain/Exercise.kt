@@ -161,6 +161,17 @@ data class Exercise(
      */
     val isCardio: Boolean get() = category == CARDIO || loggingType.recordsDistance
 
+    /** Whether this is loaded from the **Plate inventory**, which is the one tier that is built. */
+    val isBarbell: Boolean get() = equipment == BARBELL
+
+    /**
+     * Whether this exercise's numbers are pin positions rather than weights.
+     *
+     * A **Stack number** is a gym-local scale: nothing can be inferred about the gaps in one
+     * from any other machine, which is why these are learned from the log alone.
+     */
+    val isStacked: Boolean get() = equipment in STACKED
+
     /**
      * Whether training [other] trains the same thing this trains.
      *
@@ -193,3 +204,9 @@ private const val COMPOUND = "compound"
 
 /** What the bank calls the fourteen of its rows that are cardio. */
 private const val CARDIO = "cardio"
+
+/** What the bank calls the thing built from the plate inventory. */
+private const val BARBELL = "barbell"
+
+/** What the bank calls the things whose numbers are pin positions rather than weights. */
+private val STACKED = setOf("machine", "cable")

@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToLong
 
@@ -27,11 +28,11 @@ data class PlatePair(val weight: Kilograms, val pairs: Int)
  * - [Step] — a dumbbell rack or anything else that moves by a fixed amount, and the default.
  * - [Stack] — a machine, which is only ever the notches it has been *seen* at.
  *
- * Every one of them rounds **down in signed terms**, which is what makes one rule cover both
- * directions: a barbell rounds to the lighter plate, and an assisted machine — whose load is
+ * [Step] and [Stack] round **down in signed terms**, which is what makes one rule cover both
+ * directions: a dumbbell rounds to the lighter one, and an assisted machine — whose load is
  * negative, because help is weight taken off the lifter — rounds to *more* help. Both are the
  * conservative answer, and neither needs a reader to remember which way an assisted exercise
- * runs (ADR 0004).
+ * runs (ADR 0004). [Plates] is unsigned, and nothing is lost by that: a bar cannot help you.
  */
 sealed interface Increment {
 
@@ -75,43 +76,62 @@ sealed interface Increment {
         /**
          * Every total this bar and these plates can be loaded to, lightest first.
          *
-         * Computed once per inventory and in whole grams, because a sum of 1.25s in binary
-         * floating point does not land on the number a lifter reads off the plate.
+         * Whole grams, because a sum of 1.25s in binary floating point does not land on the
+         * number a lifter reads off the plate. Computed once per instance rather than once per
+         * inventory — the repository builds a fresh one per read, and a sieve over a handful of
+         * denominations is cheaper than a cache that has to be invalidated when a plate is
+         * added.
          */
         private val buildable: List<Long> by lazy {
-            val perSide = achievablePerSide(sides)
-            perSide.map { barGrams + 2 * it }
+            achievablePerSide(sides).map { barWeight + 2 * it }
         }
 
         override fun roundDown(load: Kilograms): Kilograms {
             // Below the bar there is nothing left to take off, and an empty bar is a real set-up.
-            val wanted = load.grams()
-            val under = buildable.lastOrNull { it <= wanted } ?: return bar
+            // The one answer here that is not below what was asked for.
+            val wanted = load.milligrams()
+            val under = buildable.lastOrNull { it <= wanted + A_CRUMB } ?: return bar
             return under.kilograms()
         }
 
         override fun oneStepAbove(load: Kilograms): Kilograms {
-            val wanted = load.grams()
+            val wanted = load.milligrams()
             // Nothing above it means the plates have run out, and the honest answer is the
             // heaviest thing in the room rather than a weight that is not there.
-            return (buildable.firstOrNull { it > wanted } ?: buildable.lastOrNull() ?: barGrams)
+            return (buildable.firstOrNull { it > wanted + A_CRUMB }
+                ?: buildable.lastOrNull()
+                ?: barWeight)
                 .kilograms()
         }
 
         /**
-         * What goes on one end of the bar to make [total], heaviest plate first.
+         * What goes on one end of the bar to make [total], or null where these plates cannot.
          *
          * The plate line, and the reason the rounding above is worth having: a lifter reads this
-         * and loads the bar without doing any arithmetic. Heaviest first and as few as will do
-         * it, because every plate is a trip to the rack — and exact, because the search backs up
-         * rather than taking the biggest plate that fits and getting stuck.
+         * and loads the bar without doing any arithmetic. Heaviest plate first, which is the
+         * order somebody loads in — not necessarily the fewest plates, because preferring the
+         * heaviest that fits is what a person does and second-guessing it to save one 1.25 would
+         * read as arithmetic rather than instructions.
+         *
+         * **Null and empty are different answers.** Empty is a bar with nothing on it, which is
+         * a real set-up; null is a weight these plates cannot build, which a caller must not
+         * render as an empty bar under a number that is not one. The membership check is what
+         * makes the difference cheap — and what keeps the search below off a target it would
+         * explore every combination of before admitting defeat.
          */
-        fun perSide(total: Kilograms): List<Kilograms> {
-            val each = (total.grams() - barGrams) / 2
-            if (each <= 0) return emptyList()
+        fun perSide(total: Kilograms): List<Kilograms>? {
+            val wanted = total.milligrams()
+            // Matched against what the plates actually make rather than against the number that
+            // came in: a total converted straight out of pounds and the same total summed from
+            // plates converted one at a time differ by a crumb, and comparing them exactly
+            // would refuse to explain a weight the plates had just built.
+            val built = buildable.firstOrNull { abs(it - wanted) <= A_CRUMB } ?: return null
+
+            val each = (built - barWeight) / 2
+            if (each == 0L) return emptyList()
 
             val chosen = mutableListOf<Long>()
-            return if (load(each, 0, chosen)) chosen.map { it.kilograms() } else emptyList()
+            return if (load(each, 0, chosen)) chosen.map { it.kilograms() } else null
         }
 
         /** Whether [remaining] can be made from [sides] at [index] or later, filling [chosen]. */
@@ -128,11 +148,11 @@ sealed interface Increment {
             return load(remaining, index + 1, chosen)
         }
 
-        private val barGrams: Long get() = bar.grams()
+        private val barWeight: Long get() = bar.milligrams()
 
         /** One entry per plate that can go on one end, heaviest first. */
         private val sides: List<Long> by lazy {
-            plates.flatMap { pair -> List(pair.pairs) { pair.weight.grams() } }
+            plates.flatMap { pair -> List(pair.pairs) { pair.weight.milligrams() } }
                 .filter { it > 0 }
                 .sortedDescending()
         }
@@ -147,12 +167,15 @@ sealed interface Increment {
      * against it rather than assuming a step, and never offers a pin position nobody has used.
      */
     data class Stack(val positions: List<Kilograms>) : Increment {
+        // Read from the log rather than from the machine, which is the only source there is. It
+        // is as honest as the logging: a lifter who accepts a number without checking the pin
+        // teaches the app a notch that was never there.
 
         private val notches: List<Double> = positions.map(Kilograms::value).distinct().sorted()
 
         override fun roundDown(load: Kilograms): Kilograms {
             val under = notches.lastOrNull { it <= load.value + FLOAT_DUST }
-            // The one place the answer is not below what was asked for. Nothing lighter has ever
+            // Not below what was asked for, like an empty bar is not. Nothing lighter has ever
             // been logged here, and inventing a notch is the one thing this tier exists to avoid:
             // the lifter can select a lighter pin themselves, which is how the app learns of it.
             return Kilograms(under ?: notches.firstOrNull() ?: load.value)
@@ -194,10 +217,29 @@ sealed interface Increment {
          */
         private const val FLOAT_DUST = 1e-9
 
-        /** Whole grams, which is finer than any plate ever cast and free of binary dust. */
-        private fun Kilograms.grams(): Long = (value * 1000.0).roundToLong()
+        /**
+         * Whole milligrams, which is finer than any plate ever cast and free of binary dust.
+         *
+         * Milligrams rather than grams because a rack cast in pounds does not land on grams: 45
+         * lb is 20.41165665 kg, a third of a milligram off a whole one. Rounding there is under
+         * a gram a plate, but it accumulates one way across a bar and eight plates into 345.01
+         * lb on screen — precisely the fractional nonsense this was meant to end.
+         */
+        private fun Kilograms.milligrams(): Long = (value * MILLIGRAMS_PER_KILOGRAM).roundToLong()
 
-        private fun Long.kilograms(): Kilograms = Kilograms(this / 1000.0)
+        private fun Long.kilograms(): Kilograms = Kilograms(this / MILLIGRAMS_PER_KILOGRAM)
+
+        private const val MILLIGRAMS_PER_KILOGRAM = 1_000_000.0
+
+        /**
+         * A gram of slack, which is what rounding a rack cast in pounds leaves behind.
+         *
+         * Each imperial plate lands a fraction of a milligram off a whole one and the fractions
+         * accumulate one way, so a total summed plate by plate misses the same total converted
+         * in one go. A gram is thousands of times larger than that drift and thousands of times
+         * smaller than anything anybody can load, so nothing real hides inside it.
+         */
+        private const val A_CRUMB = 1_000L
 
         /**
          * Every sum one end of the bar can be loaded to, including nothing, lightest first.

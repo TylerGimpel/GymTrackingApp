@@ -4,9 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tylergimpel.gymtracker.data.GymDatabase
-import com.tylergimpel.gymtracker.data.PlateRepository
+import com.tylergimpel.gymtracker.data.plateRepository
 import com.tylergimpel.gymtracker.data.profileRepository
-import com.tylergimpel.gymtracker.domain.Increment
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.PlatePair
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -18,6 +17,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /** What the screen holds that the database does not: two fields being typed into. */
 private data class ScreenState(val bar: String? = null, val adding: String = "")
@@ -46,7 +46,7 @@ class PlatesViewModel(application: Application) : AndroidViewModel(application) 
 
     private val database = GymDatabase.getInstance(application)
     private val profile = database.profileRepository()
-    private val plates = PlateRepository(database.plateDao(), profile)
+    private val plates = database.plateRepository()
 
     private val screen = MutableStateFlow(ScreenState())
 
@@ -76,12 +76,13 @@ class PlatesViewModel(application: Application) : AndroidViewModel(application) 
     /** Adds one pair of whatever weight is typed, which is how a rack grows. */
     fun addPair() {
         val typed = screen.value.adding.trim().toDoubleOrNull()?.takeIf { it > 0 } ?: return
-        val unit = state.value.unit
-        val already = state.value.pairs.firstOrNull { it.weight.asTextIn(unit) == typed.toString() }
+        val weight = state.value.unit.toKilograms(typed)
+        // Compared as a weight rather than as text: "20" and "20.0" are the same plate, and
+        // matching the strings would quietly reset a count to one instead of adding to it.
+        val already = state.value.pairs.firstOrNull { abs(it.weight.value - weight.value) < DUST }
+
         screen.update { it.copy(adding = "") }
-        viewModelScope.launch {
-            plates.setPairs(unit.toKilograms(typed), (already?.pairs ?: 0) + 1)
-        }
+        viewModelScope.launch { plates.setPairs(weight, (already?.pairs ?: 0) + 1) }
     }
 
     /**
@@ -97,8 +98,8 @@ class PlatesViewModel(application: Application) : AndroidViewModel(application) 
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+
+        /** Far below the lightest plate ever cast, far above what a conversion leaves behind. */
+        const val DUST = 1e-6
     }
 }
-
-/** The rack the engine would use right now, for a screen that wants to show what it builds. */
-fun PlatesUiState.asBarbell(): Increment.Plates = Increment.Plates(bar, pairs)

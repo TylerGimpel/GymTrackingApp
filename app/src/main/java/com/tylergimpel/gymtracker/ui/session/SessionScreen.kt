@@ -404,7 +404,9 @@ fun SessionScreen(
                         modifier = Modifier.height(WHEEL_HEIGHT),
                     )
                     // Under the prescription, where somebody standing at the bar reads it.
-                    state.plateLine?.let { PlateLineRow(it, state.lifterUnit) }
+                    // The exercise's unit, like the weight above it: a machine labelled in
+                    // pounds is labelled in pounds whoever is reading.
+                    state.plateLine?.let { PlateLineRow(it, selected.displayUnit) }
                     WheelFooting(state, onEndRest, onAddRest, onFixRestAlerts)
                     SetEntryControls(
                         exercise = selected,

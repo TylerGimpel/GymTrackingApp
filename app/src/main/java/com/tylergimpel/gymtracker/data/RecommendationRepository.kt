@@ -55,8 +55,7 @@ class RecommendationRepository(
      * Defaulted from the database rather than required, so that the engine can be built the way
      * it always was and the inventory arrives with it.
      */
-    private val plates: PlateRepository =
-        PlateRepository(database.plateDao(), database.profileRepository()),
+    private val plates: PlateRepository = database.plateRepository(),
     /** What the lifter reads in, which decides the step where no equipment has been described. */
     private val profile: ProfileRepository = database.profileRepository(),
 ) {
@@ -82,7 +81,11 @@ class RecommendationRepository(
             recommendNextSet(
                 history = history,
                 progress = progress,
-                calibration = CalibrationRamp.of(exercise, rounding),
+                calibration = CalibrationRamp.of(
+                    exercise = exercise,
+                    rounding = rounding,
+                    bar = plates.barbell(exercise.displayUnit).bar.takeIf { exercise.isBarbell },
+                ),
                 setsToday = open?.let { sessions.setsLoggedInSession(exercise.id, it) } ?: 0,
             )
                 ?.let { warmUpFirst(it, exercise, open, rounding) }
@@ -230,18 +233,23 @@ class RecommendationRepository(
         // the rack: a gym that goes up in fours is a fact, not a tier to be inferred.
         exercise.chosenIncrement?.let { return Increment(it) }
 
-        return when (exercise.equipment) {
-            BARBELL -> plates.barbell()
+        // The unit the weight will be *read* in, which belongs to the exercise rather than to
+        // the lifter: a lat pulldown labelled in pounds is labelled in pounds whoever walks up
+        // to it, and rounding it in kilograms is what puts 132.28 on the screen (#64).
+        val readIn = exercise.displayUnit
+
+        return when {
+            exercise.isBarbell -> plates.barbell(readIn)
 
             // Two, not one: a single logged position says where the pin was once and nothing
             // about where the next notch is. Until there are two the app knows no more about
             // this stack than about a dumbbell rack, and a step is the honest stand-in.
-            in STACKED -> history.observedLoads()
+            exercise.isStacked -> history.observedLoads()
                 .takeIf { it.size >= STACK_IS_KNOWN_FROM }
                 ?.let(Increment::Stack)
-                ?: stepFor(profile.displayUnit())
+                ?: stepFor(readIn)
 
-            else -> stepFor(profile.displayUnit())
+            else -> stepFor(readIn)
         }
     }
 
@@ -253,19 +261,19 @@ class RecommendationRepository(
      * one answer asked twice. A view onto work already done rather than a second opinion.
      */
     suspend fun plateLine(exercise: Exercise, load: Kilograms): PlateLine? {
-        if (exercise.equipment != BARBELL) return null
+        // Only where the plates are what rounded it. A lifter who has set a step of their own
+        // has overruled the inventory, and the weight that comes back is not one these plates
+        // were asked to build — showing a line under it would be explaining somebody else's
+        // arithmetic, and getting it wrong.
+        if (!exercise.isBarbell || exercise.chosenIncrement != null) return null
 
-        val barbell = plates.barbell()
-        return PlateLine(barbell.bar, barbell.perSide(load))
+        val barbell = plates.barbell(exercise.displayUnit)
+        // Null rather than an empty list where the weight is not buildable, so that "a bar with
+        // nothing on it" stays a real answer and never stands in for "the app cannot say".
+        return barbell.perSide(load)?.let { PlateLine(barbell.bar, it) }
     }
 
     private companion object {
-        /** What the bank calls the thing built from the plate inventory. */
-        const val BARBELL = "barbell"
-
-        /** What the bank calls the things whose numbers are pin positions rather than weights. */
-        val STACKED = setOf("machine", "cable")
-
         /** How many distinct positions it takes before the log describes a stack at all. */
         const val STACK_IS_KNOWN_FROM = 2
     }
