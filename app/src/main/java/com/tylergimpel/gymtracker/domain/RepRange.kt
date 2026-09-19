@@ -16,10 +16,10 @@ data class RepRange(val bottom: Int, val top: Int) {
     init {
         require(bottom >= 1) { "A rep range starts at one rep or more, not $bottom" }
         require(top >= bottom) { "A rep range of $bottom - $top has its top below its bottom" }
-        // Epley's factor reaches zero at 30 reps, and an assisted exercise reads it the other way
-        // up — so a range whose bottom got that far would divide a machine's help by nothing. Far
-        // outside anything anybody trains in, and cheaper to refuse here than to debug as an
-        // infinite prescription.
+        // Far outside anything anybody trains in, and cheaper to refuse where the range is built
+        // than to explain further downstream. It is not what keeps the load formula honest — that
+        // is the cutoff in `Anchor.workingLoadFor`, which caps the reps it reads an estimate back
+        // through whatever range it is handed.
         require(top <= MAX_PRESCRIBED_REPS) { "A rep range topping out at $top is not training" }
     }
 
@@ -32,12 +32,7 @@ data class RepRange(val bottom: Int, val top: Int) {
     fun coerce(reps: Int): Int = reps.coerceIn(bottom, top)
 
     companion object {
-        /**
-         * The widest range this project will prescribe in, and the limit the formula imposes.
-         *
-         * See the refusal above: Epley's factor is `1 + reps/30`, which an assisted exercise
-         * subtracts rather than adds.
-         */
+        /** The widest range this project will prescribe in. Past it, nobody is lifting. */
         const val MAX_PRESCRIBED_REPS = 25
 
         /**

@@ -155,6 +155,9 @@ _Avoid_: weight on its own as a name for it, which already means what is on the 
 
 ### Recommending
 
+**Training history**:
+One exercise's own logged sets, gathered into the sessions they were trained in — what every recommendation is computed from, and nothing else. A session contributes one point however many sets it took, and a set is one set however many rows recorded it (ADR 0003). Never contains another exercise's work: that is the constraint that keeps a bench press from deciding a dumbbell press.
+
 **Anchor**:
 The app's current estimate of what a user can lift on one exercise, held as an estimated one-rep max and updated from their own logged sets for that exercise alone. Never inferred from a different exercise.
 
@@ -184,7 +187,7 @@ The best set a user has performed at a given rep count for an exercise — best 
 **Working load**:
 The load an exercise is currently being worked at — the **Anchor** read back down to the bottom of the **Rep range** and rounded down to an **Increment**. A load rather than a weight, because on an assisted machine it is how much help the machine is giving.
 
-What double progression moves: it holds while the reps climb through the range, and steps only once the top has been beaten. Held per exercise beside the anchor, and the app's own working rather than anything the lifter chose, which is why it lives apart from both the shipped bank row and the lifter's preferences.
+What double progression is meant to move: the weight holds while the reps climb through the range, and steps once the top has been beaten twice. Today it follows the anchor, because the step that holds it and then advances it is the graded ladder's, which has its own ticket. Held per exercise beside the anchor, and the app's own working rather than anything the lifter chose, which is why it lives apart from both the shipped bank row and the lifter's preferences.
 
 **Increment**:
 The smallest weight step actually achievable on a given exercise, set by the equipment rather than by arithmetic — plate pairs on a barbell, rack steps on dumbbells, and for machines, the stack positions the user has been observed to use.

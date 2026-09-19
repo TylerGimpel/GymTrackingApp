@@ -53,6 +53,8 @@ import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.PrescribedLoad
+import com.tylergimpel.gymtracker.domain.reading
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RoutineDay
@@ -675,9 +677,8 @@ private fun NextSet(
     loggingType: LoggingType,
     displayUnit: WeightUnit,
 ) {
-    val prescription = recommendation.prescription
-    val reps = prescription.reps ?: return
-    val load = prescription.load
+    val reps = recommendation.prescription.reps ?: return
+    val asked = loggingType.reading(recommendation.prescription.load)
     val unit = stringResource(displayUnit.label)
     val guessing = recommendation is Recommendation.Calibrating
 
@@ -692,29 +693,29 @@ private fun NextSet(
             )
         }
         Text(
-            text = when {
-                loggingType.recordsWeight && load != null ->
-                    stringResource(R.string.set_summary, load.asTextIn(displayUnit), unit, reps)
+            text = when (asked) {
+                is PrescribedLoad.Weight ->
+                    stringResource(R.string.set_summary, asked.weight.asTextIn(displayUnit), unit, reps)
 
-                // Help, written as the machine is set rather than as it is stored: the minus sign
-                // in front of it is the screen saying which way it counts, not a negative weight.
-                loggingType.recordsAssistance && load != null && load.value < 0.0 -> stringResource(
-                    R.string.set_assisted_summary,
-                    Kilograms(-load.value).asTextIn(displayUnit),
+                is PrescribedLoad.Belt -> stringResource(
+                    R.string.set_added_weight_summary,
+                    asked.added.asTextIn(displayUnit),
                     unit,
                     reps,
                 )
 
-                loggingType.recordsAddedWeight && load != null && load.value > 0.0 -> stringResource(
-                    R.string.set_added_weight_summary,
-                    load.asTextIn(displayUnit),
+                // Written as the machine is set. The minus sign in front of it is the screen
+                // saying which way it counts, not a negative weight.
+                is PrescribedLoad.Help -> stringResource(
+                    R.string.set_assisted_summary,
+                    asked.assistance.asTextIn(displayUnit),
                     unit,
                     reps,
                 )
 
                 // A pull-up with no belt asks for reps and nothing else, which is the ordinary
                 // case on every exercise whose load is the lifter's own body.
-                else -> stringResource(R.string.set_reps_summary, reps)
+                PrescribedLoad.None -> stringResource(R.string.set_reps_summary, reps)
             },
             style = MaterialTheme.typography.headlineSmall,
         )

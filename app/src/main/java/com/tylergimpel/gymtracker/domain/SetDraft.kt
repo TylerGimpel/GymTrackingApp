@@ -214,36 +214,27 @@ data class SetDraft(
      * lifted, and one that reached storage would be read later as training.
      */
     fun showing(recommendation: Recommendation): SetDraft {
-        val prescription = recommendation.prescription
+        // A hold and a run are recorded rather than prescribed, so there is nothing to fill in.
+        if (!loggingType.recordsReps) return this
+
         val type = recommendation.setType
-        val reps = prescription.reps?.toString() ?: repsText
-        val load = prescription.load ?: return copy(repsText = reps, type = type)
-        return when {
-            loggingType.recordsWeight ->
-                copy(weightText = load.asTextIn(displayUnit), repsText = reps, type = type)
+        val reps = recommendation.prescription.reps?.toString() ?: repsText
+        return when (val asked = loggingType.reading(recommendation.prescription.load)) {
+            is PrescribedLoad.Weight ->
+                copy(weightText = asked.weight.asTextIn(displayUnit), repsText = reps, type = type)
 
-            // A belt is optional, and a prescription of nothing added is the ordinary case on a
-            // pull-up: the field stays empty rather than reading zero, which this draft would
-            // refuse anyway — a belt of nothing is an unweighted set.
-            loggingType.recordsAddedWeight -> copy(
-                addedWeightText = load.takeIf { it.value > 0.0 }?.asTextIn(displayUnit).orEmpty(),
+            is PrescribedLoad.Belt ->
+                copy(addedWeightText = asked.added.asTextIn(displayUnit), repsText = reps, type = type)
+
+            is PrescribedLoad.Help -> copy(
+                addedWeightText = asked.assistance.asTextIn(displayUnit),
                 repsText = reps,
                 type = type,
             )
 
-            // Typed as the plain magnitude the machine is set to. The load is negative because help
-            // is weight taken off the lifter, and the sign is storage's business rather than
-            // something anybody reads off a pin.
-            loggingType.recordsAssistance -> copy(
-                addedWeightText = load.takeIf { it.value < 0.0 }
-                    ?.let { Kilograms(-it.value).asTextIn(displayUnit) }
-                    .orEmpty(),
-                repsText = reps,
-                type = type,
-            )
-
-            // A hold and a run are recorded rather than prescribed, so there is nothing to fill in.
-            else -> this
+            // Nothing to hang off a belt, which is the ordinary case on a pull-up. The field has
+            // to say so rather than keeping a number from the exercise before it.
+            PrescribedLoad.None -> copy(addedWeightText = "", repsText = reps, type = type)
         }
     }
 

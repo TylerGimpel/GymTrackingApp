@@ -82,6 +82,10 @@ class RecommendationRepository(
      *
      * Forgetting matters: an exercise whose only logged set has been deleted has no estimate, and a
      * row left behind would go on prescribing from training that is no longer there.
+     *
+     * It takes the **Rep range** with it, which is safe only while every range in the table is the
+     * default this same code wrote. The ticket that starts storing a chosen one has to keep the row
+     * or make the estimate nullable, and is told so on #26.
      */
     private suspend fun remember(exerciseId: String, progress: ExerciseProgress?) {
         if (progress == null) {
@@ -95,9 +99,9 @@ class RecommendationRepository(
         /**
          * What a recommendation is rounded to, until the equipment gets a say.
          *
-         * Named here rather than passed in, so that the three tiers the spec settles — the plate
-         * inventory, the dumbbell rack's own step and the stack positions a machine has been seen
-         * at — arrive at one call site rather than being threaded through from the screen.
+         * One name in one place, so that the three tiers the spec settles — the plate inventory,
+         * the dumbbell rack's own step and the stack positions a machine has been seen at — replace
+         * a constant here rather than arriving from the screen through every caller.
          */
         val ROUNDING = Increment.DEFAULT
     }

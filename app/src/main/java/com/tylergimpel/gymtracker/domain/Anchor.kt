@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
+import kotlin.math.min
 import kotlin.math.sign
 
 /**
@@ -22,9 +23,17 @@ value class Anchor(val estimated1rm: Kilograms) {
      * The bottom rather than the middle or the top, because the bottom is where a lifter lands the
      * session after the weight goes up, and prescribing for anywhere else would ask them to start
      * a new weight already part-way through the range.
+     *
+     * **Epley is trusted exactly as far here as it is on the way in.** A rep count beyond
+     * [MAX_REPS_ESTIMATED_FROM] is out where the formula stops meaning anything, and reading an
+     * estimate back down through one is worse than reading a set up through one: an endurance
+     * range bottoming out at twenty would divide an assisted machine's help by a third and
+     * prescribe three times as much of it. So the same cutoff caps both directions.
      */
-    fun workingLoadFor(range: RepRange): Kilograms =
-        Kilograms(estimated1rm.value / epleyFactor(estimated1rm.value, range.bottom))
+    fun workingLoadFor(range: RepRange): Kilograms = Kilograms(
+        estimated1rm.value /
+            epleyFactor(estimated1rm.value, min(range.bottom, MAX_REPS_ESTIMATED_FROM)),
+    )
 
     companion object {
         /**
@@ -100,8 +109,8 @@ internal fun epley(load: Kilograms, reps: Int): Kilograms =
 /**
  * Epley's factor for [reps], pointed the way [load] runs.
  *
- * Stays between 0.6 and 1.4 over the reps an estimate is ever taken from, so an assisted load can
- * never be scaled through zero and out the other side.
+ * Every caller caps [reps] at [Anchor.MAX_REPS_ESTIMATED_FROM], so this stays between 0.6 and 1.4
+ * and an assisted load can never be scaled through zero and out the other side.
  */
 private fun epleyFactor(load: Double, reps: Int): Double =
     1.0 + sign(load) * reps / EPLEY_DIVISOR

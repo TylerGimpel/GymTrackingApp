@@ -59,9 +59,12 @@ data class ExerciseProgressEntity(
      * The load the exercise is currently being worked at — the anchor read back down to the bottom
      * of the range and rounded to something loadable.
      *
-     * Stored rather than recomputed on every read because it is what double progression advances:
-     * the weight holds while the reps climb, and the step that finally moves it is a step from this
-     * number rather than a fresh answer from the formula.
+     * **Written and not yet read back.** Today every recommendation recomputes it from the log, so
+     * this column is a record rather than a source; what will read it is the step that advances a
+     * weight after the range has been beaten twice (#50), which has to start from the weight the
+     * lifter has been working at rather than from a fresh answer to the formula. Carried ahead of
+     * its reader on ADR 0007's precedent, which is how the prescription columns arrived too — the
+     * alternative is a schema migration inside the ticket that needs it.
      */
     @ColumnInfo(name = "working_load_kg")
     val workingLoadKg: Double,

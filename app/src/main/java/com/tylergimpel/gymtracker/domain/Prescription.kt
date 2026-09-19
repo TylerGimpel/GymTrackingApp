@@ -62,6 +62,56 @@ data class Prescription(
         other != null && isSameLoadAs(other)
 }
 
+/**
+ * What a prescribed load amounts to on one exercise: which field it belongs in, and the magnitude
+ * a lifter reads there.
+ *
+ * The one place a signed load becomes a number somebody types or reads. The screen and the entry
+ * fields both need it, and a second copy of the sign test is exactly the kind of duplicated
+ * comparison ADR 0004 warns about — the copy that has it backwards looks like progress and reads
+ * like success.
+ */
+sealed interface PrescribedLoad {
+
+    /** A weight on a bar or a stack. */
+    data class Weight(val weight: Kilograms) : PrescribedLoad
+
+    /** A belt hung off a lifter whose own body is the load. */
+    data class Belt(val added: Kilograms) : PrescribedLoad
+
+    /**
+     * How much a machine is being asked to take off the lifter.
+     *
+     * A plain magnitude: the load it came from is negative, and nobody reads a minus sign off a
+     * pin.
+     */
+    data class Help(val assistance: Kilograms) : PrescribedLoad
+
+    /** No load to put anywhere — an unweighted set, or nothing prescribed at all. */
+    data object None : PrescribedLoad
+}
+
+/**
+ * How [load] reads on an exercise that records this **Logging type**.
+ *
+ * Asks the exercise what it records rather than the number what it looks like, because a load is
+ * only a belt or a machine's help in the context of the movement it was prescribed for.
+ */
+fun LoggingType.reading(load: Kilograms?): PrescribedLoad = when {
+    load == null -> PrescribedLoad.None
+    recordsWeight -> PrescribedLoad.Weight(load)
+    // A belt of nothing is an unweighted set, and help of nothing is not an assisted one: both
+    // read as no load rather than as a zero somebody has to interpret.
+    recordsAddedWeight -> load.takeIf { it.value > 0.0 }?.let(PrescribedLoad::Belt)
+        ?: PrescribedLoad.None
+
+    recordsAssistance -> load.takeIf { it.value < 0.0 }
+        ?.let { PrescribedLoad.Help(Kilograms(-it.value)) }
+        ?: PrescribedLoad.None
+
+    else -> PrescribedLoad.None
+}
+
 /** What a set did about the **Prescription** it was given. */
 enum class SetOutcome {
     /** The weight asked for, and at least the reps asked for. */

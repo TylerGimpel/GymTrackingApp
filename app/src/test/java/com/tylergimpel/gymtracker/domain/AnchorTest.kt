@@ -114,6 +114,29 @@ class AnchorTest {
     }
 
     @Test
+    fun `a range below the formula's reach is read back at the reach`() {
+        val anchor = Anchor(Kilograms(100.0))
+
+        // An endurance range bottoming out at twenty is past where Epley means anything, and the
+        // formula is trusted exactly as far on the way back down as it is on the way in — so this
+        // reads back through twelve reps rather than twenty.
+        assertEquals(
+            anchor.workingLoadFor(RepRange(12, 15)).value,
+            anchor.workingLoadFor(RepRange(20, 25)).value,
+            TOLERANCE,
+        )
+    }
+
+    @Test
+    fun `the same cap stops an assisted range asking for three times the help`() {
+        val anchor = Anchor(Kilograms(-22.0))
+
+        // Uncapped, a bottom of twenty would divide the help by a third and prescribe 66 kg of it
+        // — the inverted form of the same mistake, and the one that is invisible on screen.
+        assertEquals(-36.67, anchor.workingLoadFor(RepRange(20, 25)).value, 0.01)
+    }
+
+    @Test
     fun `reading an assisted estimate back down the range asks for more help, not less`() {
         // The one place a bare division would quietly coach somebody to get weaker: six reps need
         // more help than a single rep does, so the load has to move away from zero rather than
