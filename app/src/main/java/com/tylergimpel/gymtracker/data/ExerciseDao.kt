@@ -76,6 +76,15 @@ interface ExerciseDao {
     )
     suspend fun setDisliked(exerciseId: String, disliked: Boolean)
 
+    /** Records the step this exercise moves by, or clears it back to what the equipment says. */
+    @Query(
+        """
+        INSERT INTO exercise_preference (exercise_id, increment_kg) VALUES (:exerciseId, :incrementKg)
+        ON CONFLICT(exercise_id) DO UPDATE SET increment_kg = excluded.increment_kg
+        """,
+    )
+    suspend fun setIncrement(exerciseId: String, incrementKg: Double?)
+
     /** Records how long the lifter rests on an exercise, or clears it back to the derived answer. */
     @Query(
         """
@@ -108,6 +117,7 @@ interface ExerciseDao {
         WHERE exercise_id = :exerciseId
           AND display_unit IS NULL AND name IS NULL AND note IS NULL
           AND progression_model IS NULL AND rest_seconds IS NULL AND disliked = 0
+          AND increment_kg IS NULL
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)

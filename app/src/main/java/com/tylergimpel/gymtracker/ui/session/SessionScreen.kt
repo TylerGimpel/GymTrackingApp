@@ -121,6 +121,7 @@ fun SessionScreen(
     onPickExercise: () -> Unit,
     onOpenRoutine: () -> Unit,
     onOpenBodyweight: () -> Unit,
+    onOpenPlates: () -> Unit,
     viewModel: SessionViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -204,6 +205,7 @@ fun SessionScreen(
         onCancelFinishing = viewModel::cancelFinishing,
         onOpenRoutine = onOpenRoutine,
         onOpenBodyweight = onOpenBodyweight,
+        onOpenPlates = onOpenPlates,
     )
 }
 
@@ -262,6 +264,7 @@ fun SessionScreen(
     onCancelFinishing: () -> Unit = {},
     onOpenRoutine: () -> Unit = {},
     onOpenBodyweight: () -> Unit = {},
+    onOpenPlates: () -> Unit = {},
 ) {
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -348,6 +351,11 @@ fun SessionScreen(
                     // training when there is.
                     TextButton(onClick = onOpenBodyweight) {
                         Text(stringResource(R.string.session_open_bodyweight))
+                    }
+                    // Where the plates live. Global equipment rather than anything about today,
+                    // so it sits beside the routine and the weigh-ins rather than in a session.
+                    TextButton(onClick = onOpenPlates) {
+                        Text(stringResource(R.string.session_open_plates))
                     }
                     if (state.session != null) {
                         TextButton(onClick = onFinish) { Text(stringResource(R.string.session_finish)) }
@@ -584,6 +592,16 @@ private fun ExerciseDetailsDialog(
                     value = details.note,
                     onValueChange = { onChange(details.copy(note = it)) },
                     label = { Text(stringResource(R.string.exercise_note)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // The lifter's word over the engine's: a rack that goes up in fours is a fact
+                // about their gym, and blank hands it back to the plates or the logged stack.
+                OutlinedTextField(
+                    value = details.increment,
+                    onValueChange = { onChange(details.copy(increment = it)) },
+                    label = { Text(stringResource(R.string.exercise_increment)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 ProgressionModelChooser(details.progressionModel) {

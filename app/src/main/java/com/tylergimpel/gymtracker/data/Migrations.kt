@@ -535,6 +535,7 @@ internal val MIGRATION_20_21 = object : Migration(20, 21) {
                 "(`weight_kg` REAL NOT NULL, `pairs` INTEGER NOT NULL, PRIMARY KEY(`weight_kg`))",
         )
         db.execSQL("ALTER TABLE `profile` ADD COLUMN `bar_kg` REAL")
+        db.execSQL("ALTER TABLE `exercise_preference` ADD COLUMN `increment_kg` REAL")
     }
 }
 

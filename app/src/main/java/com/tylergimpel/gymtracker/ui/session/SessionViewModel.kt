@@ -120,6 +120,14 @@ data class ExerciseDetails(
     val progressionModel: ProgressionModel,
     /** Whether they never want it suggested again. */
     val disliked: Boolean = false,
+    /**
+     * The step this exercise moves by, as typed, in the unit the lifter reads.
+     *
+     * Text rather than a number because it is a field: empty means "the equipment decides",
+     * which is the ordinary answer and the one that puts the plate inventory or the logged stack
+     * positions back in charge.
+     */
+    val increment: String = "",
 )
 
 /**
@@ -823,6 +831,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     note = exercise.note.orEmpty(),
                     progressionModel = exercise.progressionModel,
                     disliked = exercise.isDisliked,
+                    increment = exercise.chosenIncrement
+                        ?.asTextIn(state.value.lifterUnit)
+                        .orEmpty(),
                 ),
             )
         }
@@ -856,6 +867,13 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 open.progressionModel.takeIf { it != exercise.bankProgressionModel },
             )
             exercises.setDisliked(open.exerciseId, open.disliked)
+            // Blank puts the equipment back in charge, which is what clearing a field means.
+            exercises.setIncrement(
+                open.exerciseId,
+                open.increment.trim().toDoubleOrNull()
+                    ?.takeIf { it > 0 }
+                    ?.let { state.value.lifterUnit.toKilograms(it) },
+            )
             screen.update {
                 it.copy(
                     editingExercise = null,

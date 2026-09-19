@@ -93,6 +93,14 @@ data class Exercise(
      * a statement about history — the sets already logged against it stay exactly where they are.
      */
     val isDisliked: Boolean = false,
+    /**
+     * The step this exercise moves by, where the lifter has told the app.
+     *
+     * Their word over the equipment's, because they are standing in front of it: a rack that
+     * goes up in fours is a fact about that gym and nothing can infer it. Null means nobody has
+     * said, which is the ordinary state and the one where the equipment answers.
+     */
+    val chosenIncrement: Kilograms? = null,
     /** What the lifter calls this, where they have renamed it. */
     val userName: String? = null,
     /** A standing note — "seat notch 3, use the long bar" — shown wherever the exercise is used. */
@@ -176,6 +184,7 @@ data class Exercise(
         chosenProgressionModel = chosen.chosenProgressionModel,
         chosenRest = chosen.chosenRest,
         isDisliked = chosen.isDisliked,
+        chosenIncrement = chosen.chosenIncrement,
     )
 }
 

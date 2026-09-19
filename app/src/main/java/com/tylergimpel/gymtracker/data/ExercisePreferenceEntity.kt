@@ -84,4 +84,15 @@ data class ExercisePreferenceEntity(
      */
     @ColumnInfo(name = "disliked", defaultValue = "0")
     val disliked: Boolean = false,
+
+    /**
+     * The smallest step this exercise can actually move by, where the lifter has said.
+     *
+     * A dumbbell rack going up in fours, a machine whose pin moves in sevens, a bar somebody
+     * loads with fractional plates the inventory does not list. Null is the ordinary state and
+     * means the equipment decides — the plate inventory for a barbell, the logged positions for
+     * a machine, and the lifter's own unit's step for everything else.
+     */
+    @ColumnInfo(name = "increment_kg")
+    val incrementKg: Double? = null,
 )

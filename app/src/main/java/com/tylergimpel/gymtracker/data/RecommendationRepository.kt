@@ -225,8 +225,12 @@ class RecommendationRepository(
      * - **Everything else** moves by a step: dumbbells really do come in even ones, and for
      *   whatever nobody has described a step is close enough to be corrected rather than resented.
      */
-    private suspend fun incrementFor(exercise: Exercise, history: TrainingHistory): Increment =
-        when (exercise.equipment) {
+    private suspend fun incrementFor(exercise: Exercise, history: TrainingHistory): Increment {
+        // What the lifter said, over anything the app can work out. They are standing in front of
+        // the rack: a gym that goes up in fours is a fact, not a tier to be inferred.
+        exercise.chosenIncrement?.let { return Increment(it) }
+
+        return when (exercise.equipment) {
             BARBELL -> plates.barbell()
 
             // Two, not one: a single logged position says where the pin was once and nothing
@@ -239,6 +243,7 @@ class RecommendationRepository(
 
             else -> stepFor(profile.displayUnit())
         }
+    }
 
     /**
      * How to load the bar for [load], or null where this exercise is not one.

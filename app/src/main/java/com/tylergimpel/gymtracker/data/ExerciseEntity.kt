@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import java.time.Duration
+import com.tylergimpel.gymtracker.domain.Kilograms
 
 /**
  * A row of the exercise bank as it ships in the prepopulated asset database.
@@ -128,6 +129,7 @@ fun ExerciseEntity.toDomain(
     displayUnit = WeightUnit.fromStored(preference?.displayUnit) ?: lifterUnit,
     chosenRest = preference?.restSeconds?.let { Duration.ofSeconds(it.toLong()) },
     isDisliked = preference?.disliked == true,
+    chosenIncrement = preference?.incrementKg?.let(::Kilograms),
     userName = preference?.name,
     note = preference?.note,
     source = ExerciseSource.fromStored(source),

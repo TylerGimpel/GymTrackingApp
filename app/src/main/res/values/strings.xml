@@ -59,6 +59,19 @@
     <string name="swap_nothing">Nothing close by in your gym. Search the whole list, or add what you are using.</string>
     <string name="swap_search">Search or add</string>
     <string name="swap_only_disliked">Everything left for this muscle is one you said you did not want. Which is least bad today?</string>
+    <string name="plates_title">Plates</string>
+    <string name="plates_done">Done</string>
+    <string name="plates_bar">Bar, empty</string>
+    <string name="plates_explainer">What a barbell weight is rounded to, and what the plate line under a set reads. Counted in pairs, because a bar loaded at one end is not a lift.</string>
+    <string name="plates_add">Add a pair</string>
+    <string name="plates_add_weight">Weight</string>
+    <string name="plates_pair_count">%1$d pair</string>
+    <string name="plates_pair_count_many">%1$d pairs</string>
+    <string name="plates_fewer">Fewer</string>
+    <string name="plates_more">More</string>
+    <string name="plates_empty">No plates listed, so an ordinary rack is being assumed. Add yours and the app will stop guessing.</string>
+    <string name="session_open_plates">Plates</string>
+    <string name="exercise_increment">Smallest step (blank = whatever the equipment does)</string>
     <string name="exercise_disliked">Never suggest this</string>
     <string name="drawer_sets_done">%1$d done</string>
     <string name="drawer_day_next">%1$s · next</string>

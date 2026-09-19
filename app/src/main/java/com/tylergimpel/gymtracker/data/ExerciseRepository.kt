@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.util.UUID
+import com.tylergimpel.gymtracker.domain.Kilograms
 
 /** Reads the exercise bank, handing the rest of the app domain types rather than Room entities. */
 class ExerciseRepository(
@@ -103,6 +104,18 @@ class ExerciseRepository(
      */
     suspend fun setDisliked(exerciseId: String, disliked: Boolean) = database.withTransaction {
         exercises.setDisliked(exerciseId, disliked)
+        exercises.forgetEmptyPreference(exerciseId)
+    }
+
+    /**
+     * Records the step [exerciseId] moves by, or clears it back to what the equipment says.
+     *
+     * The lifter's word over the engine's: they are standing in front of the rack and the app is
+     * not. Cleared to null rather than to a number, so that "I was wrong about this" puts the
+     * equipment back in charge instead of freezing whatever was guessed.
+     */
+    suspend fun setIncrement(exerciseId: String, increment: Kilograms?) = database.withTransaction {
+        exercises.setIncrement(exerciseId, increment?.value)
         exercises.forgetEmptyPreference(exerciseId)
     }
 
