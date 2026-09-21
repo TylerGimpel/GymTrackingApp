@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 21,
-    "identityHash": "6de844d776e9cf72c9095ed12a7b978f",
+    "identityHash": "fc4d9b8203f5e971681bc3fd7ac53004",
     "entities": [
       {
         "tableName": "exercise",
@@ -101,7 +101,7 @@
       },
       {
         "tableName": "exercise_preference",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`exercise_id` TEXT NOT NULL, `display_unit` TEXT, `name` TEXT, `note` TEXT, `progression_model` TEXT, `rest_seconds` INTEGER, `disliked` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`exercise_id`), FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`exercise_id` TEXT NOT NULL, `display_unit` TEXT, `name` TEXT, `note` TEXT, `progression_model` TEXT, `rest_seconds` INTEGER, `disliked` INTEGER NOT NULL DEFAULT 0, `increment_kg` REAL, PRIMARY KEY(`exercise_id`), FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "exerciseId",
@@ -140,6 +140,11 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "incrementKg",
+            "columnName": "increment_kg",
+            "affinity": "REAL"
           }
         ],
         "primaryKey": {
@@ -1234,7 +1239,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6de844d776e9cf72c9095ed12a7b978f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fc4d9b8203f5e971681bc3fd7ac53004')"
     ]
   }
 }
