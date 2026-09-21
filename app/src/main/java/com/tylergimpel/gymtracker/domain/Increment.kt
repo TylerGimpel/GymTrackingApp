@@ -25,10 +25,10 @@ data class PlatePair(val weight: Kilograms, val pairs: Int)
  * Three tiers, because three kinds of equipment round differently:
  *
  * - [Plates] — a barbell, which is the bar plus whatever pairs are in the room.
- * - [Step] — a dumbbell rack or anything else that moves by a fixed amount, and the default.
+ * - [Fixed] — a dumbbell rack or anything else that moves by a fixed amount, and the default.
  * - [Stack] — a machine, which is only ever the notches it has been *seen* at.
  *
- * [Step] and [Stack] round **down in signed terms**, which is what makes one rule cover both
+ * [Fixed] and [Stack] round **down in signed terms**, which is what makes one rule cover both
  * directions: a dumbbell rounds to the lighter one, and an assisted machine — whose load is
  * negative, because help is weight taken off the lifter — rounds to *more* help. Both are the
  * conservative answer, and neither needs a reader to remember which way an assisted exercise
@@ -54,7 +54,7 @@ sealed interface Increment {
      * in even steps, and approximately right about everything the lifter has not told the app
      * about — close enough to be corrected rather than resented.
      */
-    data class Step(val size: Kilograms) : Increment {
+    data class Fixed(val size: Kilograms) : Increment {
 
         override fun roundDown(load: Kilograms): Kilograms =
             Kilograms(floor(load.value / size.value + FLOAT_DUST) * size.value)
@@ -197,7 +197,7 @@ sealed interface Increment {
          * tiers are a fact about equipment, and every caller that has no equipment in hand is
          * asking the same question it was before.
          */
-        operator fun invoke(size: Kilograms): Increment = Step(size)
+        operator fun invoke(size: Kilograms): Increment = Fixed(size)
 
         /**
          * What a weight is rounded to until the equipment says otherwise.
@@ -206,14 +206,19 @@ sealed interface Increment {
          * unbuildable on a barbell and is close enough on everything else to be corrected rather
          * than resented.
          */
-        val DEFAULT: Increment = Step(Kilograms(2.5))
+        val DEFAULT: Increment = Fixed(Kilograms(2.5))
 
         /**
-         * A hair of tolerance, counted in increments rather than kilograms.
+         * A hair of tolerance, added wherever a comparison would otherwise turn on binary dust.
          *
          * A load that arrives a billionth under an exact multiple — which is what dividing by 1.2
          * and reading back in pounds does — must not round down a whole plate pair on the strength
          * of binary floating point. Far below any weight anybody can load, and far above the dust.
+         *
+         * Counted in **increments** where the load has already been divided by one ([Fixed]), and
+         * in **kilograms** where notches are compared against the load as it stands ([Stack]). At
+         * a billionth both are far beneath anything loadable, so what differs is where the
+         * arithmetic happens rather than how much slack it buys.
          */
         private const val FLOAT_DUST = 1e-9
 

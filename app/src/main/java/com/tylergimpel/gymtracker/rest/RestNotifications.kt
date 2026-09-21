@@ -87,7 +87,7 @@ class RestNotifications(private val context: Context) : RestCountdown {
     }
 
     private fun base() = NotificationCompat.Builder(context, CHANNEL)
-        .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        .setSmallIcon(android.R.drawable.ic_popup_reminder)
         // A reminder rather than an alarm. The category is what the system reads when it is
         // deciding who may talk through Do Not Disturb, and a rest timer has not earned that.
         .setCategory(NotificationCompat.CATEGORY_REMINDER)

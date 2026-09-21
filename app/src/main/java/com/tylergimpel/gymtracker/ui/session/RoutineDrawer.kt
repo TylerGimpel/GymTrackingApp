@@ -48,7 +48,9 @@ fun RoutineDrawer(
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             progress?.routine?.rotation.orEmpty().forEach { day ->
-                item(key = "day-${day.id}") { DayHeading(day, isNext = day.id == progress?.cursor?.id) }
+                item(key = "day-${day.id}") {
+                    DayHeading(day, isNext = day.id == progress?.cursor?.id)
+                }
                 items(day.exercises, key = { "${day.id}-${it.id}" }) { exercise ->
                     NavigationDrawerItem(
                         label = { Text(exercise.name) },

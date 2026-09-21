@@ -105,7 +105,6 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.ui.DayPickerDialog
-import com.tylergimpel.gymtracker.ui.label
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
 import com.tylergimpel.gymtracker.ui.label
 import java.time.Instant
@@ -113,11 +112,11 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * The plain logging screen: pick an exercise, enter a weight and reps, see what was logged.
+ * The live logging screen: the wheel of sets, what the app asks for, and the rest that follows.
  *
- * Deliberately not the settled live logging design in `docs/design/logging-screen.md` — that wheel
- * is its own ticket (#53). This is the functional path underneath it, and it now shows what the app
- * is asking for: the fields arrive holding the recommendation, so logging it is one tap.
+ * The settled design in `docs/design/logging-screen.md`, built in #53 — [SetWheel] is the screen
+ * proper and [WheelFooting] the fixed controls under it. The fields arrive holding the
+ * recommendation, so logging a set as prescribed is one tap and the wheel moves on by itself.
  */
 @Composable
 fun SessionScreen(

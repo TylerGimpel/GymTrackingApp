@@ -1,7 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
 import java.time.LocalDate
-import kotlin.math.abs
 
 /** The last value [selector] answers for, or null where it answers for none of them. */
 private fun <T, R> List<T>.lastNotNullOfOrNull(selector: (T) -> R?): R? =
@@ -285,8 +284,7 @@ class TrainingHistory(val sessions: List<TrainedSession>) {
             Ladder.ADVANCE -> rounding.oneStepAbove(held)
             // Signed, so a tenth off a barbell is lighter and a tenth off an assisted machine is
             // more help, and rounded down, which is the conservative direction in both.
-            Ladder.BACK_OFF ->
-                rounding.roundDown(Kilograms(held.value - abs(held.value) * Ladder.BACK_OFF_FRACTION))
+            Ladder.BACK_OFF -> rounding.roundDown(held.shiftedBy(-Ladder.BACK_OFF_FRACTION))
 
             Ladder.HOLD, Ladder.CUT_VOLUME, Ladder.STOP -> held
         }

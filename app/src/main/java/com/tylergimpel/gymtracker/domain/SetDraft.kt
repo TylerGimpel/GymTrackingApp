@@ -88,7 +88,9 @@ data class SetDraft(
      * assisted one. Either way the honest record is the set without the number.
      */
     val addedWeight: Kilograms?
-        get() = addedWeightText.asEnteredAmount()?.takeIf { it > 0.0 }?.let(displayUnit::toKilograms)
+        get() = addedWeightText.asEnteredAmount()
+            ?.takeIf { it > 0.0 }
+            ?.let(displayUnit::toKilograms)
 
     /** How hard it felt, or null until it reads as a rating between 1 and 10. */
     val rpe: Double? get() = rpeText.asEnteredAmount()?.takeIf { it in RPE_RANGE }
@@ -136,7 +138,9 @@ data class SetDraft(
     val performance: Performance?
         get() = when {
             loggingType.recordsDistance && loggingType.recordsDuration ->
-                distance?.let { distance -> duration?.let { Performance.DistanceAndTime(distance, it) } }
+                distance?.let { distance ->
+                    duration?.let { Performance.DistanceAndTime(distance, it) }
+                }
 
             loggingType.recordsDuration -> duration?.let(Performance::Timed)
 
@@ -226,8 +230,11 @@ data class SetDraft(
             is PrescribedLoad.Weight ->
                 copy(weightText = asked.weight.asTextIn(displayUnit), repsText = reps, type = type)
 
-            is PrescribedLoad.Belt ->
-                copy(addedWeightText = asked.added.asTextIn(displayUnit), repsText = reps, type = type)
+            is PrescribedLoad.Belt -> copy(
+                addedWeightText = asked.added.asTextIn(displayUnit),
+                repsText = reps,
+                type = type,
+            )
 
             is PrescribedLoad.Help -> copy(
                 addedWeightText = asked.assistance.asTextIn(displayUnit),

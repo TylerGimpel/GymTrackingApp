@@ -49,9 +49,10 @@ data class SessionPace(
  * gym session rather than measurements of this lifter, and the honest presentation of the total
  * is with a `~` in front of it.
  */
-fun timeLeftIn(remaining: List<Exercise>): Duration = remaining.fold(Duration.ZERO) { total, exercise ->
-    total + if (exercise.isCardio) TYPICAL_CARDIO else TYPICAL_LIFT
-}
+fun timeLeftIn(remaining: List<Exercise>): Duration =
+    remaining.fold(Duration.ZERO) { total, exercise ->
+        total + if (exercise.isCardio) TYPICAL_CARDIO else TYPICAL_LIFT
+    }
 
 /** How long an ordinary exercise takes: a few sets, each with its rest. */
 private val TYPICAL_LIFT: Duration = Duration.ofMinutes(8)

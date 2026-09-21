@@ -1,7 +1,5 @@
 package com.tylergimpel.gymtracker.domain
 
-import kotlin.math.abs
-
 /**
  * The short climb a first session makes to find a working weight, rather than predicting one.
  *
@@ -112,7 +110,7 @@ data class CalibrationRamp(
             rounding: Increment,
         ) = CalibrationRamp(
             rungs = steps
-                .map { rounding.roundDown(Kilograms(seed.value + abs(seed.value) * it)) }
+                .map { rounding.roundDown(seed.shiftedBy(it)) }
                 .distinct(),
             setType = SetType.CALIBRATION,
         )

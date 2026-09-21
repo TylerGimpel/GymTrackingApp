@@ -59,7 +59,11 @@ class PlatesViewModel(application: Application) : AndroidViewModel(application) 
                 barDraft = s.bar,
                 adding = s.adding,
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), PlatesUiState())
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            PlatesUiState(),
+        )
 
     fun typeBar(text: String) = screen.update { it.copy(bar = text) }
 

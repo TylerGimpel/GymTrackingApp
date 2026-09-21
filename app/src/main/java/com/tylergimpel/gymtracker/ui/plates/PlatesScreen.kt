@@ -136,7 +136,11 @@ private fun PlateRow(pair: PlatePair, unit: WeightUnit, onChange: (Int) -> Unit)
             )
             Text(
                 text = stringResource(
-                    if (pair.pairs == 1) R.string.plates_pair_count else R.string.plates_pair_count_many,
+                    if (pair.pairs == 1) {
+                        R.string.plates_pair_count
+                    } else {
+                        R.string.plates_pair_count_many
+                    },
                     pair.pairs,
                 ),
                 style = MaterialTheme.typography.bodyMedium,

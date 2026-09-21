@@ -55,6 +55,18 @@ class RestTest {
         assertEquals(Duration.ofSeconds(60), restFor(squat(), SetType.CALIBRATION, RepRange(3, 6)))
     }
 
+    @Test
+    fun `a warm-up never rests longer than the work it leads up to`() {
+        // A twelve-plus range rests 45 seconds between real sets, and the ramp's own minute would
+        // have the lifter waiting longer to lift light than they will to lift heavy — the run-up
+        // costing them gym time rather than saving it.
+        val working = restFor(curl(), SetType.WORKING, RepRange(12, 15))
+        val warmUp = restFor(curl(), SetType.WARMUP, RepRange(12, 15))
+
+        assertTrue(warmUp <= working)
+        assertEquals(Duration.ofSeconds(45), warmUp)
+    }
+
     private companion object {
         fun squat() = exercise(mechanic = "compound")
 

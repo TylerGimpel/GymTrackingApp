@@ -75,7 +75,7 @@ A horizontal swipe anywhere is unambiguous here because the wheel scrolls vertic
 
 - **Dual set counter** in the header: *"Set 4 of 7 · working 2 of 4"*. Overall position answers "how much is left"; working-set position answers "where am I in the real work". Both computed at render time from order and set type.
 - **Elapsed and estimated remaining**, also in the header. The `~` prefix matters: it reads as an estimate rather than a deadline, which is what made it acceptable rather than stressful. The estimate spans same-day cardio, because the question being answered is total time in the gym.
-- **Rest timer** slides up from the bottom on logging, labelled with the set type it follows, with `+30s` and `Skip`.
+- **Rest timer** slides up from the bottom on logging, labelled with the set type it follows, with `+1:00` and `Skip`. The prototype drew `+30s`; a minute is what shipped. Prescribed rests run from 45 seconds to three minutes, and a lifter reaching for more time between heavy sets is not reaching for half a minute of it. Anything finer is what editing the length is for, which is the control for arguing with the number rather than nudging it.
 - **Superset auto-jump**: logging a set in a superset moves to the paired exercise rather than starting a rest.
 - **Swap sheet** from the header, with candidates ranked so that exercises the user already has history for come first — those need no calibration.
 - **Cardio** gets its own layout: duration, distance, machine setting, optional heart rate and RPE.

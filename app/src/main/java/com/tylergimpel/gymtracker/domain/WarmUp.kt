@@ -44,7 +44,7 @@ fun warmUpsFor(
  * Counted in **empty bars**, because that is the unit a ramp is actually measured in: the first
  * rung of every barbell ramp is the bar itself, and a lift that is barely heavier than the bar
  * has nothing to ramp through. Capped at four however heavy the work is — a first set is a
- * warm-up, not a workout, and five rungs before the real thing is how a session runs long.
+ * warm-up, not the work itself, and five rungs before the real thing is how a session runs long.
  *
  * Isolation and machine work is worth two fewer, which is what makes light isolation work get
  * none at all: a curl is not a movement anybody needs three rehearsals of, and the shoulder is
@@ -59,7 +59,10 @@ private fun rungsFor(workingLoad: Kilograms, exercise: Exercise): Int {
         bars <= 4.0 -> 3
         else -> MOST_RUNGS
     }
-    return if (exercise.isCompound) full else full - RUNGS_OFF_FOR_SMALL_MOVEMENTS
+    // Isolation by mechanic, or anything on a stack. A machine holds the lifter on its path, so a
+    // compound on one asks for less rehearsal than the same pattern does under a bar.
+    val smallMovement = !exercise.isCompound || exercise.isStacked
+    return if (smallMovement) full - RUNGS_OFF_FOR_SMALL_MOVEMENTS else full
 }
 
 /** One rung: how much of the working weight, and how many reps of it. */

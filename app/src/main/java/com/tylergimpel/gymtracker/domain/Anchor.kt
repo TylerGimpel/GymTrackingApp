@@ -1,6 +1,5 @@
 package com.tylergimpel.gymtracker.domain
 
-import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sign
 
@@ -50,7 +49,7 @@ value class Anchor(val estimated1rm: Kilograms) {
      * machine and more weight on a bar.
      */
     fun isSubstantiallyBeatenBy(best: Kilograms): Boolean =
-        best.value > estimated1rm.value + abs(estimated1rm.value) * SUBSTANTIAL_BEAT_FRACTION
+        best.value > estimated1rm.shiftedBy(SUBSTANTIAL_BEAT_FRACTION).value
 
     companion object {
         /**

@@ -26,7 +26,7 @@ class WarmUpTest {
 
     @Test
     fun `the ramp never runs past four sets however heavy the work is`() {
-        // A first set is a warm-up, not a workout: five rungs before the real thing is how a
+        // A first set is a warm-up, not the work itself: five rungs before the real thing is how a
         // session runs long.
         assertEquals(4, warmUpsFor(Kilograms(200.0), squat).size)
         assertEquals(4, warmUpsFor(Kilograms(400.0), squat).size)
@@ -48,6 +48,18 @@ class WarmUpTest {
         assertEquals(0, warmUpsFor(Kilograms(60.0), curl).size)
         // Heavy isolation work still earns one.
         assertEquals(1, warmUpsFor(Kilograms(80.0), curl).size)
+    }
+
+    @Test
+    fun `a compound on a machine ramps like isolation work, not like the barbell version`() {
+        // A machine holds the lifter on its path, so a leg press asks for less rehearsal than the
+        // same pattern under a bar. Spec #25 skips the ramp for "isolation and machine work", and
+        // reading the mechanic alone gave a 200 kg leg press the full four rungs.
+        assertEquals(2, warmUpsFor(Kilograms(200.0), legPress).size)
+        assertEquals(4, warmUpsFor(Kilograms(200.0), squat).size)
+
+        // And light machine work, like light isolation work, gets none.
+        assertEquals(0, warmUpsFor(Kilograms(40.0), legPress).size)
     }
 
     @Test
@@ -93,14 +105,19 @@ class WarmUpTest {
     private companion object {
         val squat = exercise("compound")
         val curl = exercise("isolation")
+        val legPress = exercise("compound", equipment = "machine")
         val assistedMachine = exercise("compound", LoggingType.ASSISTED)
 
-        fun exercise(mechanic: String, loggingType: LoggingType = LoggingType.WEIGHT_REPS) = Exercise(
+        fun exercise(
+            mechanic: String,
+            loggingType: LoggingType = LoggingType.WEIGHT_REPS,
+            equipment: String = "barbell",
+        ) = Exercise(
             id = "Test",
             bankName = "Test",
             primaryMuscles = listOf("quadriceps"),
             secondaryMuscles = emptyList(),
-            equipment = "barbell",
+            equipment = equipment,
             mechanic = mechanic,
             force = "push",
             category = "strength",

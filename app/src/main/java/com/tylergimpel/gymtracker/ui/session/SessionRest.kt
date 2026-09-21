@@ -144,7 +144,14 @@ class SessionRest(
     fun forgetThisSet() = held.update { it.copy(forThisSet = null) }
 
     private companion object {
-        /** What "+1:00" adds, which is the only amount anybody ever wants. */
+        /**
+         * What "+1:00" adds.
+         *
+         * A minute rather than the prototype's thirty seconds, and the design it came from now
+         * says so (`docs/design/logging-screen.md`). Prescribed rests run from 45 seconds to
+         * three minutes, so a lifter reaching for more time between heavy sets is not reaching
+         * for half a minute of it; anything finer is what editing the length is for.
+         */
         val MORE_REST: Duration = Duration.ofMinutes(1)
     }
 }

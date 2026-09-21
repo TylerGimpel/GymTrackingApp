@@ -18,11 +18,18 @@ import java.time.Duration
  * derivation: the table gives bands, and these are the middles of them. They are the sort of thing
  * a lifter should be able to overrule, which is why they can.
  */
-fun restFor(exercise: Exercise, setType: SetType, repRange: RepRange): Duration = when {
-    // Standing around during a ramp is wasted gym time. Neither a warm-up nor a rung of a
-    // calibration ramp is the work — they are the way up to it.
-    !setType.isAtTheWorkingWeight -> RAMPING
+fun restFor(exercise: Exercise, setType: SetType, repRange: RepRange): Duration {
+    val working = workingRest(exercise, repRange)
 
+    // Standing around during a ramp is wasted gym time. Neither a warm-up nor a rung of a
+    // calibration ramp is the work — they are the way up to it, and never the longer wait for it.
+    // A twelve-plus range rests 45 seconds between real sets, and a minute before one would have
+    // the lifter waiting longer to lift light than they will to lift heavy.
+    return if (setType.isAtTheWorkingWeight) working else minOf(RAMPING, working)
+}
+
+/** The rest between sets at the working weight, which is what a ramp rung is measured against. */
+private fun workingRest(exercise: Exercise, repRange: RepRange): Duration = when {
     // Heavy, low-rep work is limited by how much of the nervous system has come back, and three
     // minutes is where the research stops arguing about it.
     repRange.top <= HEAVY_TOP -> HEAVY
@@ -38,7 +45,12 @@ fun restFor(exercise: Exercise, setType: SetType, repRange: RepRange): Duration 
     else -> SINGLE_JOINT
 }
 
-/** A ramp rung or a warm-up: long enough to reset the grip, short enough not to cool down. */
+/**
+ * A ramp rung or a warm-up: long enough to reset the grip, short enough not to cool down.
+ *
+ * A ceiling rather than an answer — the working rest caps it, because no ramp should ask for a
+ * longer wait than the sets it is a run-up to.
+ */
 private val RAMPING: Duration = Duration.ofSeconds(60)
 
 /** Advanced strength work, 1 - 6 reps: three minutes or more. */

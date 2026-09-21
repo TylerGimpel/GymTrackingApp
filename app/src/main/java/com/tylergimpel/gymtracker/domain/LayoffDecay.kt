@@ -2,7 +2,6 @@ package com.tylergimpel.gymtracker.domain
 
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import kotlin.math.abs
 
 /**
  * How an estimate ages while an exercise goes untrained.
@@ -58,8 +57,7 @@ data class LayoffDecay(
         weeks <= graceWeeks -> anchor
         else -> {
             val gone = perWeek * (weeks - graceWeeks)
-            val value = anchor.estimated1rm.value
-            Anchor(Kilograms(value - abs(value) * gone))
+            Anchor(anchor.estimated1rm.shiftedBy(-gone))
         }
     }
 
