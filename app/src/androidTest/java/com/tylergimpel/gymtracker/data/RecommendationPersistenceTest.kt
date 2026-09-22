@@ -481,11 +481,24 @@ class RecommendationPersistenceTest {
         val performed = sessions.observeLastFinished().first()!!.exercises.single()
         sessions.deleteSet(performed.id, performed.sets.single().setIndex)
 
-        // Nothing left to have worked anything out from, so the row goes rather than prescribing
-        // from training that is no longer there — and the exercise is back to being one the app
-        // knows nothing about, which is a ramp rather than a recommendation.
+        // Nothing left to have worked anything out from, so the exercise is back to being one the
+        // app knows nothing about: a ramp rather than a recommendation.
         assertTrue(recommendations.nextSet(exercise(BENCH)) is Recommendation.Calibrating)
-        assertEquals(0, countOf("exercise_progress"))
+
+        // **The row stays, and only the estimate goes.** This asserted a deleted row until #66,
+        // which was safe while the band in it was a constant the engine had written. Now that a
+        // band is a decision — seeded from the routine's goal, or the lifter's own — deleting the
+        // row to forget the arithmetic would take the decision with it (ADR 0010).
+        assertEquals(1, countOf("exercise_progress"))
+        database.openHelper.readableDatabase.query(
+            "SELECT anchor_kg, working_load_kg, rep_range_bottom FROM exercise_progress " +
+                "WHERE exercise_id = '$BENCH'",
+        ).use {
+            it.moveToFirst()
+            assertTrue("an estimate outlived the training it came from", it.isNull(0))
+            assertTrue("a working load outlived the training it came from", it.isNull(1))
+            assertEquals(RepRange.DEFAULT.bottom, it.getInt(2))
+        }
     }
 
     /**
