@@ -20,6 +20,45 @@ enum class RoutineGoal { HYPERTROPHY, STRENGTH, ENDURANCE }
 enum class RepPreference { LOW, MODERATE, HIGH }
 
 /**
+ * What a **Routine day** is for.
+ *
+ * Two kinds, and the distinction is arithmetic rather than behavioural. **Nothing about the
+ * rotation reads this**: the **Cursor** takes no interest in what a day contains, and it must
+ * stay that way, because the moment skipping a cardio day means something different from skipping
+ * a lifting one the lifter has two sets of rules to keep straight.
+ *
+ * What does read it is volume. A cardio position carries no resistance work, so it is excluded
+ * from divisibility — `Upper / Lower / Cardio` balances despite three not dividing by two — and
+ * from the cadence that volume targets are translated through (ADR 0005).
+ */
+enum class RoutineDayKind {
+    LIFTING,
+    CARDIO,
+}
+
+/**
+ * Where a lifter's cardio goes, if they do any.
+ *
+ * A property of the routine because it is a statement about how they train rather than about any
+ * one day, and what the generator reads when it decides whether to put cardio days in a rotation.
+ */
+enum class CardioPlacement {
+    /** None in the routine. Cardio trained anyway is a session like any other. */
+    NONE,
+
+    /** Its own position in the rotation, taking its turn. */
+    OWN_DAY,
+
+    /**
+     * After a lifting session, taking no position.
+     *
+     * The lifting day still happened, so neither the rotation nor the cadence changes. What it
+     * does change is how long the session runs, which the time ceiling has to account for (#76).
+     */
+    AFTER_LIFTING,
+}
+
+/**
  * One exercise a day holds, and how many working sets it asks for.
  *
  * The set count is the engine's answer rather than the lifter's, and it does not care how the
@@ -53,6 +92,13 @@ data class RoutineDay(
     val orderIndex: Int,
     val name: String,
     /**
+     * Whether this is a lifting day or a cardio one.
+     *
+     * Lifting unless something says otherwise, which is what a day added by hand is until the
+     * lifter says what it is for.
+     */
+    val kind: RoutineDayKind = RoutineDayKind.LIFTING,
+    /**
      * What this day holds, in the order it is to be trained.
      *
      * The plan side of the model: what a lifter intends, which a session copies rather than points
@@ -79,10 +125,27 @@ data class Routine(
     /** The equipment available, doubling as the gym checklist. */
     val equipment: Set<String>,
     val repPreference: RepPreference,
+    /** Where this lifter's cardio goes, if they do any. */
+    val cardio: CardioPlacement = CardioPlacement.NONE,
     val days: List<RoutineDay>,
 ) {
     /** The days in rotation order, whatever order they arrived in. */
     val rotation: List<RoutineDay> get() = days.sortedBy(RoutineDay::orderIndex)
+
+    /** How many positions a full pass through this routine has, cardio days included. */
+    val positions: Int get() = days.size
+
+    /**
+     * How many of those positions carry resistance work.
+     *
+     * The denominator half of the one piece of arithmetic in this project that is wrong silently.
+     * Training five times a week on `Upper / Lower / Cardio` is **3.33 lifting sessions a week**,
+     * not five, and feeding the raw cadence into volume translation under-prescribes lifting by
+     * 40% for anyone with a cardio day (ADR 0005). Divisibility counts these too, which is why
+     * `Upper / Lower / Cardio` is a valid two-rotation despite having three positions.
+     */
+    val liftingPositions: Int
+        get() = days.count { it.kind == RoutineDayKind.LIFTING }
 
     /**
      * The first day of [cycle] not yet completed or skipped — what to train next.

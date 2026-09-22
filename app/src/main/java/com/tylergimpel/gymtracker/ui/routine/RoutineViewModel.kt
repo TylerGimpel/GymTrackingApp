@@ -9,6 +9,8 @@ import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.CardioPlacement
+import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -49,15 +51,16 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         cadence: Int,
         equipment: Set<String>,
         repPreference: RepPreference,
+        cardio: CardioPlacement,
     ) {
         viewModelScope.launch {
-            repository.editProperties(name, goal, cadence, equipment, repPreference)
+            repository.editProperties(name, goal, cadence, equipment, repPreference, cardio)
         }
     }
 
-    fun addDay(name: String) {
+    fun addDay(name: String, kind: RoutineDayKind = RoutineDayKind.LIFTING) {
         val routine = state.value.progress?.routine ?: return
-        viewModelScope.launch { repository.addDay(routine.id, name) }
+        viewModelScope.launch { repository.addDay(routine.id, name, kind) }
     }
 
     fun renameDay(dayId: Long, name: String) {

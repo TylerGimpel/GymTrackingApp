@@ -6,6 +6,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.CardioPlacement
+import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.unperformedExerciseCounts
 import com.tylergimpel.gymtracker.domain.SetDraft
@@ -568,6 +570,63 @@ class RoutinePersistenceTest {
             sessions.observeSession(session).first()!!.plan.exercises.map { it.sets },
         )
     }
+
+    @Test
+    fun aCardioDayTakesItsTurnAndSkippingItBehavesLikeAnyOtherSkip() = runBlocking {
+        val id = routines.createRoutine(name = "Upper / Lower / Cardio")
+        routines.addDay(id, "Upper")
+        routines.addDay(id, "Lower")
+        routines.addDay(id, "Cardio", RoutineDayKind.CARDIO)
+        val rotation = routines.observeProgress().first()!!.routine.rotation
+
+        complete(rotation[0])
+        complete(rotation[1])
+
+        // Its turn, like any other position. A rotation that stepped over it would be one the
+        // lifter could never train the cardio in.
+        assertEquals("Cardio", cursorNow()?.name)
+
+        routines.recordSkip(id, rotation[2])
+
+        // And dealt with by a skip exactly as a lifting day is: the cycle is over and the next
+        // one opens at the top. Skipping meaning two things is what this is guarding against.
+        assertEquals("Upper", cursorNow()?.name)
+    }
+
+    @Test
+    fun aCardioPositionIsExcludedFromWhatCountsAsLiftingAndSameDayCardioTakesNoPosition() =
+        runBlocking {
+            val id = routines.createRoutine(name = "Upper / Lower / Cardio")
+            routines.addDay(id, "Upper")
+            routines.addDay(id, "Lower")
+            routines.addDay(id, "Cardio", RoutineDayKind.CARDIO)
+
+            val routine = routines.observeProgress().first()!!.routine
+
+            // Three positions, two of them training — the two numbers that stop a lifter with a
+            // cardio day being under-prescribed by 40% (ADR 0005).
+            assertEquals(3, routine.positions)
+            assertEquals(2, routine.liftingPositions)
+
+            // Cardio after lifting is a choice about how they train, and it moves neither number:
+            // the treadmill goes inside a lifting day and the lifting day still happened.
+            routines.editProperties(
+                name = routine.name,
+                goal = routine.goal,
+                cadence = routine.cadence,
+                equipment = routine.equipment,
+                repPreference = routine.repPreference,
+                cardio = CardioPlacement.AFTER_LIFTING,
+            )
+            val after = routines.observeProgress().first()!!.routine
+            assertEquals(CardioPlacement.AFTER_LIFTING, after.cardio)
+            assertEquals(3, after.positions)
+            assertEquals(2, after.liftingPositions)
+        }
+
+    /** Where the cursor points now, which is the one question the rotation answers. */
+    private suspend fun cursorNow(): RoutineDay? =
+        routines.observeProgress().first()!!.cursor
 
     /** Changes what the routine is for, leaving everything else about it as it was. */
     private suspend fun reGoal(goal: RoutineGoal) {

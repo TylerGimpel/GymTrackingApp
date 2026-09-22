@@ -7,6 +7,8 @@ import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.CardioPlacement
+import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.Session
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -80,6 +82,7 @@ class RoutineRepository(
         cadence: Int = 3,
         equipment: Set<String> = emptySet(),
         repPreference: RepPreference = RepPreference.MODERATE,
+        cardio: CardioPlacement = CardioPlacement.NONE,
     ): Long = routines.insert(
         RoutineEntity(
             name = name,
@@ -87,6 +90,7 @@ class RoutineRepository(
             cadence = cadence,
             equipment = equipment.toList(),
             repPreference = repPreference.name,
+            cardio = cardio.name,
         ),
     )
 
@@ -102,6 +106,7 @@ class RoutineRepository(
         cadence: Int,
         equipment: Set<String>,
         repPreference: RepPreference,
+        cardio: CardioPlacement = CardioPlacement.NONE,
     ) {
         val existing = routines.routine() ?: return
         routines.update(
@@ -111,17 +116,23 @@ class RoutineRepository(
                 cadence = cadence,
                 equipment = equipment.toList(),
                 repPreference = repPreference.name,
+                cardio = cardio.name,
             ),
         )
     }
 
     /** Adds a day to the end of the rotation. A revision, so the current cycle ends. */
-    suspend fun addDay(routineId: Long, name: String): Long = database.withTransaction {
+    suspend fun addDay(
+        routineId: Long,
+        name: String,
+        kind: RoutineDayKind = RoutineDayKind.LIFTING,
+    ): Long = database.withTransaction {
         val id = routines.insert(
             RoutineDayEntity(
                 routineId = routineId,
                 orderIndex = routines.highestDayOrder(routineId) + 1,
                 name = name,
+                kind = kind.name,
             ),
         )
         revise(routineId)

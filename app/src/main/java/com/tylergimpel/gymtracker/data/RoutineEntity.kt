@@ -9,6 +9,8 @@ import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.RoutineDayKind
+import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.setsFor
 import com.tylergimpel.gymtracker.domain.PlannedExercise
 
@@ -40,6 +42,16 @@ data class RoutineEntity(
 
     @ColumnInfo(name = "rep_preference")
     val repPreference: String,
+
+    /**
+     * Where this lifter's cardio goes, if they do any.
+     *
+     * A property of the routine like the goal beside it, so changing it is not a revision of the
+     * rotation — though moving cardio onto or off its own day does change which days exist, and
+     * that part is a revision when it happens.
+     */
+    @ColumnInfo(name = "cardio", defaultValue = "NONE")
+    val cardio: String = CardioPlacement.NONE.name,
 )
 
 /** One ordered position within a routine. Never a calendar day. */
@@ -68,12 +80,22 @@ data class RoutineDayEntity(
 
     @ColumnInfo(name = "name")
     val name: String,
+
+    /**
+     * Whether this position is for lifting or for cardio.
+     *
+     * Stored rather than inferred from what the day holds: an empty cardio day is still a cardio
+     * day, and a lifter who has put a treadmill into a lifting day has not turned it into one.
+     */
+    @ColumnInfo(name = "kind", defaultValue = "LIFTING")
+    val kind: String = RoutineDayKind.LIFTING.name,
 )
 
 fun RoutineDayEntity.toDomain() = RoutineDay(
     id = id,
     orderIndex = orderIndex,
     name = name,
+    kind = RoutineDayKind.valueOf(kind),
 )
 
 fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
@@ -83,6 +105,7 @@ fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
     cadence = cadence,
     equipment = equipment.toSet(),
     repPreference = RepPreference.valueOf(repPreference),
+    cardio = CardioPlacement.valueOf(cardio),
     days = days.map { it.toDomain(RoutineGoal.valueOf(goal)) },
 )
 

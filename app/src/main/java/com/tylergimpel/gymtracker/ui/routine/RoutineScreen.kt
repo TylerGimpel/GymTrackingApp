@@ -36,6 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.RepPreference
+import com.tylergimpel.gymtracker.domain.CardioPlacement
+import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
@@ -153,12 +155,14 @@ private fun RoutineProperties(
         goal: RoutineGoal = routine.goal,
         repPreference: RepPreference = routine.repPreference,
         equipment: Set<String> = routine.equipment,
+        cardio: CardioPlacement = routine.cardio,
     ) = viewModel.editProperties(
         name = name.ifBlank { routine.name },
         goal = goal,
         cadence = cadence.toIntOrNull()?.coerceAtLeast(1) ?: routine.cadence,
         equipment = equipment,
         repPreference = repPreference,
+        cardio = cardio,
     )
 
     Column(
@@ -209,6 +213,19 @@ private fun RoutineProperties(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        // Whether they do any, and where it goes. A day of its own takes a position in the
+        // rotation; after lifting takes none, because the lifting session still happened.
+        ChoiceRow(
+            label = stringResource(R.string.routine_cardio),
+            options = listOf(
+                CardioPlacement.NONE to stringResource(R.string.cardio_none),
+                CardioPlacement.OWN_DAY to stringResource(R.string.cardio_own_day),
+                CardioPlacement.AFTER_LIFTING to stringResource(R.string.cardio_after_lifting),
+            ),
+            selected = routine.cardio,
+            onSelect = { save(cardio = it) },
+        )
 
         Text(stringResource(R.string.routine_equipment), style = MaterialTheme.typography.labelLarge)
         Row(
@@ -288,6 +305,15 @@ private fun RoutineDayRow(
                 modifier = Modifier.weight(1f),
             )
         }
+        // A cardio day is said out loud, because an empty one looks like an unfinished lifting
+        // day otherwise — and because what it does to the volume arithmetic is worth knowing.
+        if (day.kind == RoutineDayKind.CARDIO) {
+            Text(
+                text = stringResource(R.string.routine_cardio_day_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (isNext) {
                 Text(
@@ -338,28 +364,47 @@ private fun RoutineDayRow(
 }
 
 @Composable
-private fun AddDay(onAdd: (String) -> Unit) {
+private fun AddDay(onAdd: (String, RoutineDayKind) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
+    var isCardio by rememberSaveable { mutableStateOf(false) }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text(stringResource(R.string.routine_new_day)) },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-        )
-        Button(
-            onClick = { onAdd(name.trim()); name = "" },
-            enabled = name.isNotBlank(),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(stringResource(R.string.routine_add))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.routine_new_day)) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = {
+                    onAdd(
+                        name.trim(),
+                        if (isCardio) RoutineDayKind.CARDIO else RoutineDayKind.LIFTING,
+                    )
+                    name = ""
+                    isCardio = false
+                },
+                enabled = name.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.routine_add))
+            }
         }
+        // Said when the day is made rather than afterwards: what a day is for decides how it is
+        // counted, and a cardio day added as a lifting one is wrong from its first cycle.
+        FilterChip(
+            selected = isCardio,
+            onClick = { isCardio = !isCardio },
+            label = { Text(stringResource(R.string.routine_day_is_cardio)) },
+        )
     }
 }

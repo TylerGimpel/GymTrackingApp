@@ -938,6 +938,7 @@ class GymDatabaseMigrationTest {
         const val TWENTIETH_DATABASE = "migration-twentieth.db"
         const val TWENTY_FIRST_DATABASE = "migration-twenty-first.db"
         const val TWENTY_SECOND_DATABASE = "migration-twenty-second.db"
+        const val TWENTY_THIRD_DATABASE = "migration-twenty-third.db"
     }
 
     /**
@@ -1053,6 +1054,38 @@ class GymDatabaseMigrationTest {
             db.query("SELECT sets FROM session_plan WHERE session_id = 1").use {
                 it.moveToFirst()
                 assertTrue("a set count was invented for a session nobody asked one of", it.isNull(0))
+            }
+        }
+    }
+
+    /**
+     * Version 24 lets a day say what it is for, and a routine say where the cardio goes.
+     *
+     * Every day that already exists is a lifting day and every lifter who was never asked has not
+     * said they do cardio, so nothing about an installed routine changes. This adds a question,
+     * not an answer — and getting the default wrong the other way would silently drop a lifter's
+     * training volume, because a cardio position counts for nothing toward it (ADR 0005).
+     */
+    @Test
+    fun migratesToCardioDaysWithEveryExistingDayStillALiftingOne() {
+        helper.createDatabase(TWENTY_THIRD_DATABASE, 23).use { version23 ->
+            version23.execSQL(
+                "INSERT INTO routine (name, goal, cadence, equipment, rep_preference) " +
+                    "VALUES ('Push / Pull / Legs', 'HYPERTROPHY', 3, '', 'MODERATE')",
+            )
+            version23.execSQL(
+                "INSERT INTO routine_day (routine_id, order_index, name) VALUES (1, 1, 'Push')",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_THIRD_DATABASE, 24, true, MIGRATION_23_24).use { db ->
+            db.query("SELECT kind FROM routine_day WHERE routine_id = 1").use {
+                it.moveToFirst()
+                assertEquals("LIFTING", it.getString(0))
+            }
+            db.query("SELECT cardio FROM routine WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals("NONE", it.getString(0))
             }
         }
     }

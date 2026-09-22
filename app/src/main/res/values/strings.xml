@@ -146,6 +146,12 @@
     <string name="routine_equipment">Equipment at your gym</string>
     <string name="routine_days">Days</string>
     <string name="routine_new_day">New day</string>
+    <string name="routine_cardio">Cardio</string>
+    <string name="cardio_none">None</string>
+    <string name="cardio_own_day">Its own day</string>
+    <string name="cardio_after_lifting">After lifting</string>
+    <string name="routine_day_is_cardio">Cardio day</string>
+    <string name="routine_cardio_day_note">Takes its turn in the rotation like any other day. It counts for nothing toward your lifting volume, which is the point.</string>
     <string name="routine_add_exercise">Add exercise</string>
     <string name="routine_remove_exercise">Remove exercise</string>
     <string name="routine_day_empty">No exercises yet.</string>

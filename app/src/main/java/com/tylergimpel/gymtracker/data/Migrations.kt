@@ -592,6 +592,22 @@ internal val MIGRATION_22_23 = object : Migration(22, 23) {
     }
 }
 
+/**
+ * A day says what it is for, and a routine says where the lifter's cardio goes.
+ *
+ * Both default to what every existing routine already is: every day that exists is a lifting day,
+ * and a lifter who has never been asked about cardio has not said they do any. Nothing about an
+ * installed routine changes, which is the point — this adds a question, not an answer.
+ */
+internal val MIGRATION_23_24 = object : Migration(23, 24) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `routine_day` ADD COLUMN `kind` TEXT NOT NULL DEFAULT 'LIFTING'",
+        )
+        db.execSQL("ALTER TABLE `routine` ADD COLUMN `cardio` TEXT NOT NULL DEFAULT 'NONE'")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -615,6 +631,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_20_21,
     MIGRATION_21_22,
     MIGRATION_22_23,
+    MIGRATION_23_24,
 )
 
 /**
