@@ -75,7 +75,7 @@ private fun GymTracker(
             onSelect = { exercise ->
                 val day = pickingForDay
                 if (day == null) viewModel.select(exercise)
-                else routineViewModel.addExerciseToDay(day, exercise)
+                else routineViewModel.pickInto(day, exercise)
                 leavePicker()
             },
         )

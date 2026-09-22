@@ -2,6 +2,7 @@ package com.tylergimpel.gymtracker.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -20,9 +21,13 @@ class GeneratorTest {
 
         filled.forEach { day ->
             day.shape.muscles.forEach { muscle ->
+                // Directly. Letting secondary work answer for a muscle collapses an upper day
+                // into three exercises and leaves half the muscles it exists for with no
+                // exercise of their own — and an assertion that accepted it would be a copy of
+                // the rule rather than a check on it.
                 assertTrue(
-                    "${day.shape.name} asks for $muscle and nothing in it works that",
-                    day.exercises.any { muscle in it.primaryMuscles || muscle in it.secondaryMuscles },
+                    "${day.shape.name} asks for $muscle and nothing in it trains that directly",
+                    day.exercises.any { muscle in it.primaryMuscles },
                 )
             }
         }
@@ -50,7 +55,7 @@ class GeneratorTest {
             day.shape.muscles.forEach { muscle ->
                 assertTrue(
                     "${day.shape.name} asks for $muscle and a sparse gym left it untrained",
-                    day.exercises.any { muscle in it.primaryMuscles || muscle in it.secondaryMuscles },
+                    day.exercises.any { muscle in it.primaryMuscles },
                 )
             }
         }
@@ -121,12 +126,37 @@ class GeneratorTest {
     }
 
     @Test
-    fun `a day is never one exercise per muscle it names`() {
+    fun `a day is as long as what it is for, and what it is for is a day's worth`() {
         val filled = fillDays(fullBody, bank, equipment = allEquipment)
 
-        // A movement that works several muscles covers several of them, so a full-body day is a
-        // handful of compounds rather than a list as long as the muscles it names.
-        assertTrue(filled.single().exercises.size < fullBody.days.single().muscles.size)
+        // One exercise per muscle named, now that coverage means direct work — so what keeps a
+        // day sane is the shape naming what the day is *for* rather than an anatomy list. A
+        // full-body day of six is a session; one of seventeen is not.
+        assertEquals(fullBody.days.single().muscles.size, filled.single().exercises.size)
+        assertTrue(filled.single().exercises.size <= 8)
+    }
+
+    @Test
+    fun `an exercise is never picked twice for one day`() {
+        val filled = fillDays(fullBody, bank, equipment = allEquipment)
+
+        val chosen = filled.single().exercises.map(Exercise::id)
+        assertEquals(chosen.distinct(), chosen)
+    }
+
+    @Test
+    fun `sessions a shape promises differ actually differ`() {
+        val twoDifferent = SPLIT_SHAPES.single { it.id == "full-body-2" }
+
+        val filled = fillDays(twoDifferent, bank, equipment = allEquipment)
+
+        // Selection is deterministic, so two days naming the same muscles come back holding the
+        // same exercises. A shape offering "two sessions that differ" has to differ in what its
+        // days are for, or it is a lie told twice.
+        assertNotEquals(
+            filled[0].exercises.map(Exercise::id),
+            filled[1].exercises.map(Exercise::id),
+        )
     }
 
     @Test
@@ -199,6 +229,13 @@ class GeneratorTest {
             exercise("Squat", listOf("quadriceps"), listOf("glutes", "lower back")),
             exercise("GobletSquat", listOf("quadriceps"), listOf("glutes"), equipment = "dumbbell"),
             exercise("Rdl", listOf("hamstrings"), listOf("glutes", "lower back")),
+            exercise("HipThrust", listOf("glutes"), listOf("hamstrings")),
+            exercise(
+                "GluteBridge",
+                listOf("glutes"),
+                listOf("hamstrings"),
+                equipment = "body only",
+            ),
             exercise("DbRdl", listOf("hamstrings"), listOf("glutes"), equipment = "dumbbell"),
             exercise("Calf", listOf("calves"), equipment = "body only", mechanic = "isolation"),
             exercise("BackExt", listOf("lower back"), equipment = "body only"),

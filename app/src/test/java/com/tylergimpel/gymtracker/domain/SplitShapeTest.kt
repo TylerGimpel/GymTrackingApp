@@ -116,7 +116,10 @@ class SplitShapeTest {
 
         SPLIT_SHAPES.flatMap { it.days }.forEach { day ->
             day.muscles.forEach {
-                assertTrue("${day.name} asks for $it, which the bank does not use", it in vocabulary)
+                assertTrue(
+                    "${day.name} asks for $it, which the bank does not use",
+                    it in vocabulary,
+                )
             }
         }
     }

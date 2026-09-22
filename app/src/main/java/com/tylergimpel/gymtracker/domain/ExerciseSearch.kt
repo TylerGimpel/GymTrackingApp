@@ -101,17 +101,33 @@ fun List<Exercise>.offeredFor(
     muscle: String? = null,
     ownEquipmentOnly: Boolean = true,
     aliases: ExerciseAliases = emptyMap(),
-): List<Exercise> {
-    val asked = query.isNotBlank()
+): List<Exercise> = worthOffering(
+    equipment = if (ownEquipmentOnly) equipment else emptySet(),
+    // Typing a name is the lifter asking for that one rather than the app suggesting anything,
+    // and refusing to find it would be the app arguing with them.
+    includeDisliked = query.isNotBlank(),
+)
+    .search(query, aliases)
+    .let { if (muscle == null) it else it.workingMuscle(muscle) }
 
-    return asSequence()
-        .filterNot { it.isTombstoned }
-        .filter { asked || !it.isDisliked }
-        .filter {
-            !ownEquipmentOnly || equipment.isEmpty() || it.equipment == null ||
-                it.equipment in equipment
-        }
-        .toList()
-        .search(query, aliases)
-        .let { if (muscle == null) it else it.workingMuscle(muscle) }
+/**
+ * The exercises worth putting in front of somebody, before anything is typed or filtered.
+ *
+ * One rule, because there are two callers and they must not drift: the picker offers these, and
+ * the generator chooses from them. Extracted for the reason the volume counting was — a rule
+ * written twice becomes two rules the first time one of them is corrected.
+ *
+ * An empty [equipment] set means nobody has described the gym yet, so everything is offered
+ * rather than nothing; an exercise needing no equipment is never excluded by a checklist.
+ */
+fun List<Exercise>.worthOffering(
+    equipment: Set<String>,
+    includeDisliked: Boolean = false,
+): List<Exercise> = filter {
+    // A dropped exercise exists for the history pointing at it, and is not something to offer.
+    !it.isTombstoned &&
+        // A **Dislike** is a hard constraint on what the app puts forward of its own accord.
+        (includeDisliked || !it.isDisliked) &&
+        // A **User-authored exercise** passes this exactly as a shipped row does.
+        (equipment.isEmpty() || it.equipment == null || it.equipment in equipment)
 }

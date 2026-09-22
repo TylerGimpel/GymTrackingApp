@@ -34,8 +34,7 @@ fun volumeByMuscle(performed: List<SessionExercise>): Map<String, Double> =
  * has to be the same arithmetic, because a target compared against one convention and a routine
  * built against the other is exactly the 30% error ADR 0005 exists to prevent.
  *
- * Per cycle, not per week — [weeklyVolumeByMuscle] is what translates it, and it needs the cadence
- * to do so.
+ * Per cycle, not per week: [weeklyVolumeByMuscle] translates it, and needs the cadence to do so.
  *
  * **Cardio days carry none of it.** A cardio position carries no resistance work by definition,
  * and crediting what a treadmill row happens to name would put leg volume into a week that had
@@ -62,14 +61,14 @@ private fun volumeOf(counted: List<Pair<Exercise, Int>>): Map<String, Double> {
         val primary = exercise.primaryMuscles.toSet()
 
         // Every primary muscle takes full credit. A handful of exercises name two, and a movement
-        // that genuinely targets two muscles primarily works both of them - splitting the credit
+        // that genuinely targets two muscles primarily works both of them — splitting the credit
         // would invent a rule, and taking only the first would lose one of them entirely.
         primary.forEach { muscle ->
             volume.merge(muscle, sets * DIRECT_CONTRIBUTION, Double::plus)
         }
 
         // A muscle already counted in full is not also counted at half. Nine shipped bank rows list
-        // the same muscle in both places - Barbell Step Ups names quadriceps twice - and stacking
+        // the same muscle in both places — Barbell Step Ups names quadriceps twice — and stacking
         // the two would quietly credit 1.5 sets for one set of work.
         exercise.secondaryMuscles
             .filterNot { it in primary }
@@ -87,11 +86,11 @@ private fun volumeOf(counted: List<Pair<Exercise, Int>>): Map<String, Double> {
  *
  * The evidence half of ADR 0005's matched pair: these boundaries are stated in *fractional* sets,
  * so they only mean anything alongside counting that halves indirect work. Pairing them with
- * Baz-Valle's 12-20, which assumes direct counting, over-prescribes by roughly a third - and
+ * Baz-Valle's 12-20, which assumes direct counting, over-prescribes by roughly a third — and
  * pairing direct counting with these under-prescribes by the same.
  *
  * From `docs/research/splits-and-volume.md`: 67 studies, 2058 participants, minimum effective dose
- * around four, and **no clear plateau** - the tiers name diminishing efficiency, never a ceiling
+ * around four, and **no clear plateau** — the tiers name diminishing efficiency, never a ceiling
  * on what works.
  */
 enum class VolumeTier {
@@ -101,19 +100,19 @@ enum class VolumeTier {
     /** The minimum effective dose: about four fractional sets a week. */
     MINIMUM_EFFECTIVE,
 
-    /** 5-10. The most growth per set spent. */
+    /** 5–10. The most growth per set spent. */
     HIGHER_EFFICIENCY,
 
-    /** 11-18. Where the research's own sample mean of 12.25 sits. */
+    /** 11–18. Where the research's own sample mean of 12.25 sits. */
     INTERMEDIATE_EFFICIENCY,
 
-    /** 19-29. Still working, and costing about 10.75 sets per detectable increment. */
+    /** 19–29. Still working, and costing about 10.75 sets per detectable increment. */
     LOWER_EFFICIENCY,
 
-    /** 30-42. Still working, and costing about 12.5. */
+    /** 30–42. Still working, and costing about 12.5. */
     LOWEST_EFFICIENCY,
 
-    /** 43 and up, where the data runs out. Not a warning - an absence. */
+    /** 43 and up, where the data runs out. Not a warning — an absence. */
     UNCLEAR,
     ;
 
@@ -149,7 +148,7 @@ enum class VolumeTier {
  * Hypertrophy takes the intermediate tier, which is where the research's own sample mean sits.
  * Strength takes the higher-efficiency tier: detectable strength increments stop at about four
  * weekly sets, so the sets beyond that are buying the muscle underneath the lift rather than the
- * lift. Endurance takes the same as hypertrophy - **there is no separate dose-response data for
+ * lift. Endurance takes the same as hypertrophy — **there is no separate dose-response data for
  * it**, and inventing a different band would be pretending otherwise.
  */
 fun weeklyVolumeTargetFor(goal: RoutineGoal): ClosedFloatingPointRange<Double> = when (goal) {
@@ -165,8 +164,8 @@ fun weeklyVolumeTargetFor(goal: RoutineGoal): ClosedFloatingPointRange<Double> =
  * sets per muscle per session (Remmert et al.), and the IUSCA position stand independently
  * recommends capping near 10 and adding sessions rather than sets past it.
  *
- * Strength has a per-session saturation of its own - about two *direct* sets for the lift being
- * trained - which is **deliberately not this number**: it is stated in the other counting
+ * Strength has a per-session saturation of its own — about two *direct* sets for the lift
+ * being trained — which is **deliberately not this number**: it is stated in the other counting
  * convention and in exercises rather than muscles, and mixing the two is the mistake ADR 0005 is
  * about.
  */

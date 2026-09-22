@@ -133,7 +133,6 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.renameDay(dayId, name) }
     }
 
-    /** Adds an exercise to a day. Not a revision, so the cycle and the cursor are untouched. */
     /** Opens the picker for [dayId], holding the bank while it is up. */
     fun startPicking(dayId: Long) {
         val day = state.value.progress?.routine?.rotation?.firstOrNull { it.id == dayId } ?: return
@@ -160,6 +159,33 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         held.update { it.copy(picking = null, addingDisliked = null) }
     }
 
+    /**
+     * Puts [exercise] in [dayId], asking first where the lifter had banned it.
+     *
+     * The way back in from the bank's own screen, where they went to write down a machine. It
+     * goes through the same asking as the picker, because the warning is about what is being
+     * added and not about which screen it was chosen on.
+     */
+    fun pickInto(dayId: Long, exercise: Exercise) {
+        if (exercise.isDisliked) {
+            val day = state.value.progress?.routine?.rotation?.firstOrNull { it.id == dayId }
+            if (day != null) {
+                viewModelScope.launch {
+                    val bank = exercises.observeBank().first()
+                    held.update {
+                        it.copy(
+                            picking = PickingFor(dayId, day.name, bank),
+                            addingDisliked = exercise,
+                        )
+                    }
+                }
+                return
+            }
+        }
+        addExerciseToDay(dayId, exercise)
+    }
+
+    /** Adds an exercise to a day. Not a revision, so the cycle and the cursor are untouched. */
     fun addExerciseToDay(dayId: Long, exercise: Exercise) {
         viewModelScope.launch { repository.addExerciseToDay(dayId, exercise.id) }
     }

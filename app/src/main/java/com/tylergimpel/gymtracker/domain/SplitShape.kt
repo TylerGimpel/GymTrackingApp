@@ -33,25 +33,31 @@ data class SplitShape(
     val description: String,
     val days: List<SplitDay>,
     /**
-     * The rotation this shape repeats on — full body 1, upper/lower 2, push/pull/legs 3, and 5
-     * for a body-part split.
+     * The rotation this shape repeats on — full body 1, upper/lower 2, push/pull/legs 3,
+     * body-part 5 — or **null where it does not repeat on one**.
      *
-     * What divisibility is stated against, and the reason a five-position upper/lower is not
-     * offered while a five-position cycle that happens to end in a full-body day is.
+     * Null is the case ADR 0005 calls a named variant: *"gaps in the divisibility grid are a
+     * prompt to author a variant, not a wall"*, and `U/L/U/L/Full` is exactly that — a five
+     * position cycle that is not a five-fold upper/lower and was never derived from a rotation at
+     * all. Declaring an invented rotation equal to its own length would make [isBalanced] say yes
+     * to anything, which is worse than admitting the rule does not reach it.
      */
-    val rotation: Int,
+    val rotation: Int?,
 ) {
     /** Positions carrying resistance work, which is what divisibility counts. */
     val liftingPositions: Int get() = days.count { it.kind == RoutineDayKind.LIFTING }
 
     /**
-     * Whether this shape's lifting positions divide by its rotation.
+     * Whether this shape's lifting positions divide by the rotation it repeats on.
      *
-     * True of everything authored below. It exists so a test can say so of the list, and so a
-     * variant added later cannot quietly introduce the permanent imbalance the rule prevents: a
-     * three-position `Upper / Lower / Upper` is not alternating, it is 2:1 forever.
+     * **This checks the arithmetic, and only the arithmetic.** It catches the case the rule
+     * is named for — a three-position `Upper / Lower / Upper` is not alternating, it is 2:1
+     * forever — for any shape that says which rotation it repeats on. It cannot check a named
+     * variant, which repeats on nothing, and it does not pretend to: those are balanced because
+     * a person authored them that way, and the honest statement of that is [rotation] being null
+     * rather than a number chosen to make this pass.
      */
-    val isBalanced: Boolean get() = liftingPositions % rotation == 0
+    val isBalanced: Boolean get() = rotation == null || liftingPositions % rotation == 0
 
     /** The same shape with a cardio position on the end, which counts toward neither rule. */
     fun withCardioDay(): SplitShape = copy(
@@ -64,24 +70,45 @@ data class SplitShape(
     }
 }
 
-/** Everything above the waist that pushes or pulls. */
-private val UPPER = listOf("chest", "lats", "middle back", "shoulders", "biceps", "triceps")
+/*
+ * What each kind of day is *for*, which since coverage means direct work is also how many
+ * exercises it comes back with. These are movement targets rather than an anatomy list: a day
+ * naming seven muscles is a seven-exercise day, and one naming seventeen is not a day.
+ *
+ * `forearms` is deliberately absent from everything but an arms day. Almost nobody trains it
+ * directly, it is secondary work in every pull in the bank, and naming it on an upper day would
+ * add a wrist curl to every routine the app generates.
+ */
+
+/** Everything above the waist that pushes or pulls, traps included. */
+private val UPPER =
+    listOf("chest", "lats", "middle back", "shoulders", "traps", "biceps", "triceps")
 
 /** Everything below it, plus the lower back that holds it all up. */
 private val LOWER = listOf("quadriceps", "hamstrings", "glutes", "calves", "lower back")
 
 private val PUSH = listOf("chest", "shoulders", "triceps")
-private val PULL = listOf("lats", "middle back", "biceps", "traps")
+private val PULL = listOf("lats", "middle back", "traps", "biceps")
 private val LEGS = LOWER
 
-private val WHOLE_BODY = UPPER + LOWER + listOf("abdominals")
+/*
+ * Full-body days, and there are three of them because **they have to differ**. Selection is
+ * deterministic, so two days naming the same muscles come back holding the same exercises — which
+ * would make "full body, two sessions that differ" a lie told twice. What differs is what each
+ * day is for, and between them they reach everything an upper/lower pair does.
+ */
+private val FULL_BODY_A =
+    listOf("quadriceps", "chest", "middle back", "shoulders", "abdominals")
+private val FULL_BODY_B = listOf("hamstrings", "lats", "glutes", "triceps", "calves")
+private val FULL_BODY_C =
+    listOf("quadriceps", "chest", "lats", "biceps", "lower back")
 
 /**
  * Every day structure this app knows how to lay out.
  *
- * Thirteen, which is what the divisibility rule leaves for cycles up to seven positions. They are
- * offered by **shape** — "alternate upper and lower" — because that is a thing anyone can choose,
- * where "a two-position cycle" is not.
+ * Thirteen, which is what the divisibility rule leaves for cycles up to seven positions. They
+ * are offered by **shape** — "alternate upper and lower" — because that is a thing anyone can
+ * choose, where "a two-position cycle" is not.
  *
  * **None of them is better than another.** Every volume-equated split trial found no difference,
  * so nothing here ranks them on quality and nothing about the wording claims one is superior.
@@ -91,19 +118,26 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
         id = "full-body-1",
         description = "Full body, every session",
         rotation = 1,
-        days = listOf(SplitDay("Full body", WHOLE_BODY)),
+        days = listOf(SplitDay("Full body", FULL_BODY_A)),
     ),
     SplitShape(
         id = "full-body-2",
         description = "Full body, two sessions that differ",
         rotation = 1,
-        days = listOf(SplitDay("Full body A", WHOLE_BODY), SplitDay("Full body B", WHOLE_BODY)),
+        days = listOf(
+            SplitDay("Full body A", FULL_BODY_A),
+            SplitDay("Full body B", FULL_BODY_B),
+        ),
     ),
     SplitShape(
         id = "full-body-3",
         description = "Full body, three sessions that differ",
         rotation = 1,
-        days = List(3) { SplitDay("Full body ${'A' + it}", WHOLE_BODY) },
+        days = listOf(
+            SplitDay("Full body A", FULL_BODY_A),
+            SplitDay("Full body B", FULL_BODY_B),
+            SplitDay("Full body C", FULL_BODY_C),
+        ),
     ),
     SplitShape(
         id = "upper-lower-2",
@@ -133,13 +167,13 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
     SplitShape(
         id = "upper-lower-full-5",
         description = "Upper, lower, upper, lower, full body",
-        rotation = 5,
+        rotation = null,
         days = listOf(
             SplitDay("Upper A", UPPER),
             SplitDay("Lower A", LOWER),
             SplitDay("Upper B", UPPER),
             SplitDay("Lower B", LOWER),
-            SplitDay("Full body", WHOLE_BODY),
+            SplitDay("Full body", FULL_BODY_A),
         ),
     ),
     SplitShape(
@@ -175,7 +209,7 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
     SplitShape(
         id = "upper-lower-arms-3",
         description = "Upper, lower, arms",
-        rotation = 3,
+        rotation = null,
         days = listOf(
             SplitDay("Upper", UPPER),
             SplitDay("Lower", LOWER),
@@ -185,18 +219,18 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
     SplitShape(
         id = "full-body-upper-lower-4",
         description = "Full body, upper, full body, lower",
-        rotation = 4,
+        rotation = null,
         days = listOf(
-            SplitDay("Full body A", WHOLE_BODY),
+            SplitDay("Full body A", FULL_BODY_A),
             SplitDay("Upper", UPPER),
-            SplitDay("Full body B", WHOLE_BODY),
+            SplitDay("Full body B", FULL_BODY_B),
             SplitDay("Lower", LOWER),
         ),
     ),
     SplitShape(
         id = "push-pull-legs-upper-lower-5",
         description = "Push, pull, legs, upper, lower",
-        rotation = 5,
+        rotation = null,
         days = listOf(
             SplitDay("Push", PUSH),
             SplitDay("Pull", PULL),

@@ -60,13 +60,12 @@
     <string name="avoided_remove">Take it out</string>
     <string name="swap_title">Train something else</string>
     <string name="swap_nothing">Nothing close by in your gym. Search the whole list, or add what you are using.</string>
-    <string name="swap_search">Search or add</string>
     <string name="picker_search">Search by name</string>
     <string name="picker_everything">Everything</string>
     <string name="picker_nothing">Nothing matches. Try a shorter word, widen it to everything, or add what you are using.</string>
     <string name="picker_add_new">Add new</string>
     <string name="routine_pick_exercise">Add to %1$s</string>
-    <string name="picker_disliked">You said never to suggest this one. Adding it anyway is your call.</string>
+    <string name="picker_disliked">You said never to suggest %1$s. Adding it anyway is your call.</string>
     <string name="swap_only_disliked">Everything left for this muscle is one you said you did not want. Which is least bad today?</string>
     <string name="plates_title">Plates</string>
     <string name="plates_done">Done</string>
@@ -144,7 +143,6 @@
     <string name="routine_title">Routine</string>
     <string name="routine_done">Done</string>
     <string name="routine_none">No routine yet. One is a name and an ordered list of days — rest is implied by not training, so it takes no position.</string>
-    <string name="routine_create">Create a routine</string>
     <string name="routine_build_by_hand">Start from an empty routine</string>
     <string name="routine_setup_frequency">How many times a week do you train?</string>
     <string name="routine_setup_frequency_why">Used to work out how much work a week your routine adds up to. It never schedules anything.</string>
@@ -160,6 +158,7 @@
     <string name="routine_days">Days</string>
     <string name="routine_what_it_trains">What this cycle trains</string>
     <string name="routine_muscle_load">%1$s · %2$d× a cycle · %3$s sets a week</string>
+    <string name="routine_muscle_target">aiming for %1$s to %2$s</string>
     <string name="routine_past_session_cap">%1$s gets %2$s sets in one day. Past about eleven, more sets in the same session stop showing up — the same work on another day would.</string>
     <string name="routine_trains_nothing">Nothing in this routine yet, so there is nothing to report about it.</string>
     <string name="routine_new_day">New day</string>

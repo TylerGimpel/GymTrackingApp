@@ -43,6 +43,7 @@ import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.weeklyVolumeTargetFor
 import com.tylergimpel.gymtracker.domain.splitShapesFor
 import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.whatItTrains
@@ -164,6 +165,7 @@ fun RoutineScreen(
 @Composable
 private fun WhatItTrains(routine: Routine?) {
     val load = remember(routine) { routine?.whatItTrains().orEmpty() }
+    val target = routine?.let { weeklyVolumeTargetFor(it.goal) }
 
     Column(
         modifier = Modifier.padding(16.dp),
@@ -177,6 +179,20 @@ private fun WhatItTrains(routine: Routine?) {
             Text(
                 text = stringResource(R.string.routine_trains_nothing),
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The band the goal aims at, said once rather than beside every muscle. A number to read
+        // the rows against, and still a fact: it is what the app is aiming for, not a mark out of
+        // ten for what they built.
+        target?.takeIf { load.isNotEmpty() }?.let {
+            Text(
+                text = stringResource(
+                    R.string.routine_muscle_target,
+                    it.start.asSetsText(),
+                    it.endInclusive.asSetsText(),
+                ),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

@@ -8,9 +8,9 @@ import org.junit.Test
 /**
  * What a routine does, said as a fact.
  *
- * **The register is the whole of this.** "This cycle trains chest 3× and back 1×" helps somebody
- * decide; "your routine is unbalanced" is a grade nobody asked for. So everything here is a
- * count — how often, how much, and where that sits in the tiers — and nothing here is a verdict.
+ * **The register is the whole of this.** "This cycle trains chest 3× and back 1×" helps
+ * somebody decide; "your routine is unbalanced" is a grade nobody asked for. So everything
+ * here is a count — how often, how much, where that sits — and nothing here is a verdict.
  *
  * Nothing here refuses anything either. A lifter who wants a lopsided routine has made a decision
  * that is theirs, and the app's job is to make sure they made it knowingly.

@@ -9,7 +9,14 @@ package com.tylergimpel.gymtracker.domain
  */
 data class MuscleLoad(
     val muscle: String,
-    /** How many lifting days in the cycle train it at all. */
+    /**
+     * How many lifting days in the cycle train it **directly**.
+     *
+     * Direct work only, because this is the number the sentence is made of: reporting "shoulders
+     * 2x a cycle" for an upper/lower routine with no shoulder exercise in it hides exactly the
+     * lopsidedness this report exists to surface. A muscle worked only as secondary reads as
+     * zero sessions and whatever fractional volume it actually gets, which is the truth about it.
+     */
     val sessions: Int,
     /** Fractional sets a week, which is the unit every volume target is stated in. */
     val weeklySets: Double,
@@ -33,7 +40,7 @@ data class MuscleLoad(
  * What this routine trains, muscle by muscle, heaviest first.
  *
  * The report behind *"this cycle trains chest 3× and back 1×"* — which is a fact that helps
- * somebody decide, where *"your routine is unbalanced"* is a grade nobody asked for. Ordered by
+ * somebody decide, where *"your routine is unbalanced"* is a grade nobody asked for. Sorted by
  * weekly volume so the contrast is the first thing read: a lifter scanning this wants what is
  * getting the most and the least, not an alphabet.
  *
@@ -50,15 +57,21 @@ fun Routine.whatItTrains(): List<MuscleLoad> {
 
     val weekly = weeklyVolumeByMuscle()
 
-    // Per day, so that "how often" and "the most in one go" are both answerable. Counted with the
-    // same arithmetic as everything else, because a report in one convention and a target in the
-    // other is the error ADR 0005 is about.
+    // Per day, so that "how much in one go" is answerable. Counted with the same arithmetic as
+    // everything else, because a report in one convention and a target in the other is the error
+    // ADR 0005 is about.
     val perDay = lifting.map { plannedVolumeByMuscle(listOf(it)) }
+
+    // And separately, the days that train each muscle directly — which is not the same question,
+    // and answering it with the volume map would count a bench press as a shoulder session.
+    val directDays = lifting.map { day ->
+        day.exercises.filter { it.sets != null }.flatMap { it.exercise.primaryMuscles }.toSet()
+    }
 
     return weekly.keys.map { muscle ->
         MuscleLoad(
             muscle = muscle,
-            sessions = perDay.count { it.containsKey(muscle) },
+            sessions = directDays.count { muscle in it },
             weeklySets = weekly.getValue(muscle),
             mostInOneSession = perDay.maxOf { it[muscle] ?: 0.0 },
         )

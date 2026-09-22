@@ -13,11 +13,16 @@ data class FilledDay(
  * divisibility rule collapses the space; which exercises go in them cannot, because equipment
  * varies at every gym and a template would be wrong at most of them.
  *
- * **Coverage is the whole rule.** A day names muscles and comes back training all of them —
- * checked by muscle rather than by movement pattern, because the exercise model carries no
- * movement pattern and muscle is the one field at full fill. A muscle is covered once something
- * chosen works it at all, directly or as secondary work, which is what keeps a full-body day a
- * handful of compounds instead of a list as long as the muscles it names.
+ * **Coverage is the whole rule, and it is coverage by direct work.** A day names muscles and
+ * comes back with an exercise that works each of them *primarily* — checked by muscle rather than
+ * by movement pattern, because the exercise model carries no movement pattern and muscle is the
+ * one field at full fill.
+ *
+ * Secondary work is emphatically not coverage. Letting it count collapses an upper day into
+ * three exercises — a press, a row and a pulldown "cover" shoulders, biceps and triceps
+ * between them — and leaves three of the muscles the day exists for with half-credit work and
+ * no exercise of their own. What keeps a day from being as long as the muscles it names is the
+ * **shape** naming what the day is *for*, not the generator counting incidental work as done.
  *
  * **How many sets each of these gets, and what order they are trained in, is not decided here**
  * (#74). This answers what, and only what.
@@ -58,41 +63,35 @@ fun fillDays(
  * picking them first is what keeps the day short; then by id, which is arbitrary and total, which
  * is all a tie-break has to be.
  */
-private fun List<Exercise>.availableFor(equipment: Set<String>): List<Exercise> = asSequence()
-    // A dropped exercise exists for the history pointing at it, and is not something to programme.
-    .filterNot { it.isTombstoned }
-    // A hard constraint. Including one because what was left scored worse would break the only
-    // promise a **Dislike** makes.
-    .filterNot { it.isDisliked }
-    // A **User-authored exercise** passes this exactly as a shipped row does: it carries the same
-    // equipment value, and a gym's own machines should be programmable like anything else.
-    .filter { equipment.isEmpty() || it.equipment == null || it.equipment in equipment }
-    .sortedWith(compareByDescending<Exercise> { it.isCompound }.thenBy { it.id })
-    .toList()
+private fun List<Exercise>.availableFor(equipment: Set<String>): List<Exercise> =
+    // The same rule the picker offers by, so a lifter is never generated something the app would
+    // not have suggested them. Nothing is ever *generated* from a banned exercise, which is why
+    // the picker's exception for one typed by name has no equivalent here.
+    worthOffering(equipment)
+        .sortedWith(compareByDescending<Exercise> { it.isCompound }.thenBy { it.id })
 
 /**
- * Enough of this pool to work every muscle [day] asks for.
+ * An exercise for every muscle [day] asks for, in the order the shape names them.
  *
- * Greedy and in the order the shape lists its muscles, which is the order they were authored in
- * and roughly the order they matter to the day. A muscle already worked by something chosen is
- * not chosen for again — that is what turns twelve muscles into five or six exercises, and it is
- * why the first pick for a push day tends to cover the other two.
+ * **Primary work only, on both sides of the question.** A muscle is answered by an exercise that
+ * trains it directly, and a muscle already answered that way is not answered twice — so a day
+ * naming chest and triceps gets a press and a pushdown, and a day naming chest twice gets one
+ * press. What it never gets is a pushdown skipped because the press happens to involve triceps.
  *
- * Only an exercise that works the muscle **primarily** is picked for it. Secondary work counts
- * toward a muscle already being covered, but nothing is ever chosen *because* it works something
- * secondarily: a chest day covered by three presses is not a triceps day.
+ * A muscle nothing in the pool trains directly is skipped rather than filled with something that
+ * does not train it. The day comes back honestly short, and what to do about that is a
+ * conversation for the validation (#76).
  */
 private fun List<Exercise>.coveringMusclesOf(day: SplitDay): List<Exercise> {
     val chosen = mutableListOf<Exercise>()
-    val worked = mutableSetOf<String>()
+    val answered = mutableSetOf<String>()
 
     day.muscles.forEach { muscle ->
-        if (muscle in worked) return@forEach
+        if (muscle in answered) return@forEach
 
         val pick = firstOrNull { muscle in it.primaryMuscles } ?: return@forEach
         chosen += pick
-        worked += pick.primaryMuscles
-        worked += pick.secondaryMuscles
+        answered += pick.primaryMuscles
     }
 
     return chosen

@@ -88,7 +88,10 @@ class ExercisePickerTest {
     fun `a dropped exercise is never offered, typed or not`() {
         // A tombstone exists for the history pointing at it, and is not something to offer anybody.
         assertFalse(bank.offeredFor(equipment = emptySet()).any { it.id == "Dropped" })
-        assertFalse(bank.offeredFor(query = "dropped", equipment = emptySet()).any { it.id == "Dropped" })
+        assertFalse(
+            bank.offeredFor(query = "dropped", equipment = emptySet())
+                .any { it.id == "Dropped" },
+        )
     }
 
     @Test

@@ -600,10 +600,17 @@ fun SessionScreen(
             // stands until they type something, at which point they are asking for something
             // specific and the whole bank answers.
             suggested = candidates,
-            // When the bans leave no way to train the muscle the app asks which is least bad,
-            // rather than silently including a banned exercise or silently skipping the muscle.
-            note = stringResource(R.string.swap_only_disliked)
-                .takeIf { state.swappingLeavesOnlyDisliked },
+            // Two things worth saying before the list, and never both at once. That the bans
+            // have left nothing good, so the app is asking which is least bad rather than
+            // silently including one or silently skipping the muscle — or that there was nothing
+            // close by to suggest at all, which is a real answer and not an empty box.
+            note = when {
+                state.swappingLeavesOnlyDisliked ->
+                    stringResource(R.string.swap_only_disliked)
+
+                candidates.isEmpty() -> stringResource(R.string.swap_nothing)
+                else -> null
+            },
         )
     }
 
