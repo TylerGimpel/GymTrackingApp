@@ -249,8 +249,13 @@ class RoutineRepository(
         }
 
         val goal = RoutineGoal.valueOf(routine.goal)
-        val pinned = days.associate { day ->
-            day.name to routines.pinnedIn(day.id).mapNotNull { held ->
+
+        // **Paired by position, never by name.** A lifter can rename a day without it being a
+        // **Revision** (ADR 0006), and a day renamed or added by hand has no counterpart in the
+        // shape — so matching on names empties exactly those days and throws their pins away.
+        val inOrder = days.sortedBy { it.orderIndex }
+        val pinned = inOrder.zip(shape.days).associate { (day, position) ->
+            position.name to routines.pinnedIn(day.id).mapNotNull { held ->
                 bank.firstOrNull { it.id == held.exerciseId }
                     ?.let { PlannedExercise(it, held.sets) }
             }
@@ -261,15 +266,17 @@ class RoutineRepository(
             bank = bank,
             equipment = routine.equipment.toSet(),
             goal = goal,
-            weeklyFrequency = routine.cadence,
+            cadence = routine.cadence,
             pinned = pinned,
             seed = seed,
-        ).associateBy { it.shape.name }
+        )
 
-        days.forEach { day ->
+        // Days past the end of the shape are the lifter's own, added after it was laid out. The
+        // generator has nothing to say about them, so it says nothing and leaves them alone.
+        inOrder.zip(filled).forEach { (day, position) ->
             val kept = routines.pinnedIn(day.id).associateBy { it.exerciseId }
             routines.clearDay(day.id)
-            filled[day.name]?.exercises?.forEachIndexed { index, planned ->
+            position.exercises.forEachIndexed { index, planned ->
                 routines.insert(
                     RoutineDayExerciseEntity(
                         routineDayId = day.id,

@@ -33,8 +33,12 @@ class SetBudgetTest {
     fun `a budget never divides past four ways`() {
         // Invented, like the rest. Past four the app would be prescribing a movement for its own
         // sake, and there is no dose-response data for exercises-per-muscle to argue otherwise.
-        assertEquals(MOST_EXERCISES_PER_MUSCLE, exercisesForSets(40.0))
-        (1..40).forEach { assertTrue(exercisesForSets(it.toDouble()) <= MOST_EXERCISES_PER_MUSCLE) }
+        //
+        // Asserted against the literal four rather than against the constant: reading the
+        // constant back would restate the coerce that produced the number and pass whatever it
+        // was changed to.
+        assertEquals(4, exercisesForSets(40.0))
+        assertEquals(4, exercisesForSets(12.0))
     }
 
     @Test
@@ -55,29 +59,11 @@ class SetBudgetTest {
             }
         }
 
-        assertTrue("nothing reached the band at all", landings.any { it in 2..4 })
-        assertTrue("something divided past four ways", landings.all { it <= 4 })
-
-        // A budget under two sets is one exercise, and deliberately so: the spec asks for a count
-        // "derived from how the set budget divides rather than chosen", and forcing a second
-        // movement onto two sets would be choosing. It happens for strength trained often, where
-        // one exercise for three sets is better training than two for one apiece.
-        assertTrue(landings.contains(1))
-    }
-
-    @Test
-    fun `a real weekly target divides into two to four exercises`() {
-        // What the research-shaped budget actually produces, which is the band the spec names.
-        // Asserted over the goals rather than by pinning a number, because the number is not the
-        // claim — the band is.
-        RoutineGoal.entries.forEach { goal ->
-            val target = weeklyVolumeTargetFor(goal)
-            val perSession = target.endInclusive / 2
-            assertTrue(
-                "$goal at ${target.endInclusive} a week over two sessions left the band",
-                exercisesForSets(perSession) in 2..MOST_EXERCISES_PER_MUSCLE,
-            )
-        }
+        // What the real arithmetic produces, stated as the set it is. Listing it rather than
+        // bounding it is the point: a bound written from the same coerce the numbers came out of
+        // would pass whatever that coerce was changed to, which is how three earlier tests in
+        // this spec came to assert their own implementation.
+        assertEquals(setOf(1, 2, 3, 4), landings)
     }
 
     @Test

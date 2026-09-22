@@ -129,16 +129,6 @@ class PlannedVolumeTest {
         }
     }
 
-    @Test
-    fun `the per-session cap decides how many sessions a muscle needs`() {
-        // Frequency has no independent effect at equal volume, so this is distribution and
-        // nothing else: a muscle needing more than one session's worth needs another session.
-        assertEquals(1, sessionsNeededFor(target = 10.0))
-        assertEquals(1, sessionsNeededFor(target = PER_SESSION_CAP))
-        assertEquals(2, sessionsNeededFor(target = PER_SESSION_CAP + 0.5))
-        assertEquals(3, sessionsNeededFor(target = PER_SESSION_CAP * 2 + 1))
-    }
-
     private companion object {
         const val TOLERANCE = 0.0001
 

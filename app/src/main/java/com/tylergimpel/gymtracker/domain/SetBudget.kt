@@ -85,14 +85,14 @@ fun setsPerSessionFor(
     muscle: String,
     shape: SplitShape,
     goal: RoutineGoal,
-    weeklyFrequency: Int,
+    cadence: Int,
 ): Double {
     val lifting = shape.days.filter { it.kind == RoutineDayKind.LIFTING }
     val daysTrainingIt = lifting.count { muscle in it.muscles }
     if (daysTrainingIt == 0 || shape.days.isEmpty()) return 0.0
 
     // How often the cycle comes round, which is the only thing that turns a cycle into a week.
-    val cyclesPerWeek = weeklyFrequency.toDouble() / shape.days.size
+    val cyclesPerWeek = cadence.toDouble() / shape.days.size
     val sessionsPerWeek = daysTrainingIt * cyclesPerWeek
     if (sessionsPerWeek <= 0.0) return 0.0
 

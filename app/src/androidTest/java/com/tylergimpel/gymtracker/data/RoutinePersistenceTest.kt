@@ -830,6 +830,39 @@ class RoutinePersistenceTest {
         assertEquals(was, everyExercise())
     }
 
+    @Test
+    fun renamingADayDoesNotCostItsContentsWhenTheRoutineIsBuiltAgain() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        val push = routines.observeProgress().first()!!.routine.rotation.first()
+
+        // Renaming a day is explicitly not a **Revision** (ADR 0006) — the cycle carries on — so
+        // it must not quietly cost the lifter what that day holds either. Matching the generated
+        // days to the stored ones by name emptied exactly the days somebody had renamed.
+        routines.renameDay(push.id, "Chest and shoulders")
+        routines.regenerate(shape, bank, seed = 1)
+
+        val after = routines.observeProgress().first()!!.routine.rotation
+            .single { it.id == push.id }
+        assertEquals("Chest and shoulders", after.name)
+        assertTrue("a renamed day came back empty", after.exercises.isNotEmpty())
+    }
+
+    @Test
+    fun aDayAddedByHandIsLeftAloneWhenTheRoutineIsBuiltAgain() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        val routineId = routines.observeProgress().first()!!.routine.id
+        val mine = routines.addDay(routineId, "Calves and abs")
+        routines.addExerciseToDay(mine, BENCH)
+
+        routines.regenerate(shape, bank, seed = 2)
+
+        // The shape has nothing to say about a day the lifter invented, so it says nothing.
+        val after = routines.observeProgress().first()!!.routine.rotation.single { it.id == mine }
+        assertEquals(listOf(BENCH), after.exercises.map { it.exercise.id })
+    }
+
     /** A routine generated from [shape] against the real bank, and that bank. */
     private suspend fun generated(shape: SplitShape): List<Exercise> {
         val bank = exercises.observeBank().first()

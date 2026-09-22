@@ -172,16 +172,6 @@ fun weeklyVolumeTargetFor(goal: RoutineGoal): ClosedFloatingPointRange<Double> =
 const val PER_SESSION_CAP = 11.0
 
 /**
- * How many sessions a cycle needs to give a muscle [target] sets without breaching the cap.
- *
- * Frequency has no independent effect on hypertrophy at equal volume, so this is distribution and
- * nothing more: it says how many sessions the work has to be spread over, never that spreading it
- * is better.
- */
-fun sessionsNeededFor(target: Double, cap: Double = PER_SESSION_CAP): Int =
-    ceil(target / cap).toInt().coerceAtLeast(1)
-
-/**
  * How many lifting sessions a week this routine actually contains.
  *
  * **Not the cadence the lifter gave**, and the difference is the one piece of arithmetic in this

@@ -242,7 +242,7 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
 )
 
 /**
- * The shapes to offer a lifter who trains [weeklyFrequency] times a week.
+ * The shapes to offer a lifter who trains [cadence] times a week.
  *
  * **Every shape is offered.** Weekly frequency does not constrain cycle length and never has —
  * that is the whole of ADR 0005's second half, and a lifter training five times a week on a
@@ -259,12 +259,12 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
  * counts only positions carrying resistance work.
  */
 fun splitShapesFor(
-    weeklyFrequency: Int,
+    cadence: Int,
     cardio: CardioPlacement = CardioPlacement.NONE,
 ): List<SplitShape> = SPLIT_SHAPES
     .map { if (cardio == CardioPlacement.OWN_DAY) it.withCardioDay() else it }
     .sortedWith(
-        compareBy<SplitShape> { kotlin.math.abs(it.liftingPositions - weeklyFrequency) }
+        compareBy<SplitShape> { kotlin.math.abs(it.liftingPositions - cadence) }
             .thenBy { it.liftingPositions },
     )
 

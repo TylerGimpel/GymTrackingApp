@@ -46,16 +46,16 @@ class BindingTest {
         // A day of compounds rests longer than a day of machine isolation work, because the
         // engine prescribes rest from what the set is. A ceiling assuming one number for both
         // would be measuring the wrong session.
-        val compounds = sessionLength(longDay)
-        val isolation = sessionLength(isolationDay)
+        val compounds = lengthOf(longDay)
+        val isolation = lengthOf(isolationDay)
 
         assertTrue(compounds > isolation)
     }
 
     @Test
     fun `cardio after lifting counts against the ceiling`() {
-        val lifting = sessionLength(fittingDay)
-        val andThenARun = sessionLength(fittingDay, cardio = CardioPlacement.AFTER_LIFTING)
+        val lifting = lengthOf(fittingDay)
+        val andThenARun = lengthOf(fittingDay, CardioPlacement.AFTER_LIFTING)
 
         // It takes no position in the rotation and does not touch the cadence, because the lifting
         // session still happened — but the lifter is in the gym for longer, and this is the one
@@ -65,8 +65,8 @@ class BindingTest {
 
     @Test
     fun `cardio on its own day does not lengthen a lifting one`() {
-        val lifting = sessionLength(fittingDay)
-        val ownDay = sessionLength(fittingDay, cardio = CardioPlacement.OWN_DAY)
+        val lifting = lengthOf(fittingDay)
+        val ownDay = lengthOf(fittingDay, CardioPlacement.OWN_DAY)
 
         assertEquals(lifting, ownDay)
     }
@@ -157,6 +157,52 @@ class BindingTest {
     }
 
     @Test
+    fun `the question is asked about what the routine meant to train, not what it got`() {
+        // The case the story exists for, and the one that went unasked. Exclusions empty a muscle
+        // *before* generation, so the generator skips it and it never reaches the days — asking
+        // over the days therefore asks only about muscles that are fine, and the one lifter who
+        // needed the question never sees it. That is the "silently skipping a muscle group" the
+        // spec forbids, arrived at by reading the wrong list.
+        val shape = SplitShape(
+            id = "chest-only",
+            description = "Chest",
+            rotation = 1,
+            days = listOf(SplitDay("Chest", listOf("chest"))),
+        )
+        val allBanned = bank.map {
+            if ("chest" in it.primaryMuscles) it.copy(isDisliked = true) else it
+        }
+        val emptied = routineOf(day("Chest")).copy(
+            shape = shape,
+            equipment = setOf("barbell", "dumbbell"),
+        )
+
+        val asked = bindingOn(emptied, bank = allBanned)
+            .filterIsInstance<Binding.OnlyDislikedLeft>()
+
+        assertEquals(listOf("chest"), asked.map { it.muscle })
+        assertTrue(asked.single().candidates.all { it.isDisliked })
+    }
+
+    @Test
+    fun `a routine that trains everything it meant to asks nothing`() {
+        val shape = SplitShape(
+            id = "chest-only",
+            description = "Chest",
+            rotation = 1,
+            days = listOf(SplitDay("Chest", listOf("chest"))),
+        )
+        val fine = routineOf(day("Chest", exercise("Bench", "chest") to 4)).copy(
+            shape = shape,
+            equipment = setOf("barbell"),
+        )
+
+        assertTrue(
+            bindingOn(fine, bank = bank).filterIsInstance<Binding.OnlyDislikedLeft>().isEmpty(),
+        )
+    }
+
+    @Test
     fun `a muscle with something available asks nothing`() {
         assertEquals(null, leastBadFor("chest", bank, equipment = setOf("barbell")))
     }
@@ -167,6 +213,12 @@ class BindingTest {
         // is least bad" when there are none would be a question with no answers.
         assertEquals(null, leastBadFor("neck", bank, equipment = setOf("barbell")))
     }
+
+    /** How long this routine's one day runs, which is what the ceiling is checked against. */
+    private fun lengthOf(
+        routine: Routine,
+        cardio: CardioPlacement = routine.cardio,
+    ) = dayLength(routine.days.single(), cardio, RepRange.DEFAULT)
 
     private companion object {
         fun exercise(id: String, primary: String, equipment: String? = "barbell") = Exercise(

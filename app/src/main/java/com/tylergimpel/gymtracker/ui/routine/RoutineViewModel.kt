@@ -147,7 +147,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun createFromShape(
         name: String,
         shape: SplitShape,
-        weeklyFrequency: Int,
+        cadence: Int,
         cardio: CardioPlacement,
         equipment: Set<String>,
         goal: RoutineGoal = RoutineGoal.HYPERTROPHY,
@@ -158,7 +158,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 name = name,
                 shape = shape,
                 goal = goal,
-                cadence = weeklyFrequency,
+                cadence = cadence,
                 equipment = equipment,
                 repPreference = repPreference,
                 cardio = cardio,
@@ -232,6 +232,17 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     fun cancelPicking() = held.update { it.copy(picking = null, addingDisliked = null) }
 
+    /**
+     * Records how much training the lifter has behind them.
+     *
+     * Theirs rather than the routine's, so it goes to the profile — but it is asked here, beside
+     * the goal and the rep preference, because this is where they are already saying what they
+     * want out of their training.
+     */
+    fun setExperience(experience: Experience) {
+        viewModelScope.launch { database.profileRepository().setExperience(experience) }
+    }
+
     /** Keeps one of a day's exercises through the next regeneration, or stops keeping it. */
     fun setPinned(dayId: Long, exerciseId: String, pinned: Boolean) {
         viewModelScope.launch { repository.setPinned(dayId, exerciseId, pinned) }
@@ -260,7 +271,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
      * of its own — and why one active routine is non-lossy rather than approximately so. What
      * comes back replaces the current one; it does not run beside it.
      */
-    fun rebuildFromLog(weeklyFrequency: Int, cardio: CardioPlacement, equipment: Set<String>) {
+    fun rebuildFromLog(cadence: Int, cardio: CardioPlacement, equipment: Set<String>) {
         viewModelScope.launch {
             val recovered = rebuildFrom(sessions.observeRecent(RECOVERABLE_SESSIONS).first())
             if (recovered.isEmpty()) {
@@ -274,7 +285,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 name = recovered.first().name,
                 recovered = recovered,
                 goal = RoutineGoal.HYPERTROPHY,
-                cadence = weeklyFrequency,
+                cadence = cadence,
                 equipment = equipment,
                 repPreference = RepPreference.MODERATE,
                 cardio = cardio,
@@ -332,7 +343,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /** Adds an exercise to a day. Not a revision, so the cycle and the cursor are untouched. */
-    fun addExerciseToDay(dayId: Long, exercise: Exercise) {
+    private fun addExerciseToDay(dayId: Long, exercise: Exercise) {
         viewModelScope.launch { repository.addExerciseToDay(dayId, exercise.id) }
     }
 

@@ -36,10 +36,14 @@ class ExercisePickerTest {
     @Test
     fun `a gym nobody has described offers everything rather than nothing`() {
         // An empty checklist is "they have not said", not "they own no equipment". Filtering to
-        // it would leave a new lifter looking at a blank list — so everything the picker would
-        // ever offer is offered, which is the bank less what is dropped and what is banned.
-        val offerable = bank.filterNot { it.isTombstoned || it.isDisliked }
-        assertEquals(offerable.size, bank.offeredFor(equipment = emptySet()).size)
+        // it would leave a new lifter looking at a blank list.
+        //
+        // Named rather than derived: rebuilding the expectation from the same predicate the code
+        // filters by would pass whatever that predicate became.
+        assertEquals(
+            listOf("Bench", "Pushdown", "PullUp", "Mine"),
+            bank.offeredFor(equipment = emptySet()).map { it.id },
+        )
     }
 
     @Test

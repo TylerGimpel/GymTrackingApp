@@ -97,16 +97,12 @@ fun seedRepRange(
 ): SeededRepRange {
     // A gym with nothing to load heavily cannot deliver a 1-6RM. Overruled rather than quietly
     // prescribed and never reached, and the conflict beside it says why (#76).
-    val noHeavyLoad = equipment.isNotEmpty() && equipment.none(::canLoadHeavy)
+    val noHeavyLoad = equipment.isNotEmpty() && !equipment.canLoadHeavy()
     if (preference == RepPreference.LOW && noHeavyLoad) {
         return seedRepRange(goal, RepPreference.MODERATE).copy(overruled = RepPreference.LOW)
     }
     return seedFor(goal, preference)
 }
-
-/** Whether this equipment can be loaded heavily enough for low-rep work. */
-private fun canLoadHeavy(equipment: String): Boolean =
-    equipment in setOf("barbell", "dumbbell", "machine", "kettlebells", "cable", "e-z curl bar")
 
 private fun seedFor(goal: RoutineGoal, preference: RepPreference): SeededRepRange = when (goal) {
     RoutineGoal.STRENGTH -> when (preference) {

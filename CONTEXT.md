@@ -111,7 +111,7 @@ An observation and never an action. The app notices and the lifter decides: peop
 A change to which days are in the active routine, or to their order. Revising ends the current cycle and starts a new one; it can never affect logged history. Renaming a day, or editing the routine's goal, cadence, equipment or rep preference, is not a revision and leaves the cycle alone — see `docs/adr/0006-routines-are-not-versioned.md`.
 
 **Pin**:
-Marking an exercise to be kept through a revision, so regeneration treats it as a fixed constraint and works around it. Concerns the shape of the routine, never the safety of its history.
+Marking an exercise to be kept through a revision, so regeneration treats it as a fixed constraint and works around it. A pin takes one of the places its muscle's set budget asked for rather than answering for the muscle — treating it as an answer would collapse a muscle budgeted several movements down to the one that was pinned. Concerns the shape of the routine, never the safety of its history.
 
 **Swap**:
 Substituting one exercise for another for a single session, because the equipment is unavailable or the user does not want it today. Situational and temporary; making a substitution permanent is a revision instead.
@@ -224,9 +224,6 @@ _Avoid_: template, which suggests the exercises come with it.
 
 **Binding constraint**:
 Something a routine cannot satisfy, paired with what would give if the lifter relaxed it. Never an error and never a refusal: an impossible request is a conversation, so the app says what is binding and leaves the decision where it belongs. The time ceiling usually binds before volume does.
-
-**Pin**:
-An exercise the lifter marked to keep through a regeneration, which the generator treats as a fixed constraint and builds the day around. A pin takes one of the places its muscle's budget asked for; it does not answer for the muscle. About the **shape** of the routine and never about the safety of anything, since per-exercise history follows the exercise whatever a routine does.
 
 **Experience**:
 How much training a lifter has behind them — novice, trained or advanced. Theirs rather than any routine's, so it sits with their **Preferred unit**. One rule reads it: whether to steer somebody away from high-rep work whose value depends on judging proximity to failure. Trained until they say otherwise, because that is the answer that overrules nothing.

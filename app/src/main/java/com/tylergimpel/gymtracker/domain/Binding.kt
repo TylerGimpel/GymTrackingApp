@@ -141,31 +141,15 @@ fun conflictsFor(
     }
 }
 
-/** Whether any of this equipment can be loaded heavily enough for low-rep work. */
-private fun Set<String>.canLoadHeavy(): Boolean = any {
+/**
+ * Whether any of this equipment can be loaded heavily enough for low-rep work.
+ *
+ * One rule with two readers — the band a goal seeds and the conflict that explains overruling a
+ * preference — and they must agree, or the app overrules somebody for a reason it then denies.
+ */
+internal fun Set<String>.canLoadHeavy(): Boolean = any {
     it in setOf("barbell", "dumbbell", "machine", "kettlebells", "cable", "e-z curl bar")
 }
-
-/**
- * Roughly how long a day takes, which is the number the ceiling is checked against.
- *
- * **Rest is most of a session**, and the engine already prescribes it per set, so a length
- * computed without it would be measuring the wrong thing. Same-day cardio is added because the
- * lifter is in the gym for it — it takes no position in the rotation and does not touch the
- * cadence, since the lifting session still happened, but it is time (ADR 0005).
- *
- * Every constant here is an invented, tuneable judgement call: how long a set takes to perform and
- * how long a piece of cardio runs are averages of an ordinary session rather than measurements of
- * this lifter.
- */
-fun sessionLength(
-    routine: Routine,
-    cardio: CardioPlacement = routine.cardio,
-    repRange: RepRange = RepRange.DEFAULT,
-): Duration = routine.days
-    .filter { it.kind == RoutineDayKind.LIFTING }
-    .maxOfOrNull { dayLength(it, cardio, repRange) }
-    ?: Duration.ZERO
 
 /**
  * How long one day runs.
@@ -174,7 +158,21 @@ fun sessionLength(
  * multi-joint lift rests for three minutes and a machine isolation set for ninety seconds, and a
  * ceiling that assumed one number for both would be measuring the wrong session entirely.
  */
-private fun dayLength(
+/**
+ * How long one day runs, which is the number the ceiling is checked against.
+ *
+ * **Rest is most of a session**, and it is the engine's own — derived per exercise from what that
+ * set is, so a heavy multi-joint lift rests three minutes and a machine isolation set ninety
+ * seconds. A ceiling assuming one number for both would be measuring the wrong session.
+ *
+ * Same-day cardio is added because the lifter is in the gym for it: it takes no position in the
+ * rotation and does not touch the cadence, since the lifting session still happened, but it is
+ * time (ADR 0005).
+ *
+ * Both constants below are invented, tuneable judgement calls — averages of an ordinary session
+ * rather than measurements of this lifter.
+ */
+internal fun dayLength(
     day: RoutineDay,
     cardio: CardioPlacement,
     repRange: RepRange,
@@ -263,15 +261,34 @@ fun bindingOn(
     }
 
     // And the question only the lifter can answer: where their own exclusions have left a muscle
-    // with nothing to train it, which is least bad. Asked over the muscles this routine is meant
-    // to train rather than the whole vocabulary.
+    // with nothing to train it, which is least bad.
+    //
+    // **Asked about what the routine was meant to train, not what it ended up with.** A muscle
+    // the exclusions emptied never reaches the days at all — the generator skips what it cannot
+    // fill — so reading the days back would ask only about muscles that are fine, and the one
+    // case this exists for would go silently unasked. Which is precisely the "silently skipping a
+    // muscle group" the spec forbids.
     if (bank.isNotEmpty()) {
-        routine.days.filter { it.kind == RoutineDayKind.LIFTING }
-            .flatMap { day -> day.exercises.flatMap { it.exercise.primaryMuscles } }
-            .distinct()
+        routine.musclesItMeansToTrain()
             .mapNotNull { leastBadFor(it, bank, routine.equipment) }
             .forEach { add(it) }
     }
+}
+
+/**
+ * The muscles this routine set out to train.
+ *
+ * The **Split shape** it was laid out from, where it has one, because that is what was *asked
+ * for* — and a muscle the lifter's exclusions emptied is missing from the days precisely because
+ * nothing could fill it. A routine built by hand or rebuilt from the log has no shape, and what
+ * it holds is the only statement of intent there is.
+ */
+private fun Routine.musclesItMeansToTrain(): List<String> = when (val laidOutFrom = shape) {
+    null -> days.filter { it.kind == RoutineDayKind.LIFTING }
+        .flatMap { day -> day.exercises.flatMap { it.exercise.primaryMuscles } }
+        .distinct()
+
+    else -> laidOutFrom.days.flatMap { it.muscles }.distinct()
 }
 
 /**

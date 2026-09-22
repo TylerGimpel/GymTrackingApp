@@ -42,6 +42,9 @@ data class ProfileEntity(
      * Twenty kilograms or forty-five pounds are different bars rather than two spellings of one
      * — which is the whole reason this is stored rather than converted from a constant.
      */
+    @ColumnInfo(name = "bar_kg")
+    val barKg: Double? = null,
+
     /**
      * How much training this lifter has behind them.
      *
@@ -52,9 +55,6 @@ data class ProfileEntity(
      */
     @ColumnInfo(name = "experience", defaultValue = "TRAINED")
     val experience: String = "TRAINED",
-
-    @ColumnInfo(name = "bar_kg")
-    val barKg: Double? = null,
 ) {
     companion object {
         /** There is one lifter, so there is one row, and it has a known id to be written over. */

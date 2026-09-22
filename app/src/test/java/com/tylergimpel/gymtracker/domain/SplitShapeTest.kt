@@ -40,7 +40,7 @@ class SplitShapeTest {
 
     @Test
     fun `five days a week and upper lower is offered`() {
-        val offered = splitShapesFor(weeklyFrequency = 5)
+        val offered = splitShapesFor(cadence = 5)
 
         // Entirely sound: a two-position cycle at cadence 5. Because the cycle is not anchored to
         // a calendar it produces U/L/U/L/U then L/U/L/U/L for free, which is the thing a
@@ -60,7 +60,7 @@ class SplitShapeTest {
 
     @Test
     fun `the likeliest shape is near the top without being called the best`() {
-        val offered = splitShapesFor(weeklyFrequency = 3)
+        val offered = splitShapesFor(cadence = 3)
 
         // A convenience, not a ranking on quality: somebody training three times a week most
         // often wants a cycle that comes round about weekly.
@@ -85,7 +85,7 @@ class SplitShapeTest {
 
     @Test
     fun `upper lower cardio is offered, because a cardio position carries no volume`() {
-        val offered = splitShapesFor(weeklyFrequency = 3, cardio = CardioPlacement.OWN_DAY)
+        val offered = splitShapesFor(cadence = 3, cardio = CardioPlacement.OWN_DAY)
 
         val upperLowerCardio = offered.single { it.id == "upper-lower-2-cardio" }
 
@@ -99,7 +99,7 @@ class SplitShapeTest {
     @Test
     fun `nobody gets a cardio day they did not ask for`() {
         listOf(CardioPlacement.NONE, CardioPlacement.AFTER_LIFTING).forEach { placement ->
-            val offered = splitShapesFor(weeklyFrequency = 3, cardio = placement)
+            val offered = splitShapesFor(cadence = 3, cardio = placement)
             assertTrue(offered.none { day -> day.days.any { it.kind == RoutineDayKind.CARDIO } })
         }
     }

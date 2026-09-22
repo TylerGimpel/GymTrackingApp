@@ -53,7 +53,7 @@ fun fillDays(
      * the budget dutifully produces a twenty-exercise day. The lifter has already answered this
      * question at setup; nothing here should be guessing at it.
      */
-    weeklyFrequency: Int,
+    cadence: Int,
     /**
      * Exercises the lifter marked to keep, which regeneration treats as fixed.
      *
@@ -80,7 +80,7 @@ fun fillDays(
 
         FilledDay(
             day,
-            pool.buildDay(day, shape, goal, weeklyFrequency, pinned[day.name].orEmpty(), seed)
+            pool.buildDay(day, shape, goal, cadence, pinned[day.name].orEmpty(), seed)
                 .orderedBy(goal),
         )
     }
@@ -145,7 +145,7 @@ private fun List<Exercise>.buildDay(
     day: SplitDay,
     shape: SplitShape,
     goal: RoutineGoal,
-    weeklyFrequency: Int,
+    cadence: Int,
     kept: List<PlannedExercise>,
     seed: Int,
 ): List<PlannedExercise> {
@@ -157,7 +157,7 @@ private fun List<Exercise>.buildDay(
     day.muscles.forEach { muscle ->
         if (muscle in answered) return@forEach
 
-        val sets = setsPerSessionFor(muscle, shape, goal, weeklyFrequency)
+        val sets = setsPerSessionFor(muscle, shape, goal, cadence)
         val wanted = exercisesForSets(sets)
 
         val pinnedHere = kept.filter { muscle in it.exercise.primaryMuscles }.map { it.exercise }

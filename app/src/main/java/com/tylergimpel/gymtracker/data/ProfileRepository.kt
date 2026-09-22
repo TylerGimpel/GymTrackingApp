@@ -65,6 +65,12 @@ class ProfileRepository(
     suspend fun setBar(weight: Kilograms) = profiles.upsert(
         profiles.profile()?.copy(barKg = weight.value) ?: ProfileEntity(barKg = weight.value),
     )
+
+    /** Records how much training the lifter says they have behind them. */
+    suspend fun setExperience(experience: Experience) = profiles.upsert(
+        profiles.profile()?.copy(experience = experience.name)
+            ?: ProfileEntity(experience = experience.name),
+    )
 }
 
 /**
