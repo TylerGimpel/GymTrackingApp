@@ -42,6 +42,8 @@ import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.ui.exercise.ExercisePicker
+import com.tylergimpel.gymtracker.domain.Exercise
 
 /**
  * A minimal routine editor: a name, the properties, and an ordered list of day names.
@@ -54,7 +56,7 @@ import com.tylergimpel.gymtracker.domain.RoutineGoal
 @Composable
 fun RoutineScreen(
     onBack: () -> Unit,
-    onAddExercise: (Long) -> Unit,
+    onAddNewExercise: (Long) -> Unit,
     viewModel: RoutineViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -97,7 +99,7 @@ fun RoutineScreen(
                     onRename = { viewModel.renameDay(day.id, it) },
                     onMove = { viewModel.moveDay(day.id, it) },
                     onRemove = { viewModel.removeDay(day.id) },
-                    onAddExercise = { onAddExercise(day.id) },
+                    onAddExercise = { viewModel.startPicking(day.id) },
                     onRemoveExercise = { viewModel.removeExerciseFromDay(day.id, it) },
                 )
                 HorizontalDivider()
@@ -112,6 +114,24 @@ fun RoutineScreen(
                 }
             }
         }
+    }
+
+    // Over the routine rather than away from it: filling a day is part of building one, and
+    // being thrown at another screen to do it loses the lifter their place.
+    state.picking?.let { picking ->
+        RoutinePicker(
+            picking = picking,
+            equipment = state.progress?.routine?.equipment.orEmpty(),
+            addingDisliked = state.addingDisliked,
+            onPick = viewModel::pick,
+            // Leaving for the bank's own form closes this, so coming back does not reopen a
+            // list taken before the exercise they went to write down existed.
+            onAddNew = {
+                viewModel.cancelPicking()
+                onAddNewExercise(picking.dayId)
+            },
+            onCancel = viewModel::cancelPicking,
+        )
     }
 }
 
@@ -361,6 +381,36 @@ private fun RoutineDayRow(
             Text(stringResource(R.string.routine_add_exercise))
         }
     }
+}
+
+/**
+ * The one picker, opened to fill a routine day.
+ *
+ * The same component a **Swap** opens, with nothing ranked in front of it: a day being built has
+ * no exercise to be "instead of", so the lifter starts from their own gym and types.
+ *
+ * A **Dislike** stops the app suggesting something. It was never a promise to argue with somebody
+ * who asks for one by name, so picking a banned exercise asks once and then adds it — the routine
+ * is theirs.
+ */
+@Composable
+private fun RoutinePicker(
+    picking: PickingFor,
+    equipment: Set<String>,
+    addingDisliked: Exercise?,
+    onPick: (Exercise) -> Unit,
+    onAddNew: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    ExercisePicker(
+        title = stringResource(R.string.routine_pick_exercise, picking.dayName),
+        bank = picking.bank,
+        equipment = equipment,
+        onPick = onPick,
+        onAddNew = onAddNew,
+        onCancel = onCancel,
+        note = addingDisliked?.let { stringResource(R.string.picker_disliked, it.name) },
+    )
 }
 
 @Composable

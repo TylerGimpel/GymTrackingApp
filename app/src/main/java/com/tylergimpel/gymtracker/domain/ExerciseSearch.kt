@@ -74,3 +74,44 @@ private fun String.tokenise(): List<String> =
     lowercase().split(NON_WORD).filter(String::isNotEmpty)
 
 private val NON_WORD = Regex("[^\\p{L}\\p{N}]+")
+
+/**
+ * What the picker offers, wherever it was opened from.
+ *
+ * One rule for swapping mid-session and for filling a routine day, because both ask the same
+ * question and a lifter should not have to learn two lists. What differs between the two callers
+ * is what they rank in front of these, never what is in them.
+ *
+ * Four filters, in the order that keeps the ordering meaningful:
+ *
+ * - **A dropped exercise is never offered.** A tombstone exists for the history pointing at it.
+ * - **A Dislike is a hard constraint on what is *suggested*** — but typing a name is not the app
+ *   suggesting anything, it is the lifter asking for that one. Refusing to find it would be the
+ *   app arguing with them; what should happen next is a warning, which is the caller's business.
+ * - **The gym's equipment**, unless [ownEquipmentOnly] is off. An empty checklist means nobody
+ *   has described the gym yet, so everything is offered rather than nothing.
+ * - **What was typed, then the muscle**, in that order, because filtering by muscle is what puts
+ *   exercises that target it in front of ones that merely involve it.
+ *
+ * A **User-authored exercise** passes through all four exactly as a shipped row does.
+ */
+fun List<Exercise>.offeredFor(
+    equipment: Set<String>,
+    query: String = "",
+    muscle: String? = null,
+    ownEquipmentOnly: Boolean = true,
+    aliases: ExerciseAliases = emptyMap(),
+): List<Exercise> {
+    val asked = query.isNotBlank()
+
+    return asSequence()
+        .filterNot { it.isTombstoned }
+        .filter { asked || !it.isDisliked }
+        .filter {
+            !ownEquipmentOnly || equipment.isEmpty() || it.equipment == null ||
+                it.equipment in equipment
+        }
+        .toList()
+        .search(query, aliases)
+        .let { if (muscle == null) it else it.workingMuscle(muscle) }
+}

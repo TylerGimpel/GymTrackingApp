@@ -49,8 +49,8 @@ private fun GymTracker(
 ) {
     var destination by rememberSaveable { mutableStateOf(Destination.SESSION) }
 
-    // Which routine day the picker was opened for, if it was opened for one. The picker is the
-    // same screen either way; only where the chosen exercise lands differs.
+    // Which routine day is being filled, if the bank was opened to write down a machine for one.
+    // The bank screen is the same either way; only where the new exercise lands differs.
     var pickingForDay by rememberSaveable { mutableStateOf<Long?>(null) }
 
     fun leavePicker() {
@@ -90,7 +90,10 @@ private fun GymTracker(
 
         Destination.ROUTINE -> RoutineScreen(
             onBack = { destination = Destination.SESSION },
-            onAddExercise = { dayId ->
+            // The only reason left to leave the routine: writing down a machine the app has
+            // never heard of, which is the one form in the app that does that. The day comes
+            // with them, so what they add lands where they were putting it.
+            onAddNewExercise = { dayId ->
                 pickingForDay = dayId
                 destination = Destination.EXERCISE_PICKER
             },

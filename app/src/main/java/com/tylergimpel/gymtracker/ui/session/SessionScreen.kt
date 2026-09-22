@@ -99,6 +99,7 @@ import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.ui.exercise.ExercisePicker
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asTimeText
@@ -586,13 +587,23 @@ fun SessionScreen(
         )
     }
 
-    state.swapCandidates?.let {
-        SwapSheet(
-            it,
-            state.swappingLeavesOnlyDisliked,
-            exercises.onSwapTo,
-            exercises.onPickExercise,
-            exercises.onCancelSwap,
+    state.swapCandidates?.let { candidates ->
+        ExercisePicker(
+            title = stringResource(R.string.swap_title),
+            bank = state.pickerBank,
+            equipment = state.routine?.routine?.equipment.orEmpty(),
+            onPick = exercises.onSwapTo,
+            onAddNew = exercises.onPickExercise,
+            onCancel = exercises.onCancelSwap,
+            // What the swap worked out: same muscle, same mechanic, the lifter's own equipment,
+            // and the ones they have history for first, because those need no calibration. It
+            // stands until they type something, at which point they are asking for something
+            // specific and the whole bank answers.
+            suggested = candidates,
+            // When the bans leave no way to train the muscle the app asks which is least bad,
+            // rather than silently including a banned exercise or silently skipping the muscle.
+            note = stringResource(R.string.swap_only_disliked)
+                .takeIf { state.swappingLeavesOnlyDisliked },
         )
     }
 
@@ -1244,54 +1255,6 @@ private fun AvoidedPrompt(
                     Text(stringResource(R.string.avoided_remove))
                 }
             }
-        },
-    )
-}
-
-/**
- * What to train instead, because the machine is busy.
- *
- * The suggestions are the app's best guesses, and the two ways out of them get equal room:
- * searching the whole bank, and adding an exercise the app has never heard of. Nobody is ever
- * stuck with a list.
- */
-@Composable
-private fun SwapSheet(
-    candidates: List<Exercise>,
-    onlyDislikedLeft: Boolean,
-    onSwapTo: (Exercise) -> Unit,
-    onSearch: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.swap_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                // When the bans leave no way to train the muscle, the app asks which is
-                // least bad. Silently including a banned exercise would break the promise the
-                // ban makes, and silently skipping the muscle would leave a hole in the training
-                // that nobody chose.
-                if (onlyDislikedLeft) {
-                    Text(stringResource(R.string.swap_only_disliked))
-                }
-                if (candidates.isEmpty()) {
-                    // A real answer rather than an empty box: the gym checklist may be narrow, or
-                    // this movement may have no close relatives in the bank.
-                    Text(stringResource(R.string.swap_nothing))
-                }
-                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                    items(candidates, key = Exercise::id) { candidate ->
-                        TextButton(onClick = { onSwapTo(candidate) }) { Text(candidate.name) }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onSearch) { Text(stringResource(R.string.swap_search)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

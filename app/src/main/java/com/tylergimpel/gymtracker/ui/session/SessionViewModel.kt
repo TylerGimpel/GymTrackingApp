@@ -204,6 +204,13 @@ private data class ScreenState(
     val swapCandidates: List<Exercise>? = null,
     /** Whether the only things left to suggest are ones the lifter has banned. */
     val swappingLeavesOnlyDisliked: Boolean = false,
+    /**
+     * The whole bank, while the picker is open.
+     *
+     * Held only then, because it is 893 rows and nothing else on this screen wants it. The picker
+     * searches and filters it in place rather than asking the database again on every keystroke.
+     */
+    val pickerBank: List<Exercise> = emptyList(),
     /** Exercises the lifter has already been asked about, so the question is asked once. */
     val askedAbout: Set<String> = emptySet(),
 )
@@ -281,6 +288,13 @@ data class SessionUiState(
      * can decide.
      */
     val swappingLeavesOnlyDisliked: Boolean = false,
+    /**
+     * The whole bank, while the picker is open.
+     *
+     * Held only then, because it is 893 rows and nothing else on this screen wants it. The picker
+     * searches and filters it in place rather than asking the database again on every keystroke.
+     */
+    val pickerBank: List<Exercise> = emptyList(),
     /**
      * An exercise the recent sessions kept asking for and the training kept not containing.
      *
@@ -497,6 +511,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 skipping = cycle.skipping,
                 editingExercise = screen.editingExercise,
                 swapCandidates = screen.swapCandidates,
+                pickerBank = screen.pickerBank,
                 swappingLeavesOnlyDisliked = screen.swappingLeavesOnlyDisliked,
                 // The first one they have not answered about yet, and only one at a time.
                 avoided = avoidedExercises(recent)
@@ -925,6 +940,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     swapCandidates = candidates.ifEmpty { leastBad },
                     swappingLeavesOnlyDisliked = leastBad.isNotEmpty(),
+                    pickerBank = bank,
                 )
             }
         }

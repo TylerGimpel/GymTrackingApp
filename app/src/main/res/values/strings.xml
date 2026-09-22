@@ -61,6 +61,12 @@
     <string name="swap_title">Train something else</string>
     <string name="swap_nothing">Nothing close by in your gym. Search the whole list, or add what you are using.</string>
     <string name="swap_search">Search or add</string>
+    <string name="picker_search">Search by name</string>
+    <string name="picker_everything">Everything</string>
+    <string name="picker_nothing">Nothing matches. Try a shorter word, widen it to everything, or add what you are using.</string>
+    <string name="picker_add_new">Add new</string>
+    <string name="routine_pick_exercise">Add to %1$s</string>
+    <string name="picker_disliked">You said never to suggest this one. Adding it anyway is your call.</string>
     <string name="swap_only_disliked">Everything left for this muscle is one you said you did not want. Which is least bad today?</string>
     <string name="plates_title">Plates</string>
     <string name="plates_done">Done</string>
