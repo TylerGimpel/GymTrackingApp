@@ -31,6 +31,15 @@ data class PickingFor(
     val bank: List<Exercise>,
 )
 
+/** Why the app is offering to build the routine again. */
+enum class RebuildOffer {
+    /** The goal, the cadence or the rep preference — what the routine is *for*. */
+    WHAT_IT_IS_FOR,
+
+    /** What the gym has, which changes when somebody joins a new one and nothing else. */
+    EQUIPMENT,
+}
+
 data class RoutineUiState(
     val progress: RoutineProgress? = null,
     /** The equipment vocabulary the shipped bank uses, offered as the gym checklist. */
@@ -47,6 +56,14 @@ data class RoutineUiState(
     val shape: SplitShape? = null,
     /** How many times variety has been asked for, which is what makes each answer a new one. */
     val seed: Int = 0,
+    /**
+     * A property changed that the routine could be rebuilt around, waiting on an answer.
+     *
+     * **An offer and never an action.** Somebody ticking a machine because they joined a new gym
+     * has said nothing about wanting a different routine, and quietly rebuilding their training
+     * plan for them would be the worst kind of helpful.
+     */
+    val offeringRebuild: RebuildOffer? = null,
     /**
      * An exercise the lifter picked that they had banned, waiting on them to say yes anyway.
      *
@@ -133,10 +150,37 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         repPreference: RepPreference,
         cardio: CardioPlacement,
     ) {
+        val before = state.value.progress?.routine
         viewModelScope.launch {
             repository.editProperties(name, goal, cadence, equipment, repPreference, cardio)
+
+            // The offer, made only where something actually changed that the routine could be
+            // built around — and never for a rename, which changes nothing about the training.
+            val offer = when {
+                before == null || state.value.shape == null -> null
+                before.equipment != equipment -> RebuildOffer.EQUIPMENT
+                before.goal != goal ||
+                    before.cadence != cadence ||
+                    before.repPreference != repPreference -> RebuildOffer.WHAT_IT_IS_FOR
+
+                else -> null
+            }
+            if (offer != null) held.update { it.copy(offeringRebuild = offer) }
         }
     }
+
+    /** Takes the offer, which is the only way a property change reaches the days. */
+    fun acceptRebuild() {
+        held.update { it.copy(offeringRebuild = null) }
+        regenerate()
+    }
+
+    /**
+     * Declines it, leaving the routine exactly as it was.
+     *
+     * Nothing to undo, because nothing was done: the offer never touched the days.
+     */
+    fun declineRebuild() = held.update { it.copy(offeringRebuild = null) }
 
     fun addDay(name: String, kind: RoutineDayKind = RoutineDayKind.LIFTING) {
         val routine = state.value.progress?.routine ?: return

@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -147,6 +148,34 @@ fun RoutineScreen(
 
     // Over the routine rather than away from it: filling a day is part of building one, and
     // being thrown at another screen to do it loses the lifter their place.
+    // An offer, in front of the lifter, with declining as easy as accepting. The routine is
+    // untouched until they answer, and untouched afterwards if they say no.
+    state.offeringRebuild?.let { offer ->
+        AlertDialog(
+            onDismissRequest = viewModel::declineRebuild,
+            text = {
+                Text(
+                    stringResource(
+                        when (offer) {
+                            RebuildOffer.EQUIPMENT -> R.string.routine_offer_equipment
+                            RebuildOffer.WHAT_IT_IS_FOR -> R.string.routine_offer_rebuild
+                        },
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::acceptRebuild) {
+                    Text(stringResource(R.string.routine_offer_accept))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::declineRebuild) {
+                    Text(stringResource(R.string.routine_offer_decline))
+                }
+            },
+        )
+    }
+
     state.picking?.let { picking ->
         RoutinePicker(
             picking = picking,

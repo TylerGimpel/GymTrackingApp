@@ -156,6 +156,10 @@
     <string name="routine_equipment">Equipment at your gym</string>
     <string name="routine_days">Days</string>
     <string name="routine_regenerate">Build it again</string>
+    <string name="routine_offer_rebuild">You changed what this routine is for. Want it built again to match, or keep the one you have?</string>
+    <string name="routine_offer_equipment">You changed what your gym has. Want the routine built again around it, or keep the one you have?</string>
+    <string name="routine_offer_accept">Build it again</string>
+    <string name="routine_offer_decline">Keep what I have</string>
     <string name="routine_undo">Undo that</string>
     <string name="routine_pin">Keep</string>
     <string name="routine_pinned">Keeping</string>

@@ -760,6 +760,44 @@ class RoutinePersistenceTest {
         assertFalse(routines.canUndo())
     }
 
+    @Test
+    fun changingWhatARoutineIsForDoesNotTouchWhatItsDaysHold() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        generated(shape)
+        val before = everyExercise()
+        val cycleBefore = routines.observeProgress().first()!!.cycle?.ordinal
+
+        reGoal(RoutineGoal.STRENGTH)
+
+        // Editing a property is not a **Revision**: the rotation is untouched, so the cycle and
+        // the cursor are where the lifter left them — and, crucially, so are the exercises.
+        // Rebuilding around a new goal is something they are offered, never something done to
+        // them, and declining has nothing to undo because nothing happened.
+        assertEquals(before, everyExercise())
+        assertEquals(cycleBefore, routines.observeProgress().first()!!.cycle?.ordinal)
+    }
+
+    @Test
+    fun changingGymsNeverCostsTheLifterTheirRoutine() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        generated(shape)
+        val before = everyExercise()
+
+        val routine = routines.observeProgress().first()!!.routine
+        routines.editProperties(
+            name = routine.name,
+            goal = routine.goal,
+            cadence = routine.cadence,
+            equipment = setOf("body only"),
+            repPreference = routine.repPreference,
+            cardio = routine.cardio,
+        )
+
+        // Somebody ticking a machine because they joined a new gym has said nothing about wanting
+        // a different routine. Quietly rebuilding it for them would be the worst kind of helpful.
+        assertEquals(before, everyExercise())
+    }
+
     /** A routine generated from [shape] against the real bank, and that bank. */
     private suspend fun generated(shape: SplitShape): List<Exercise> {
         val bank = exercises.observeBank().first()
