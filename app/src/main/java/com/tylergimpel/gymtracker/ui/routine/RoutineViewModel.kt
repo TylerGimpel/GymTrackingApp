@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.data.RoutineProgress
 import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.RepPreference
+import com.tylergimpel.gymtracker.domain.Experience
 import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.CardioPlacement
@@ -51,11 +52,11 @@ data class RoutineUiState(
     /**
      * Whether the last regeneration can still be stepped back from.
      *
-     * One step, and only until the routine has been trained (ADR 0006).
+     * One step, and only until the routine has been trained (ADR 0006). Read from storage rather
+     * than remembered, so finishing a session — which clears it — is reflected here, and so the
+     * button does not vanish because the process was killed.
      */
     val canUndo: Boolean = false,
-    /** The shape this routine was laid out from, which is what regenerating rebuilds against. */
-    val shape: SplitShape? = null,
     /** How many times variety has been asked for, which is what makes each answer a new one. */
     val seed: Int = 0,
     /**
@@ -66,6 +67,16 @@ data class RoutineUiState(
      * plan for them would be the worst kind of helpful.
      */
     val offeringRebuild: RebuildOffer? = null,
+    /** Whether the log turned out to hold no routine worth rebuilding, after they asked. */
+    val nothingToRebuild: Boolean = false,
+    /**
+     * How much training the lifter has behind them, which one conflict rule reads.
+     *
+     * Theirs rather than the routine's, so it comes from the profile.
+     */
+    val experience: Experience = Experience.TRAINED,
+    /** The bank, so the least-bad question can be asked about muscles their bans have emptied. */
+    val bank: List<Exercise> = emptyList(),
     /**
      * An exercise the lifter picked that they had banned, waiting on them to say yes anyway.
      *
@@ -108,8 +119,18 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         repository.observeProgress(),
         database.exerciseDao().observeEquipment(),
         held,
-    ) { progress, equipment, onScreen ->
-        onScreen.copy(progress = progress, availableEquipment = equipment)
+        database.profileRepository().observeExperience(),
+        exercises.observeBank(),
+    ) { progress, equipment, onScreen, experience, bank ->
+        onScreen.copy(
+            progress = progress,
+            availableEquipment = equipment,
+            experience = experience,
+            bank = bank,
+            // Asked of the database rather than remembered: a session logged elsewhere in the app
+            // spends the step back, and this is what notices.
+            canUndo = repository.canUndo(),
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), RoutineUiState())
 
     fun createRoutine(name: String) {
@@ -145,10 +166,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 // they decided without being told about it separately.
                 bank = exercises.observeBank().first(),
             )
-            // Remembered so that "build it again" has something to build against. A routine
-            // created by hand has no shape, and regenerating one would be inventing a structure
-            // nobody chose.
-            held.update { it.copy(shape = shape, seed = 0) }
+            held.update { it.copy(seed = 0) }
         }
     }
 
@@ -167,7 +185,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             // The offer, made only where something actually changed that the routine could be
             // built around — and never for a rename, which changes nothing about the training.
             val offer = when {
-                before == null || state.value.shape == null -> null
+                before == null || before.shape == null -> null
                 before.equipment != equipment -> RebuildOffer.EQUIPMENT
                 before.goal != goal ||
                     before.cadence != cadence ||
@@ -191,6 +209,8 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
      * Nothing to undo, because nothing was done: the offer never touched the days.
      */
     fun declineRebuild() = held.update { it.copy(offeringRebuild = null) }
+
+    fun dismissNothingToRebuild() = held.update { it.copy(nothingToRebuild = false) }
 
     fun addDay(name: String, kind: RoutineDayKind = RoutineDayKind.LIFTING) {
         val routine = state.value.progress?.routine ?: return
@@ -225,11 +245,11 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
      * different one rather than the same one again.
      */
     fun regenerate() {
-        val shape = state.value.shape ?: return
+        val shape = state.value.progress?.routine?.shape ?: return
         viewModelScope.launch {
             val next = state.value.seed + 1
             repository.regenerate(shape, exercises.observeBank().first(), seed = next)
-            held.update { it.copy(seed = next, canUndo = repository.canUndo()) }
+            held.update { it.copy(seed = next) }
         }
     }
 
@@ -243,7 +263,12 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun rebuildFromLog(weeklyFrequency: Int, cardio: CardioPlacement, equipment: Set<String>) {
         viewModelScope.launch {
             val recovered = rebuildFrom(sessions.observeRecent(RECOVERABLE_SESSIONS).first())
-            if (recovered.isEmpty()) return@launch
+            if (recovered.isEmpty()) {
+                // Said rather than silently doing nothing. A button that answers a tap with
+                // stillness reads as broken, and "you have no history yet" is a real answer.
+                held.update { it.copy(nothingToRebuild = true) }
+                return@launch
+            }
 
             repository.rebuildFromSessions(
                 name = recovered.first().name,
@@ -254,18 +279,15 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 repPreference = RepPreference.MODERATE,
                 cardio = cardio,
             )
-            // No shape, because this one was not laid out from one. Regenerating it would be
-            // inventing a structure the lifter never chose.
-            held.update { it.copy(shape = null, seed = 0) }
+            // No shape is recorded for it, because this one was not laid out from one.
+            // Regenerating it would be inventing a structure the lifter never chose.
+            held.update { it.copy(seed = 0) }
         }
     }
 
     /** Puts back what the days held before the last regeneration. */
     fun undoRegeneration() {
-        viewModelScope.launch {
-            repository.undoRegeneration()
-            held.update { it.copy(canUndo = repository.canUndo()) }
-        }
+        viewModelScope.launch { repository.undoRegeneration() }
     }
 
     /**

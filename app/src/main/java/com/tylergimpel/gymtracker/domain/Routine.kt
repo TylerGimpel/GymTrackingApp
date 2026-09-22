@@ -153,6 +153,13 @@ data class Routine(
     val repPreference: RepPreference,
     /** Where this lifter's cardio goes, if they do any. */
     val cardio: CardioPlacement = CardioPlacement.NONE,
+    /**
+     * The shape this routine was laid out from, where it was laid out from one.
+     *
+     * Null for one built by hand or rebuilt from the log. Regenerating those would be inventing a
+     * structure nobody chose, so the offer is simply not made.
+     */
+    val shape: SplitShape? = null,
     val days: List<RoutineDay>,
 ) {
     /** The days in rotation order, whatever order they arrived in. */

@@ -940,6 +940,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_SECOND_DATABASE = "migration-twenty-second.db"
         const val TWENTY_THIRD_DATABASE = "migration-twenty-third.db"
         const val TWENTY_FOURTH_DATABASE = "migration-twenty-fourth.db"
+        const val TWENTY_FIFTH_DATABASE = "migration-twenty-fifth.db"
     }
 
     /**
@@ -1115,7 +1116,8 @@ class GymDatabaseMigrationTest {
                     "VALUES (1, 1, 'Push', 'LIFTING')",
             )
             version24.execSQL(
-                "INSERT INTO routine_day_exercise (routine_day_id, exercise_id, order_index, sets) " +
+                "INSERT INTO routine_day_exercise " +
+                    "(routine_day_id, exercise_id, order_index, sets) " +
                     "VALUES (1, 'Barbell_Bench_Press', 1, 4)",
             )
         }
@@ -1132,6 +1134,40 @@ class GymDatabaseMigrationTest {
                 db.query("SELECT COUNT(*) FROM routine_day_exercise_undo").use {
                     it.moveToFirst()
                     assertEquals(0, it.getInt(0))
+                }
+            }
+    }
+
+    /**
+     * Version 26 records how much training the lifter has behind them, and what shape their
+     * routine was laid out from.
+     *
+     * Both default to the answer that changes nothing. "Trained" is the experience that overrules
+     * no preference, since assuming somebody is new and steering them is the worse mistake. A null
+     * shape is a routine nobody generated, which is every routine that existed before the app
+     * could remember one across a restart.
+     */
+    @Test
+    fun migratesToExperienceAndARememberedShapeWithoutAssumingEither() {
+        helper.createDatabase(TWENTY_FIFTH_DATABASE, 25).use { version25 ->
+            version25.execSQL("INSERT INTO profile (id, display_unit) VALUES (1, 'kg')")
+            version25.execSQL(
+                "INSERT INTO routine (name, goal, cadence, equipment, rep_preference, cardio) " +
+                    "VALUES ('Mine', 'HYPERTROPHY', 3, '', 'MODERATE', 'NONE')",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_FIFTH_DATABASE, 26, true, MIGRATION_25_26)
+            .use { db ->
+                db.query("SELECT experience, display_unit FROM profile WHERE id = 1").use {
+                    it.moveToFirst()
+                    assertEquals("TRAINED", it.getString(0))
+                    // And what they had already chosen is untouched.
+                    assertEquals("kg", it.getString(1))
+                }
+                db.query("SELECT shape_id FROM routine WHERE id = 1").use {
+                    it.moveToFirst()
+                    assertTrue("a shape was invented for a routine nobody generated", it.isNull(0))
                 }
             }
     }

@@ -38,6 +38,34 @@ class SetBudgetTest {
     }
 
     @Test
+    fun `the real arithmetic lands in the band for every shape the app offers`() {
+        // The guard below used the band top over two sessions, which is not what any routine
+        // actually asks. This runs the real budget for every shape, goal and frequency, and
+        // asserts where it lands — including the one place it lands at one, and why that is
+        // right rather than a violation.
+        val landings = mutableSetOf<Int>()
+        SPLIT_SHAPES.forEach { shape ->
+            RoutineGoal.entries.forEach { goal ->
+                (2..6).forEach { frequency ->
+                    shape.days.flatMap { it.muscles }.distinct().forEach { muscle ->
+                        val sets = setsPerSessionFor(muscle, shape, goal, frequency)
+                        if (sets > 0) landings += exercisesForSets(sets)
+                    }
+                }
+            }
+        }
+
+        assertTrue("nothing reached the band at all", landings.any { it in 2..4 })
+        assertTrue("something divided past four ways", landings.all { it <= 4 })
+
+        // A budget under two sets is one exercise, and deliberately so: the spec asks for a count
+        // "derived from how the set budget divides rather than chosen", and forcing a second
+        // movement onto two sets would be choosing. It happens for strength trained often, where
+        // one exercise for three sets is better training than two for one apiece.
+        assertTrue(landings.contains(1))
+    }
+
+    @Test
     fun `a real weekly target divides into two to four exercises`() {
         // What the research-shaped budget actually produces, which is the band the spec names.
         // Asserted over the goals rather than by pinning a number, because the number is not the

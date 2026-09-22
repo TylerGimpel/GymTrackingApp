@@ -102,7 +102,9 @@ fun RoutineScreen(
         }
 
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
-            item { RoutineProperties(routine, state.availableEquipment, viewModel) }
+            item {
+                RoutineProperties(routine, state.availableEquipment, state.experience, viewModel)
+            }
             item { HorizontalDivider() }
             item {
                 Text(
@@ -128,14 +130,14 @@ fun RoutineScreen(
             item { AddDay(onAdd = viewModel::addDay) }
             item {
                 Regenerate(
-                    canRegenerate = state.shape != null,
+                    canRegenerate = state.progress?.routine?.shape != null,
                     canUndo = state.canUndo,
                     onRegenerate = viewModel::regenerate,
                     onUndo = viewModel::undoRegeneration,
                 )
             }
             item { WhatItTrains(state.progress?.routine) }
-            item { WhatIsBinding(state.progress?.routine) }
+            item { WhatIsBinding(state.progress?.routine, state.bank) }
             item {
                 TextButton(
                     onClick = viewModel::deleteRoutine,
@@ -147,8 +149,6 @@ fun RoutineScreen(
         }
     }
 
-    // Over the routine rather than away from it: filling a day is part of building one, and
-    // being thrown at another screen to do it loses the lifter their place.
     // An offer, in front of the lifter, with declining as easy as accepting. The routine is
     // untouched until they answer, and untouched afterwards if they say no.
     state.offeringRebuild?.let { offer ->
@@ -171,6 +171,20 @@ fun RoutineScreen(
             },
             dismissButton = {
                 TextButton(onClick = viewModel::declineRebuild) {
+                    Text(stringResource(R.string.routine_offer_decline))
+                }
+            },
+        )
+    }
+
+    // Over the routine rather than away from it: filling a day is part of building one, and
+    // being thrown at another screen to do it loses the lifter their place.
+    state.nothingToRebuild.takeIf { it }?.let {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissNothingToRebuild,
+            text = { Text(stringResource(R.string.routine_rebuild_none)) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissNothingToRebuild) {
                     Text(stringResource(R.string.routine_offer_decline))
                 }
             },
@@ -277,8 +291,10 @@ private fun WhatItTrains(routine: Routine?) {
  * Silent when everything holds, like the rest of this screen.
  */
 @Composable
-private fun WhatIsBinding(routine: Routine?) {
-    val findings = remember(routine) { routine?.let { bindingOn(it) }.orEmpty() }
+private fun WhatIsBinding(routine: Routine?, bank: List<Exercise>) {
+    val findings = remember(routine, bank) {
+        routine?.let { bindingOn(it, bank = bank) }.orEmpty()
+    }
     if (findings.isEmpty()) return
 
     Column(
@@ -488,6 +504,8 @@ private fun EmptyRoutine(
 private fun RoutineProperties(
     routine: Routine,
     availableEquipment: List<String>,
+    /** How much training the lifter has behind them, which one conflict rule reads. */
+    experience: Experience,
     viewModel: RoutineViewModel,
 ) {
     var name by rememberSaveable(routine.id) { mutableStateOf(routine.name) }
@@ -549,7 +567,7 @@ private fun RoutineProperties(
         conflictsFor(
             goal = routine.goal,
             preference = routine.repPreference,
-            experience = Experience.TRAINED,
+            experience = experience,
             equipment = routine.equipment,
         ).forEach {
             Text(

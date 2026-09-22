@@ -42,6 +42,17 @@ data class ProfileEntity(
      * Twenty kilograms or forty-five pounds are different bars rather than two spellings of one
      * — which is the whole reason this is stored rather than converted from a constant.
      */
+    /**
+     * How much training this lifter has behind them.
+     *
+     * Theirs rather than any routine's, which is why it sits here with their preferred unit. Only
+     * one rule reads it — whether to steer somebody away from high-rep work they would have to
+     * judge proximity to failure for — and "trained" is the assumption until they say otherwise,
+     * because it is the one that overrules nothing.
+     */
+    @ColumnInfo(name = "experience", defaultValue = "TRAINED")
+    val experience: String = "TRAINED",
+
     @ColumnInfo(name = "bar_kg")
     val barKg: Double? = null,
 ) {

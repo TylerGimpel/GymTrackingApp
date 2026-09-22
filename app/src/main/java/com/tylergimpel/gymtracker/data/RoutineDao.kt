@@ -102,9 +102,9 @@ interface RoutineDao {
     /**
      * Forgets the step back.
      *
-     * Called when one is taken, when a new one replaces it, and when a session is logged — after
-     * which the routine has been trained and the thing undo would restore is no longer what the
-     * lifter was doing.
+     * Called when one is taken and when a new one replaces it. A session being logged spends it
+     * too, through `SessionDao` — in the same transaction that finishes the session, so a landed
+     * session and a surviving undo cannot come apart.
      */
     @Query("DELETE FROM routine_day_exercise_undo")
     suspend fun clearUndo()

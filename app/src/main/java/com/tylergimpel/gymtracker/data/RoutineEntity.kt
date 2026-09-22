@@ -9,6 +9,8 @@ import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.SPLIT_SHAPES
+import com.tylergimpel.gymtracker.domain.shapeOf
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.setsFor
@@ -52,6 +54,17 @@ data class RoutineEntity(
      */
     @ColumnInfo(name = "cardio", defaultValue = "NONE")
     val cardio: String = CardioPlacement.NONE.name,
+
+    /**
+     * The **Split shape** this routine was laid out from, where it was laid out from one.
+     *
+     * Stored rather than remembered on screen, because regenerating needs it and a lifter who
+     * closed the app should not lose the ability to ask for a different routine. Null for one
+     * built by hand or rebuilt from the log: regenerating those would be inventing a structure
+     * nobody chose.
+     */
+    @ColumnInfo(name = "shape_id")
+    val shapeId: String? = null,
 )
 
 /** One ordered position within a routine. Never a calendar day. */
@@ -106,6 +119,7 @@ fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
     equipment = equipment.toSet(),
     repPreference = RepPreference.valueOf(repPreference),
     cardio = CardioPlacement.valueOf(cardio),
+    shape = shapeId?.let { id -> SPLIT_SHAPES.firstOrNull { it.id == id } ?: shapeOf(id) },
     days = days.map { it.toDomain(RoutineGoal.valueOf(goal)) },
 )
 

@@ -112,7 +112,8 @@ fun conflictsFor(
     }
 
     // A gym with no way to load a lift heavily cannot deliver a 1-6RM whatever anybody prefers.
-    if (preference == RepPreference.LOW && equipment.isNotEmpty() && equipment.none(::canLoadHeavy)) {
+    val noHeavyLoad = equipment.isNotEmpty() && !equipment.canLoadHeavy()
+    if (preference == RepPreference.LOW && noHeavyLoad) {
         add(
             Conflict(
                 wonBy = goal,
@@ -140,9 +141,10 @@ fun conflictsFor(
     }
 }
 
-/** Whether this equipment can be loaded heavily enough for low-rep work. */
-private fun canLoadHeavy(equipment: String): Boolean =
-    equipment in setOf("barbell", "dumbbell", "machine", "kettlebells", "cable", "e-z curl bar")
+/** Whether any of this equipment can be loaded heavily enough for low-rep work. */
+private fun Set<String>.canLoadHeavy(): Boolean = any {
+    it in setOf("barbell", "dumbbell", "machine", "kettlebells", "cable", "e-z curl bar")
+}
 
 /**
  * Roughly how long a day takes, which is the number the ceiling is checked against.
@@ -158,20 +160,30 @@ private fun canLoadHeavy(equipment: String): Boolean =
  */
 fun sessionLength(
     routine: Routine,
-    restPerSet: Duration,
-    cardio: CardioPlacement = CardioPlacement.NONE,
+    cardio: CardioPlacement = routine.cardio,
+    repRange: RepRange = RepRange.DEFAULT,
 ): Duration = routine.days
     .filter { it.kind == RoutineDayKind.LIFTING }
-    .maxOfOrNull { dayLength(it, restPerSet, cardio) }
+    .maxOfOrNull { dayLength(it, cardio, repRange) }
     ?: Duration.ZERO
 
+/**
+ * How long one day runs.
+ *
+ * **The rest is the engine's own**, derived per exercise from what that set is — a heavy
+ * multi-joint lift rests for three minutes and a machine isolation set for ninety seconds, and a
+ * ceiling that assumed one number for both would be measuring the wrong session entirely.
+ */
 private fun dayLength(
     day: RoutineDay,
-    restPerSet: Duration,
     cardio: CardioPlacement,
+    repRange: RepRange,
 ): Duration {
-    val sets = day.exercises.sumOf { it.sets ?: 0 }
-    val lifting = (UNDER_THE_BAR.plus(restPerSet)).multipliedBy(sets.toLong())
+    val lifting = day.exercises.fold(Duration.ZERO) { total, planned ->
+        val rest = planned.exercise.chosenRest
+            ?: restFor(planned.exercise, SetType.WORKING, repRange)
+        total + (UNDER_THE_BAR + rest).multipliedBy((planned.sets ?: 0).toLong())
+    }
     val andCardio =
         if (cardio == CardioPlacement.AFTER_LIFTING) SAME_DAY_CARDIO else Duration.ZERO
     return lifting + andCardio
@@ -200,10 +212,16 @@ val SESSION_CEILING: Duration = Duration.ofMinutes(90)
 fun bindingOn(
     routine: Routine,
     ceiling: Duration = SESSION_CEILING,
-    restPerSet: Duration = Duration.ofMinutes(2),
+    /**
+     * The bank, where the least-bad question is worth asking.
+     *
+     * Empty skips it — not because the question does not matter, but because it cannot be
+     * answered without knowing what the gym could have offered instead.
+     */
+    bank: List<Exercise> = emptyList(),
 ): List<Binding> = buildList {
     routine.days.filter { it.kind == RoutineDayKind.LIFTING }.forEach { day ->
-        val length = dayLength(day, restPerSet, routine.cardio)
+        val length = dayLength(day, routine.cardio, RepRange.DEFAULT)
         if (length > ceiling) {
             add(
                 Binding.SessionTooLong(
@@ -242,6 +260,17 @@ fun bindingOn(
                 ),
             )
         }
+    }
+
+    // And the question only the lifter can answer: where their own exclusions have left a muscle
+    // with nothing to train it, which is least bad. Asked over the muscles this routine is meant
+    // to train rather than the whole vocabulary.
+    if (bank.isNotEmpty()) {
+        routine.days.filter { it.kind == RoutineDayKind.LIFTING }
+            .flatMap { day -> day.exercises.flatMap { it.exercise.primaryMuscles } }
+            .distinct()
+            .mapNotNull { leastBadFor(it, bank, routine.equipment) }
+            .forEach { add(it) }
     }
 }
 

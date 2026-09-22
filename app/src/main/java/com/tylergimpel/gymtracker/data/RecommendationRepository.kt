@@ -302,6 +302,9 @@ class RecommendationRepository(
         return seedRepRange(
             goal = RoutineGoal.valueOf(routine.goal),
             preference = RepPreference.valueOf(routine.repPreference),
+            // The gym, because a preference for heavy triples is not deliverable in a room with
+            // nothing to load. The conflict that explains the override is reported on the routine.
+            equipment = routine.equipment.toSet(),
         ).range
     }
 

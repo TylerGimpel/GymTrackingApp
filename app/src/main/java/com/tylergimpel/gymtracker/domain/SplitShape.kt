@@ -61,7 +61,7 @@ data class SplitShape(
 
     /** The same shape with a cardio position on the end, which counts toward neither rule. */
     fun withCardioDay(): SplitShape = copy(
-        id = "$id-cardio",
+        id = "$id$CARDIO_SUFFIX",
         days = days + SplitDay(CARDIO_DAY, emptyList(), RoutineDayKind.CARDIO),
     )
 
@@ -267,3 +267,19 @@ fun splitShapesFor(
         compareBy<SplitShape> { kotlin.math.abs(it.liftingPositions - weeklyFrequency) }
             .thenBy { it.liftingPositions },
     )
+
+/**
+ * The shape with this id, or null where nothing answers to it.
+ *
+ * Covers the cardio variants too, which are the base shapes with a position on the end rather
+ * than entries in the list — so a routine laid out from one can still be found by what it stored.
+ */
+fun shapeOf(id: String): SplitShape? = when {
+    id.endsWith(CARDIO_SUFFIX) ->
+        SPLIT_SHAPES.firstOrNull { it.id == id.removeSuffix(CARDIO_SUFFIX) }?.withCardioDay()
+
+    else -> SPLIT_SHAPES.firstOrNull { it.id == id }
+}
+
+/** What [SplitShape.withCardioDay] appends to an id, so the pair can be read back apart. */
+private const val CARDIO_SUFFIX = "-cardio"

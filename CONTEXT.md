@@ -218,6 +218,19 @@ The load an exercise is currently being worked at — the **Anchor** read back d
 
 What double progression moves: the weight holds while the reps climb through the range, and steps by one **Increment** once the top has been beaten on two consecutive sessions. Held rather than followed — once the app has asked for a weight, that weight is what holds, and not whatever the **Anchor** currently says. The app's own working rather than anything the lifter chose, which is why it lives apart from both the shipped bank row and the lifter's preferences.
 
+**Split shape**:
+A hand-authored day structure: the rotation a routine is laid out from, before anything is in it. Thirteen of them, which is what the divisibility rule leaves for cycles up to seven positions. Offered by shape — "alternate upper and lower" — because that is a thing anyone can choose and "a two-position cycle" is not. A shape names, per position, the muscles that position is *for*; what goes in it is the generator's half of the hybrid, because equipment varies at every gym and a template would be wrong at most of them.
+_Avoid_: template, which suggests the exercises come with it.
+
+**Binding constraint**:
+Something a routine cannot satisfy, paired with what would give if the lifter relaxed it. Never an error and never a refusal: an impossible request is a conversation, so the app says what is binding and leaves the decision where it belongs. The time ceiling usually binds before volume does.
+
+**Pin**:
+An exercise the lifter marked to keep through a regeneration, which the generator treats as a fixed constraint and builds the day around. A pin takes one of the places its muscle's budget asked for; it does not answer for the muscle. About the **shape** of the routine and never about the safety of anything, since per-exercise history follows the exercise whatever a routine does.
+
+**Experience**:
+How much training a lifter has behind them — novice, trained or advanced. Theirs rather than any routine's, so it sits with their **Preferred unit**. One rule reads it: whether to steer somebody away from high-rep work whose value depends on judging proximity to failure. Trained until they say otherwise, because that is the answer that overrules nothing.
+
 **Plate inventory**:
 The plates the lifter owns and the bar they go on: one global, editable set, counted in **pairs** because a bar loaded at one end is not a lift. The single thing both the engine and the **Plate line** read, which is what stops the weight and the instructions for building it ever disagreeing.
 

@@ -27,7 +27,10 @@ class RebuildFromSessionsTest {
         )
 
         assertEquals(listOf("Push", "Pull", "Legs"), recovered.map { it.name })
-        assertEquals(listOf("Bench", "Row", "Squat"), recovered.map { it.exercises.single().exercise.id })
+        assertEquals(
+            listOf("Bench", "Row", "Squat"),
+            recovered.map { it.exercises.single().exercise.id },
+        )
     }
 
     @Test
@@ -59,7 +62,10 @@ class RebuildFromSessionsTest {
     @Test
     fun `a session that followed no routine day contributes nothing`() {
         val recovered = rebuildFrom(
-            listOf(session(day = null, on = "2026-03-02", bench to 4), session("Push", "2026-03-04", row to 4)),
+            listOf(
+                session(day = null, on = "2026-03-02", bench to 4),
+                session("Push", "2026-03-04", row to 4),
+            ),
         )
 
         // Training with no routine is an ordinary session, and there is no rotation in it to

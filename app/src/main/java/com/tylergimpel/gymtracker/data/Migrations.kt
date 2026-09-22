@@ -639,6 +639,23 @@ internal val MIGRATION_24_25 = object : Migration(24, 25) {
     }
 }
 
+/**
+ * How much training the lifter has behind them, and the shape their routine was laid out from.
+ *
+* Both default to the answer that changes nothing. "Trained" is the experience that overrules no
+ * preference, since assuming somebody is new and steering them is the worse mistake. A null shape
+ * is a routine nobody generated, which is every routine that exists before this: the app could not
+ * remember a shape across a restart until now.
+ */
+internal val MIGRATION_25_26 = object : Migration(25, 26) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `profile` ADD COLUMN `experience` TEXT NOT NULL DEFAULT 'TRAINED'",
+        )
+        db.execSQL("ALTER TABLE `routine` ADD COLUMN `shape_id` TEXT")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -664,6 +681,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_22_23,
     MIGRATION_23_24,
     MIGRATION_24_25,
+    MIGRATION_25_26,
 )
 
 /**

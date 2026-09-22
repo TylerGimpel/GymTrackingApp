@@ -88,6 +88,8 @@ class RoutineRepository(
         equipment: Set<String> = emptySet(),
         repPreference: RepPreference = RepPreference.MODERATE,
         cardio: CardioPlacement = CardioPlacement.NONE,
+        /** The shape it was laid out from, where it was laid out from one. */
+        shapeId: String? = null,
     ): Long = routines.insert(
         RoutineEntity(
             name = name,
@@ -96,6 +98,7 @@ class RoutineRepository(
             equipment = equipment.toList(),
             repPreference = repPreference.name,
             cardio = cardio.name,
+            shapeId = shapeId,
         ),
     )
 
@@ -126,7 +129,7 @@ class RoutineRepository(
          */
         bank: List<Exercise> = emptyList(),
     ): Long = database.withTransaction {
-        val id = createRoutine(name, goal, cadence, equipment, repPreference, cardio)
+        val id = createRoutine(name, goal, cadence, equipment, repPreference, cardio, shape.id)
         val filled = fillDays(shape, bank, equipment, goal, cadence).associateBy { it.shape.name }
 
         shape.days.forEach { day ->
@@ -294,7 +297,11 @@ class RoutineRepository(
         val rows = routines.undoRows()
         if (rows.isEmpty()) return@withTransaction
 
-        rows.map { it.routineDayId }.distinct().forEach { routines.clearDay(it) }
+        // Every day of the routine, not only the ones that wrote undo rows. A day that was empty
+        // before the regeneration wrote none, so clearing by row would leave whatever the
+        // regeneration put in it — and an undo that puts most of a routine back is not an undo.
+        val routine = routines.routine() ?: return@withTransaction
+        routines.days(routine.id).forEach { routines.clearDay(it.id) }
         rows.forEach { row ->
             routines.insert(
                 RoutineDayExerciseEntity(
@@ -308,14 +315,6 @@ class RoutineRepository(
         }
         routines.clearUndo()
     }
-
-    /**
-     * Forgets the step back, because the routine has now been trained.
-     *
-     * ADR 0006 retains undo only until the next session is logged: past that, what it would
-     * restore is no longer what the lifter is doing.
-     */
-    suspend fun forgetUndo() = routines.clearUndo()
 
     /**
      * Edits the routine's properties.
@@ -334,6 +333,8 @@ class RoutineRepository(
         cardio: CardioPlacement,
     ) {
         val existing = routines.routine() ?: return
+        // `copy` on the row that is already there, so the shape it was laid out from survives an
+        // edit that has nothing to say about it.
         routines.update(
             existing.copy(
                 name = name,

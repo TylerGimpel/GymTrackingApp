@@ -84,7 +84,31 @@ data class SeededRepRange(
  * it. Exactly where a low preference stops and a moderate one starts is a judgement call, like
  * the layoff decay rate and the skip threshold, and should look like one.
  */
-fun seedRepRange(goal: RoutineGoal, preference: RepPreference): SeededRepRange = when (goal) {
+fun seedRepRange(
+    goal: RoutineGoal,
+    preference: RepPreference,
+    /**
+     * What the gym has, which can make a preference unreachable however much anybody wants it.
+     *
+     * Empty means nobody has described the gym yet, and an undescribed gym is not a reason to
+     * overrule anybody.
+     */
+    equipment: Set<String> = emptySet(),
+): SeededRepRange {
+    // A gym with nothing to load heavily cannot deliver a 1-6RM. Overruled rather than quietly
+    // prescribed and never reached, and the conflict beside it says why (#76).
+    val noHeavyLoad = equipment.isNotEmpty() && equipment.none(::canLoadHeavy)
+    if (preference == RepPreference.LOW && noHeavyLoad) {
+        return seedRepRange(goal, RepPreference.MODERATE).copy(overruled = RepPreference.LOW)
+    }
+    return seedFor(goal, preference)
+}
+
+/** Whether this equipment can be loaded heavily enough for low-rep work. */
+private fun canLoadHeavy(equipment: String): Boolean =
+    equipment in setOf("barbell", "dumbbell", "machine", "kettlebells", "cable", "e-z curl bar")
+
+private fun seedFor(goal: RoutineGoal, preference: RepPreference): SeededRepRange = when (goal) {
     RoutineGoal.STRENGTH -> when (preference) {
         RepPreference.LOW -> SeededRepRange(RepRange(3, 5))
         RepPreference.MODERATE -> SeededRepRange(RepRange(4, 6))

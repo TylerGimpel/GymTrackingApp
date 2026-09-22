@@ -78,22 +78,11 @@ fun fillDays(
         // would put volume into a day that is meant to carry none.
         if (day.kind == RoutineDayKind.CARDIO) return@map FilledDay(day, emptyList())
 
-        val kept = pinned[day.name].orEmpty()
-        val answered = kept.flatMap { it.exercise.primaryMuscles }.toSet()
-
-        val generated = pool.coveringMusclesOf(day, already = answered)
-            .flatMap { (muscle, chosen) ->
-                val sets = setsPerSessionFor(muscle, shape, goal, weeklyFrequency)
-                val across = chosen.rotatedBy(seed).take(exercisesForSets(sets))
-                across.zip(setsAcross(across.size, sets)) { exercise, count ->
-                    PlannedExercise(exercise, count)
-                }
-            }
-
-        // Pinned first, then what was generated around them, then ordered as one day: a lifter
-        // who kept their squat still wants it before their curls.
-        val all = (kept + generated).distinctBy { it.exercise.id }
-        FilledDay(day, all.orderedBy(goal))
+        FilledDay(
+            day,
+            pool.buildDay(day, shape, goal, weeklyFrequency, pinned[day.name].orEmpty(), seed)
+                .orderedBy(goal),
+        )
     }
 }
 
@@ -134,38 +123,61 @@ private fun List<Exercise>.availableFor(equipment: Set<String>): List<Exercise> 
         .sortedWith(compareByDescending<Exercise> { it.isCompound }.thenBy { it.id })
 
 /**
- * An exercise for every muscle [day] asks for, in the order the shape names them.
+ * The day, built: an exercise for every muscle it names, as many as the budget wants of each.
  *
- * **Primary work only, on both sides of the question.** A muscle is answered by an exercise that
- * trains it directly, and a muscle already answered that way is not answered twice — so a day
- * naming chest and triceps gets a press and a pushdown, and a day naming chest twice gets one
- * press. What it never gets is a pushdown skipped because the press happens to involve triceps.
+ * **Direct work on both sides of the question.** A muscle is answered by exercises that train it
+ * primarily, and a muscle those exercises already train primarily is not answered again — so
+ * a day
+ * naming chest and triceps gets a press and a pushdown, and one naming chest twice gets one press.
+ * What it never gets is a pushdown skipped because the press happens to involve triceps.
+ *
+ * **A pin constrains the day; it does not satisfy it.** An exercise the lifter kept takes one of
+ * the places its muscle's budget asked for, and the rest are still filled around it. Treating a
+ * pin as an answer would collapse a muscle budgeted eleven sets across four movements down to the
+ * one pinned movement — a silent under-prescription, and exactly the kind of invisible volume
+ * error ADR 0005 exists to prevent.
  *
  * A muscle nothing in the pool trains directly is skipped rather than filled with something that
  * does not train it. The day comes back honestly short, and what to do about that is a
  * conversation for the validation (#76).
  */
-private fun List<Exercise>.coveringMusclesOf(
+private fun List<Exercise>.buildDay(
     day: SplitDay,
-    already: Set<String> = emptySet(),
-): List<Pair<String, List<Exercise>>> {
-    val chosen = mutableListOf<Pair<String, List<Exercise>>>()
-    val answered = already.toMutableSet()
-    val taken = mutableSetOf<String>()
+    shape: SplitShape,
+    goal: RoutineGoal,
+    weeklyFrequency: Int,
+    kept: List<PlannedExercise>,
+    seed: Int,
+): List<PlannedExercise> {
+    val chosen = mutableListOf<PlannedExercise>()
+    val answered = mutableSetOf<String>()
+    val keptIds = kept.mapTo(mutableSetOf()) { it.exercise.id }
+    val taken = keptIds.toMutableSet()
 
     day.muscles.forEach { muscle ->
         if (muscle in answered) return@forEach
 
-        // As many as the budget could possibly want, so the caller can take what it needs without
-        // asking again. Fewer where the gym has fewer, which is a short day rather than an error.
-        val picks = filter { muscle in it.primaryMuscles && it.id !in taken }
-            .take(MOST_EXERCISES_PER_MUSCLE)
-        if (picks.isEmpty()) return@forEach
+        val sets = setsPerSessionFor(muscle, shape, goal, weeklyFrequency)
+        val wanted = exercisesForSets(sets)
 
-        chosen += muscle to picks
-        taken += picks.map(Exercise::id)
-        answered += picks.first().primaryMuscles
+        val pinnedHere = kept.filter { muscle in it.exercise.primaryMuscles }.map { it.exercise }
+        val filling = filter { muscle in it.primaryMuscles && it.id !in taken }
+            .rotatedBy(seed)
+            .take((wanted - pinnedHere.size).coerceAtLeast(0))
+
+        val forThisMuscle = pinnedHere + filling
+        if (forThisMuscle.isEmpty()) return@forEach
+
+        taken += forThisMuscle.map(Exercise::id)
+        // Everything these train primarily now has direct work, so nothing else is chosen for it.
+        answered += forThisMuscle.flatMap(Exercise::primaryMuscles)
+        chosen += forThisMuscle.zip(setsAcross(forThisMuscle.size, sets)) { exercise, count ->
+            PlannedExercise(exercise, count, pinned = exercise.id in keptIds)
+        }
     }
 
-    return chosen
+    // A pin for something the day does not name is still the lifter's: they put it there, and a
+    // regeneration that quietly dropped it would not be keeping what it promised to keep.
+    val placed = chosen.mapTo(mutableSetOf()) { it.exercise.id }
+    return chosen + kept.filterNot { it.exercise.id in placed }.map { it.copy(pinned = true) }
 }

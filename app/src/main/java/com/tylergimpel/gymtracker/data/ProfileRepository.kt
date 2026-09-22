@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.data
 
 import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.Experience
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -27,6 +28,19 @@ class ProfileRepository(
 
     suspend fun displayUnit(): WeightUnit =
         WeightUnit.fromStored(profiles.profile()?.displayUnit) ?: systemDefault
+
+    /**
+     * How much training this lifter has behind them.
+     *
+     * Trained until they say otherwise, because that is the answer that overrules no preference:
+     * assuming somebody is new and steering them is a worse mistake than assuming they are not.
+     */
+    fun observeExperience(): Flow<Experience> = profiles.observe().map {
+        it?.experience?.let(::experienceOf) ?: Experience.TRAINED
+    }
+
+    private fun experienceOf(stored: String): Experience? =
+        Experience.entries.firstOrNull { it.name == stored }
 
     /**
      * Records that this lifter reads weights in [displayUnit] from now on.

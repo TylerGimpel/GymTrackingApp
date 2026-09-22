@@ -43,20 +43,19 @@ class BindingTest {
     fun `the length it estimates is the work plus the rest between it`() {
         // Rest is most of a session and the engine already prescribes it per set, so a ceiling
         // computed without it would be measuring the wrong thing entirely.
-        val withRest = sessionLength(longDay, restPerSet = Duration.ofMinutes(3))
-        val withLess = sessionLength(longDay, restPerSet = Duration.ofSeconds(60))
+        // A day of compounds rests longer than a day of machine isolation work, because the
+        // engine prescribes rest from what the set is. A ceiling assuming one number for both
+        // would be measuring the wrong session.
+        val compounds = sessionLength(longDay)
+        val isolation = sessionLength(isolationDay)
 
-        assertTrue(withRest > withLess)
+        assertTrue(compounds > isolation)
     }
 
     @Test
     fun `cardio after lifting counts against the ceiling`() {
-        val lifting = sessionLength(fittingDay, restPerSet = Duration.ofMinutes(2))
-        val andThenARun = sessionLength(
-            fittingDay,
-            restPerSet = Duration.ofMinutes(2),
-            cardio = CardioPlacement.AFTER_LIFTING,
-        )
+        val lifting = sessionLength(fittingDay)
+        val andThenARun = sessionLength(fittingDay, cardio = CardioPlacement.AFTER_LIFTING)
 
         // It takes no position in the rotation and does not touch the cadence, because the lifting
         // session still happened — but the lifter is in the gym for longer, and this is the one
@@ -66,12 +65,8 @@ class BindingTest {
 
     @Test
     fun `cardio on its own day does not lengthen a lifting one`() {
-        val lifting = sessionLength(fittingDay, restPerSet = Duration.ofMinutes(2))
-        val ownDay = sessionLength(
-            fittingDay,
-            restPerSet = Duration.ofMinutes(2),
-            cardio = CardioPlacement.OWN_DAY,
-        )
+        val lifting = sessionLength(fittingDay)
+        val ownDay = sessionLength(fittingDay, cardio = CardioPlacement.OWN_DAY)
 
         assertEquals(lifting, ownDay)
     }
@@ -148,7 +143,9 @@ class BindingTest {
 
     @Test
     fun `exclusions leaving a muscle untrainable ask which is least bad`() {
-        val banned = bank.map { if ("chest" in it.primaryMuscles) it.copy(isDisliked = true) else it }
+        val banned = bank.map {
+            if ("chest" in it.primaryMuscles) it.copy(isDisliked = true) else it
+        }
 
         val choice = leastBadFor("chest", banned, equipment = setOf("barbell"))
 
@@ -204,6 +201,18 @@ class BindingTest {
 
         /** Fourteen sets of one muscle: inside the band, and inside the hour and a half. */
         val fittingDay = routineOf(day("Fits", exercise("Bench", "chest") to 14))
+
+        /** The same amount of work on machines, which the engine rests far less between. */
+        val isolationDay = routineOf(
+            day(
+                "Isolation",
+                exercise("Fly", "chest", equipment = "machine").copy(mechanic = "isolation") to 14,
+                exercise("Pushdown", "triceps", equipment = "machine")
+                    .copy(mechanic = "isolation") to 14,
+                exercise("Curl", "biceps", equipment = "machine")
+                    .copy(mechanic = "isolation") to 14,
+            ),
+        )
 
         /** Three muscles at fourteen sets each, which is in band and nearly two hours long. */
         val longDay = routineOf(

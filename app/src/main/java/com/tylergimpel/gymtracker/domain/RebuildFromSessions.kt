@@ -3,8 +3,8 @@ package com.tylergimpel.gymtracker.domain
 /**
  * A routine day recovered from the log: its name, and what the session it came from was asked for.
  *
- * Not a [RoutineDay], because nothing here has an id yet — it is a shape read back out of history,
- * waiting to be created.
+ * Not a [RoutineDay], because nothing here has an id yet — it is a shape read back out of
+ * history, waiting to be created.
  */
 data class RecoveredDay(
     val name: String,
@@ -14,10 +14,10 @@ data class RecoveredDay(
 /**
  * The routine a run of sessions was following, read back out of their **Plan** snapshots.
  *
- * **No new storage, and that is the whole argument.** A session snapshots what its routine day
- * held when it was trained, which ADR 0006 leans on to justify not versioning routines at all — so
- * every routine day a lifter ever followed is already in the log, and getting one back is a read
- * and a create rather than a feature.
+ * **No new storage, and that is the whole argument.** A session snapshots what its routine
+ * day held when it was trained, which ADR 0006 leans on to justify not versioning routines at
+ * all — so every routine day a lifter ever followed is already in the log, and getting one
+ * back is a read and a create rather than a feature.
  *
  * Keyed by the routine day name the session recorded, because that is what a session copies: the
  * day it realised, by name, with no constraint back to a routine that may not exist any more.
