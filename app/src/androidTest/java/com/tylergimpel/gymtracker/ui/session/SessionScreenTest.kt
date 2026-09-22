@@ -24,6 +24,7 @@ import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import org.junit.Assert.assertEquals
@@ -31,6 +32,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
 
 /**
  * What the logging screen does when a thumb touches it.
@@ -205,7 +209,9 @@ class SessionScreenTest {
         recommendation: Recommendation = prescribed,
         routine: RoutineProgress? = null,
         logged: Int = 0,
+        session: Session? = null,
     ): SessionUiState = SessionUiState(
+        session = session,
         selected = bench,
         recommendation = recommendation,
         draft = SetDraft(weightText = "60", repsText = "8"),
@@ -213,6 +219,30 @@ class SessionScreenTest {
             WheelSet.Pending(recommendation),
         routine = routine,
     )
+
+    @Test
+    fun theHeaderSaysHowLongTheLifterHasBeenHere() {
+        val startedAt = Instant.now().minus(Duration.ofMinutes(47))
+        compose.setContent {
+            SessionScreen(state = state(session = Session.start(startedAt, ZoneId.systemDefault())))
+        }
+
+        // Counted from the session rather than from the first working set, so a treadmill before
+        // the weights is inside it: what is being answered is how long this trip to the gym has
+        // taken, which is the half of "how much longer am I here" the estimate cannot supply.
+        compose.onNodeWithText("47 min so far").assertIsDisplayed()
+    }
+
+    @Test
+    fun anHourInIsReadAsAnHourRatherThanAsMinutes() {
+        val startedAt = Instant.now().minus(Duration.ofMinutes(72))
+        compose.setContent {
+            SessionScreen(state = state(session = Session.start(startedAt, ZoneId.systemDefault())))
+        }
+
+        // `72 min` is arithmetic the lifter should not be doing at the rack.
+        compose.onNodeWithText("1:12 so far").assertIsDisplayed()
+    }
 
     private fun loggedSet(index: Int) = PerformedSet(
         setIndex = index,

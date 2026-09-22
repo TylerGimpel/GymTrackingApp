@@ -38,6 +38,8 @@
     <string name="wheel_nothing_asked">Log what you do.</string>
     <string name="wheel_pace">set %1$d · working %2$d</string>
     <string name="wheel_time_left">~%1$s left</string>
+    <string name="wheel_elapsed_minutes">%1$d min so far</string>
+    <string name="wheel_elapsed_hours">%1$d:%2$02d so far</string>
     <string name="wheel_range">%1$d - %2$d reps</string>
     <string name="wheel_plate_line">%1$s %2$s bar · %3$s per side</string>
     <string name="wheel_bar_only">%1$s %2$s bar, nothing on it</string>

@@ -66,6 +66,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -101,6 +102,7 @@ import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asTimeText
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Duration
 import com.tylergimpel.gymtracker.domain.asAmountText
@@ -1341,6 +1343,49 @@ private fun RestAlertWarning(
 }
 
 /**
+ * How long the session has been running, re-read each time the minute turns over.
+ *
+ * **Minutes and never seconds.** A lifter reading this is deciding whether they have time to
+ * finish before something else, which is not a question asked to the second — and a seconds place
+ * ticking in the corner of a screen whose whole design is to say as little as possible about
+ * itself would be the noisiest thing on it.
+ *
+ * The wake-up is timed to the next whole minute rather than polled on a loop, so the number
+ * changes at the moment it becomes wrong rather than up to a minute afterwards.
+ */
+@Composable
+private fun elapsedText(startedAt: Instant): String {
+    val minutes by produceState(minutesSince(startedAt), startedAt) {
+        while (true) {
+            val running = Duration.between(startedAt, Instant.now()).toMillis()
+            delay(MILLIS_PER_MINUTE - running.mod(MILLIS_PER_MINUTE))
+            value = minutesSince(startedAt)
+        }
+    }
+    return if (minutes >= MINUTES_PER_HOUR) {
+        stringResource(
+            R.string.wheel_elapsed_hours,
+            minutes / MINUTES_PER_HOUR,
+            minutes % MINUTES_PER_HOUR,
+        )
+    } else {
+        stringResource(R.string.wheel_elapsed_minutes, minutes)
+    }
+}
+
+/**
+ * Whole minutes since [startedAt], and never fewer than none.
+ *
+ * The floor is for a session refiled onto a date in the future and for a phone whose clock has
+ * moved under it. Neither is worth a branch on screen, and "-3 min so far" is worse than nothing.
+ */
+private fun minutesSince(startedAt: Instant): Long =
+    Duration.between(startedAt, Instant.now()).toMinutes().coerceAtLeast(0)
+
+private const val MILLIS_PER_MINUTE = 60_000L
+private const val MINUTES_PER_HOUR = 60L
+
+/**
  * How to load the bar, under the weight it makes.
  *
  * **Always visible and never interactive.** A lifter reads it and loads the bar; there is nothing
@@ -1388,14 +1433,27 @@ private fun WheelFooting(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        // The tilde is the point: it reads as an estimate rather than a deadline, which is what
-        // made it acceptable to look at mid-session rather than stressful.
-        state.timeLeft?.let {
-            Text(
-                text = stringResource(R.string.wheel_time_left, it.asTimeText()),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Half of "how much longer am I here", and the estimate beside it is the other half:
+            // neither answers it alone. Counted from the session's own start rather than from the
+            // first set, so a treadmill before the weights is inside it — the question being
+            // asked is about time in the gym rather than time under a bar.
+            state.session?.let {
+                Text(
+                    text = elapsedText(it.startedAt),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // The tilde is the point: it reads as an estimate rather than a deadline, which is what
+            // made it acceptable to look at mid-session rather than stressful.
+            state.timeLeft?.let {
+                Text(
+                    text = stringResource(R.string.wheel_time_left, it.asTimeText()),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 
