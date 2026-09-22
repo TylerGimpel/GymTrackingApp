@@ -43,6 +43,8 @@ import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.splitShapesFor
+import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.ui.exercise.ExercisePicker
 import com.tylergimpel.gymtracker.domain.Exercise
@@ -79,6 +81,9 @@ fun RoutineScreen(
             EmptyRoutine(
                 insets = insets,
                 onCreate = { viewModel.createRoutine(defaultName) },
+                onCreateFromShape = { shape, frequency, cardio ->
+                    viewModel.createFromShape(shape.description, shape, frequency, cardio)
+                },
             )
             return@Scaffold
         }
@@ -209,20 +214,101 @@ private fun Double.asSetsText(): String =
 private fun EmptyRoutine(
     insets: PaddingValues,
     onCreate: () -> Unit,
+    onCreateFromShape: (SplitShape, Int, CardioPlacement) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(insets)
-            .padding(16.dp),
+    // The one question everybody can answer, and the one the volume arithmetic actually needs.
+    // What is never asked is a cycle length: "how many days is your routine" reads as both this
+    // and the number of positions, and conflating them makes sound routines look invalid.
+    var frequency by rememberSaveable { mutableStateOf(3) }
+    var cardio by rememberSaveable { mutableStateOf(CardioPlacement.NONE) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(insets),
+        contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = stringResource(R.string.routine_none),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(onClick = onCreate) { Text(stringResource(R.string.routine_create)) }
+        item {
+            Text(
+                text = stringResource(R.string.routine_none),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            Text(
+                text = stringResource(R.string.routine_setup_frequency),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                (1..7).forEach { times ->
+                    FilterChip(
+                        selected = times == frequency,
+                        onClick = { frequency = times },
+                        label = { Text(times.toString()) },
+                    )
+                }
+            }
+        }
+        item {
+            Text(
+                text = stringResource(R.string.routine_setup_frequency_why),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            ChoiceRow(
+                label = stringResource(R.string.routine_cardio),
+                options = listOf(
+                    CardioPlacement.NONE to stringResource(R.string.cardio_none),
+                    CardioPlacement.OWN_DAY to stringResource(R.string.cardio_own_day),
+                    CardioPlacement.AFTER_LIFTING to stringResource(R.string.cardio_after_lifting),
+                ),
+                selected = cardio,
+                onSelect = { cardio = it },
+            )
+        }
+        item {
+            Text(
+                text = stringResource(R.string.routine_setup_shape),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        item {
+            // Said out loud, because the honest thing to say about splits is that the evidence
+            // found no difference between them.
+            Text(
+                text = stringResource(R.string.routine_setup_shape_why),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // By shape, never by position count: "alternate upper and lower" is a thing anyone can
+        // choose, and "a 2-position cycle" is not. Nothing invalid is here to be rejected,
+        // because nothing invalid was ever authored.
+        items(splitShapesFor(frequency, cardio), key = SplitShape::id) { shape ->
+            TextButton(onClick = { onCreateFromShape(shape, frequency, cardio) }) {
+                Text(
+                    stringResource(
+                        R.string.routine_shape_days,
+                        shape.description,
+                        shape.days.size,
+                    ),
+                )
+            }
+        }
+        item {
+            // The same mechanism from an empty start, for somebody who knows exactly what they
+            // want and does not need a shape suggested to them.
+            TextButton(onClick = onCreate) {
+                Text(stringResource(R.string.routine_build_by_hand))
+            }
+        }
     }
 }
 

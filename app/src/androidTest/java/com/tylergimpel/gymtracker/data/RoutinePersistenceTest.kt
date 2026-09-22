@@ -6,6 +6,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.liftingCadence
+import com.tylergimpel.gymtracker.domain.SPLIT_SHAPES
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.SessionPlan
@@ -624,6 +626,32 @@ class RoutinePersistenceTest {
             assertEquals(3, after.days.size)
             assertEquals(2, after.liftingPositions)
         }
+
+    @Test
+    fun aShapeLaysOutANamedRotationOfEmptyDays() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "upper-lower-2" }.withCardioDay()
+
+        routines.createFromShape(
+            name = shape.description,
+            shape = shape,
+            goal = RoutineGoal.HYPERTROPHY,
+            cadence = 5,
+            equipment = setOf("barbell"),
+            repPreference = RepPreference.MODERATE,
+            cardio = CardioPlacement.OWN_DAY,
+        )
+
+        val routine = routines.observeProgress().first()!!.routine
+
+        // A rotation and nothing in it. Filling the days is the other half of generation, and a
+        // separate decision: the structure is templatable and the exercises are not.
+        assertEquals(listOf("Upper", "Lower", "Cardio"), routine.rotation.map { it.name })
+        assertTrue(routine.rotation.all { it.exercises.isEmpty() })
+
+        // Three positions at five sessions a week, two of them lifting: 3.33 lifting sessions.
+        assertEquals(2, routine.liftingPositions)
+        assertEquals(3.333, routine.liftingCadence, 0.001)
+    }
 
     /** Where the cursor points now, which is the one question the rotation answers. */
     private suspend fun cursorNow(): RoutineDay? =

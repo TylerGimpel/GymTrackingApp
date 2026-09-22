@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import kotlinx.coroutines.flow.SharingStarted
@@ -76,6 +77,32 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     fun createRoutine(name: String) {
         viewModelScope.launch { repository.createRoutine(name = name) }
+    }
+
+    /**
+     * Lays out a routine from a shape the lifter recognised.
+     *
+     * Everything the setup asked for travels together, because the cadence is what volume
+     * translation needs and the cardio placement is what decided whether a cardio position was
+     * among the shapes at all.
+     */
+    fun createFromShape(
+        name: String,
+        shape: SplitShape,
+        weeklyFrequency: Int,
+        cardio: CardioPlacement,
+    ) {
+        viewModelScope.launch {
+            repository.createFromShape(
+                name = name,
+                shape = shape,
+                goal = RoutineGoal.HYPERTROPHY,
+                cadence = weeklyFrequency,
+                equipment = emptySet(),
+                repPreference = RepPreference.MODERATE,
+                cardio = cardio,
+            )
+        }
     }
 
     fun editProperties(

@@ -7,6 +7,7 @@ import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.Session
@@ -93,6 +94,40 @@ class RoutineRepository(
             cardio = cardio.name,
         ),
     )
+
+    /**
+     * Creates a routine laid out by [shape], as a named rotation of empty days.
+     *
+     * The hand-authored half of generation. What comes out is a rotation and nothing in it —
+     * filling the days is the other half, and it is a separate decision because the day structure
+     * is templatable and the exercises are not.
+     *
+     * Divisibility needs no check here: it is true of every shape by construction, which is what
+     * "invalid combinations never appear" means. Nothing is rejected because nothing invalid was
+     * ever offered.
+     */
+    suspend fun createFromShape(
+        name: String,
+        shape: SplitShape,
+        goal: RoutineGoal,
+        cadence: Int,
+        equipment: Set<String>,
+        repPreference: RepPreference,
+        cardio: CardioPlacement,
+    ): Long = database.withTransaction {
+        val id = createRoutine(name, goal, cadence, equipment, repPreference, cardio)
+        shape.days.forEach { day ->
+            routines.insert(
+                RoutineDayEntity(
+                    routineId = id,
+                    orderIndex = routines.highestDayOrder(id) + 1,
+                    name = day.name,
+                    kind = day.kind.name,
+                ),
+            )
+        }
+        id
+    }
 
     /**
      * Edits the routine's properties.

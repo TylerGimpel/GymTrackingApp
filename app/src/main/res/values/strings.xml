@@ -145,6 +145,12 @@
     <string name="routine_done">Done</string>
     <string name="routine_none">No routine yet. One is a name and an ordered list of days — rest is implied by not training, so it takes no position.</string>
     <string name="routine_create">Create a routine</string>
+    <string name="routine_build_by_hand">Start from an empty routine</string>
+    <string name="routine_setup_frequency">How many times a week do you train?</string>
+    <string name="routine_setup_frequency_why">Used to work out how much work a week your routine adds up to. It never schedules anything.</string>
+    <string name="routine_setup_shape">Pick a shape</string>
+    <string name="routine_setup_shape_why">However many sessions a week you do, the rotation just comes round. None of these is better than the others.</string>
+    <string name="routine_shape_days">%1$s · %2$d in the rotation</string>
     <string name="routine_name">Routine name</string>
     <string name="routine_cadence">Sessions per week</string>
     <string name="routine_goal">Goal</string>
