@@ -152,6 +152,10 @@
     <string name="routine_preference_overruled">Training for strength needs heavy sets, so your exercises are set to %1$d - %2$d reps rather than the higher reps you prefer.</string>
     <string name="routine_equipment">Equipment at your gym</string>
     <string name="routine_days">Days</string>
+    <string name="routine_what_it_trains">What this cycle trains</string>
+    <string name="routine_muscle_load">%1$s · %2$d× a cycle · %3$s sets a week</string>
+    <string name="routine_past_session_cap">%1$s gets %2$s sets in one day. Past about eleven, more sets in the same session stop showing up — the same work on another day would.</string>
+    <string name="routine_trains_nothing">Nothing in this routine yet, so there is nothing to report about it.</string>
     <string name="routine_new_day">New day</string>
     <string name="routine_cardio">Cardio</string>
     <string name="cardio_none">None</string>

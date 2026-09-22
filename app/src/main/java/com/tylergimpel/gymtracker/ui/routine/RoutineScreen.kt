@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -42,6 +43,7 @@ import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.ui.exercise.ExercisePicker
 import com.tylergimpel.gymtracker.domain.Exercise
 
@@ -105,6 +107,7 @@ fun RoutineScreen(
                 HorizontalDivider()
             }
             item { AddDay(onAdd = viewModel::addDay) }
+            item { WhatItTrains(state.progress?.routine) }
             item {
                 TextButton(
                     onClick = viewModel::deleteRoutine,
@@ -134,6 +137,73 @@ fun RoutineScreen(
         )
     }
 }
+
+/**
+ * What the routine does, muscle by muscle.
+ *
+ * **Facts and never grades.** "This cycle trains chest 3x a cycle" is something a lifter can act
+ * on; "your routine is unbalanced" is marking their homework. So this prints counts and says
+ * nothing about whether they are the right ones — training chest three times and back once is a
+ * decision somebody is allowed to make, and the app's only job is to make sure they made it
+ * knowing what it was.
+ *
+ * Nothing here blocks a save, because there is nothing here to fail.
+ */
+@Composable
+private fun WhatItTrains(routine: Routine?) {
+    val load = remember(routine) { routine?.whatItTrains().orEmpty() }
+
+    Column(
+        modifier = Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.routine_what_it_trains),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        if (load.isEmpty()) {
+            Text(
+                text = stringResource(R.string.routine_trains_nothing),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        load.forEach { entry ->
+            Text(
+                text = stringResource(
+                    R.string.routine_muscle_load,
+                    entry.muscle,
+                    entry.sessions,
+                    entry.weeklySets.asSetsText(),
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The one thing worth saying beyond the counts, and it is still a count: work past the cap
+        // is work that is there and not doing anything.
+        load.filter { it.pastSessionCap }.forEach { entry ->
+            Text(
+                text = stringResource(
+                    R.string.routine_past_session_cap,
+                    entry.muscle,
+                    entry.mostInOneSession.asSetsText(),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * A fractional set count as a lifter would write it.
+ *
+ * Halves exist because indirect work counts at a half (ADR 0005), and "7.5" is the honest way to
+ * print one. A whole number keeps no decimal point, because "8.0 sets" reads like a measurement.
+ */
+private fun Double.asSetsText(): String =
+    if (this % 1.0 == 0.0) toInt().toString() else "%.1f".format(this)
 
 @Composable
 private fun EmptyRoutine(
