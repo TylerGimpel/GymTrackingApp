@@ -305,12 +305,13 @@ class SessionRepository(
      */
     private suspend fun plan(sessionId: Long, plan: SessionPlan) {
         if (sessions.plannedCount(sessionId) > 0) return
-        plan.exercises.forEachIndexed { index, exercise ->
+        plan.exercises.forEachIndexed { index, planned ->
             sessions.insert(
                 SessionPlanEntity(
                     sessionId = sessionId,
-                    exerciseId = exercise.id,
+                    exerciseId = planned.exercise.id,
                     orderIndex = index + 1,
+                    sets = planned.sets,
                 ),
             )
         }

@@ -16,7 +16,7 @@ class SessionPlanTest {
 
     @Test
     fun `a session that did everything it was for has nothing unperformed`() {
-        val plan = SessionPlan(listOf(bench, row, curl))
+        val plan = planOf(bench, row, curl)
 
         val unperformed = plan.unperformed(performed(bench, row, curl))
 
@@ -25,7 +25,7 @@ class SessionPlanTest {
 
     @Test
     fun `what was planned and not trained is named, rather than merely absent`() {
-        val plan = SessionPlan(listOf(bench, row, curl))
+        val plan = planOf(bench, row, curl)
 
         val unperformed = plan.unperformed(performed(bench, row))
 
@@ -34,7 +34,7 @@ class SessionPlanTest {
 
     @Test
     fun `a partial session reports what it did against what it was for`() {
-        val plan = SessionPlan(listOf(bench, row, curl))
+        val plan = planOf(bench, row, curl)
 
         assertEquals(listOf(bench, row), plan.performed(performed(bench, row)))
         assertEquals(2, plan.performed(performed(bench, row)).size)
@@ -44,7 +44,7 @@ class SessionPlanTest {
     @Test
     fun `the unperformed keep the order the routine day held them in`() {
         // So a lifter reading them back sees their session in the shape it was meant to take.
-        val plan = SessionPlan(listOf(bench, row, curl))
+        val plan = planOf(bench, row, curl)
 
         assertEquals(listOf(bench, curl), plan.unperformed(performed(row)))
     }
@@ -62,7 +62,7 @@ class SessionPlanTest {
     @Test
     fun `an exercise trained but never planned is not counted against the plan`() {
         // Swapping in something else is ordinary; the plan reports on itself, not on the session.
-        val plan = SessionPlan(listOf(bench, row))
+        val plan = planOf(bench, row)
 
         assertEquals(listOf(row), plan.unperformed(performed(bench, curl)))
         assertEquals(listOf(bench), plan.performed(performed(bench, curl)))
@@ -102,10 +102,14 @@ class SessionPlanTest {
         )
     }
 
+    /** A plan of exercises nothing prescribed a set count for, which is what these are about. */
+    private fun planOf(vararg exercises: Exercise) =
+        SessionPlan(exercises.map { PlannedExercise(it) })
+
     private fun logged(plan: List<Exercise>, did: List<Exercise>) = LoggedSession(
         session = Session.start(Instant.parse("2026-09-14T18:00:00Z"), ZONE),
         exercises = performed(*did.toTypedArray()),
-        plan = SessionPlan(plan),
+        plan = planOf(*plan.toTypedArray()),
     )
 
     private companion object {

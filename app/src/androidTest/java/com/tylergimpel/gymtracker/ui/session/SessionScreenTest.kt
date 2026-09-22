@@ -14,6 +14,7 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Effort
+import com.tylergimpel.gymtracker.domain.PlannedExercise
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SetType
@@ -307,7 +308,7 @@ class SessionScreenTest {
                         id = 1,
                         orderIndex = 1,
                         name = "Push",
-                        exercises = listOf(bench, row),
+                        exercises = listOf(PlannedExercise(bench, 4), PlannedExercise(row, 4)),
                     ),
                 ),
             ),

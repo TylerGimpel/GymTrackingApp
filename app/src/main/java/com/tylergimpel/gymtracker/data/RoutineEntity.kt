@@ -9,6 +9,8 @@ import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.setsFor
+import com.tylergimpel.gymtracker.domain.PlannedExercise
 
 /**
  * The whole repeating training plan.
@@ -81,11 +83,20 @@ fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
     cadence = cadence,
     equipment = equipment.toSet(),
     repPreference = RepPreference.valueOf(repPreference),
-    days = days.map(RoutineDayWithExercises::toDomain),
+    days = days.map { it.toDomain(RoutineGoal.valueOf(goal)) },
 )
 
-fun RoutineDayWithExercises.toDomain() = day.toDomain().copy(
+/**
+ * A day and what it holds, with a set count for every exercise in it.
+ *
+ * [goal] answers for an entry that has never had a number of its own, which is every entry until
+ * the generator starts writing them (#74). Derived on read rather than stored, so a goal that
+ * changes moves the counts with it — unlike a **Rep range**, a set count is not something a lifter
+ * is mid-progression on, and a day that kept prescribing five sets after they stopped training
+ * for strength would be stale rather than stable.
+ */
+fun RoutineDayWithExercises.toDomain(goal: RoutineGoal) = day.toDomain().copy(
     exercises = exercises
         .sortedBy { it.entry.orderIndex }
-        .map { it.exercise.toDomain() },
+        .map { PlannedExercise(it.exercise.toDomain(), it.entry.sets ?: setsFor(goal)) },
 )

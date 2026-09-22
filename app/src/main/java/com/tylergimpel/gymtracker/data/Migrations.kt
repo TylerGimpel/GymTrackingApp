@@ -576,6 +576,22 @@ internal val MIGRATION_21_22 = object : Migration(21, 22) {
     }
 }
 
+/**
+ * A day says how many sets, and a session records how many it was asked for.
+ *
+ * Both columns are nullable and both stay null here. For `routine_day_exercise` that means "the
+ * engine's answer for the goal stands", which is every row until the generator starts dividing a
+ * real budget (#74). For `session_plan` it means "nothing asked", which is the truth about every
+ * session logged before this and not a gap to fill: a number written over history would be a
+ * prescription nobody made.
+ */
+internal val MIGRATION_22_23 = object : Migration(22, 23) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `routine_day_exercise` ADD COLUMN `sets` INTEGER")
+        db.execSQL("ALTER TABLE `session_plan` ADD COLUMN `sets` INTEGER")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -598,6 +614,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_19_20,
     MIGRATION_20_21,
     MIGRATION_21_22,
+    MIGRATION_22_23,
 )
 
 /**

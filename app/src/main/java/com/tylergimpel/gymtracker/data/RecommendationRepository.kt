@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.domain.Increment
 import com.tylergimpel.gymtracker.domain.LayoffDecay
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.PlateLine
+import com.tylergimpel.gymtracker.domain.PlannedSets
 import com.tylergimpel.gymtracker.domain.stepFor
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepPreference
@@ -39,6 +40,17 @@ import java.time.LocalDate
  * or deleted heals the estimate instead of poisoning it for good, and an installed copy carrying
  * years of history needs no backfill to arrive at the same numbers as a fresh one.
  */
+/**
+ * What to do next, and how much of this exercise the session was asked for.
+ *
+ * Paired because they come out of one reading of the log: the recommendation folds the history and
+ * the ramp falls out of the weight it arrives at.
+ */
+data class PrescribedNext(
+    val recommendation: Recommendation,
+    val planned: PlannedSets?,
+)
+
 class RecommendationRepository(
     private val database: GymDatabase,
     private val exercises: ExerciseDao,
@@ -78,7 +90,17 @@ class RecommendationRepository(
      * estimate. Null where neither has anything: the lifter — or the bank — decided this lift is
      * recorded rather than coached, or it is a hold or a run, or today's ramp has run its course.
      */
-    suspend fun nextSet(exercise: Exercise): Recommendation? {
+    suspend fun nextSet(exercise: Exercise): Recommendation? =
+        nextSetWithPlan(exercise)?.recommendation
+
+    /**
+     * The same answer, with how many sets of [exercise] this session was asked for.
+     *
+     * Together rather than as a second call because the two share a fold of the log and the ramp
+     * computed from it. Nothing but the header wants the counts, and the header should not cost a
+     * second reading of a lifter's history to draw.
+     */
+    suspend fun nextSetWithPlan(exercise: Exercise): PrescribedNext? {
         if (!exercise.progressionModel.isPrescribed) return null
 
         return database.withTransaction {
@@ -93,7 +115,7 @@ class RecommendationRepository(
             val rounding = incrementFor(exercise)
             val progress = history.progressIn(repRange, rounding, decay, LocalDate.now(clock))
             remember(exercise.id, progress, seeded)
-            recommendNextSet(
+            val next = recommendNextSet(
                 history = history,
                 progress = progress,
                 calibration = CalibrationRamp.of(
@@ -103,10 +125,64 @@ class RecommendationRepository(
                 ),
                 setsToday = open?.let { sessions.setsLoggedInSession(exercise.id, it) } ?: 0,
                 rounding = rounding,
+            ) ?: return@withTransaction null
+
+            PrescribedNext(
+                recommendation = warmUpFirst(next, exercise, open, rounding)
+                    .let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) },
+                planned = plannedSetsOf(next, exercise, open, rounding),
             )
-                ?.let { warmUpFirst(it, exercise, open, rounding) }
-                ?.let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) }
         }
+    }
+
+    /**
+     * How many sets this session asked for of [exercise], or null where it asked for none.
+     *
+     * The working half is the plan's, copied from the routine day when the session began. The
+     * whole is that plus the ramp — which is settled only once the work starts: until then the
+     * app still owes whatever rungs are left, and afterwards the ramp is however many the lifter
+     * actually did. A total that kept counting rungs nobody climbed would leave somebody reading
+     * `6 of 7` with nothing left to do.
+     *
+     * Null for a session trained with no routine, which is ordinary rather than incomplete.
+     */
+    private suspend fun plannedSetsOf(
+        next: Recommendation,
+        exercise: Exercise,
+        open: Long?,
+        rounding: Increment,
+    ): PlannedSets? {
+        val session = open ?: return null
+        val working = sessions.plannedSets(session, exercise.id) ?: return null
+        val rampDone = sessions.setsOfTypeInSession(exercise.id, session, SetType.WARMUP.stored)
+        val workStarted =
+            sessions.setsOfTypeInSession(exercise.id, session, SetType.WORKING.stored) > 0
+
+        val ramp = when {
+            workStarted -> rampDone
+            else -> maxOf(rampDone, rampSizeFor(next, exercise, session, rounding))
+        }
+        return PlannedSets(total = ramp + working, working = working)
+    }
+
+    /** How many rungs the ramp up to this prescription has, or none where it asks for no load. */
+    private suspend fun rampSizeFor(
+        next: Recommendation,
+        exercise: Exercise,
+        session: Long,
+        rounding: Increment,
+    ): Int {
+        val load = when (next) {
+            is Recommendation.Prescribing, is Recommendation.CuttingVolume -> next.prescription.load
+            else -> null
+        } ?: return 0
+
+        return warmUpsFor(
+            workingLoad = load,
+            exercise = exercise,
+            alreadyWorkedTheMuscle = alreadyWarmed(exercise, session),
+            rounding = rounding,
+        ).size
     }
 
     /**

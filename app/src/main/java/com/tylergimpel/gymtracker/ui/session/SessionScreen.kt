@@ -1453,9 +1453,21 @@ private fun WheelFooting(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        state.pace?.let {
+        // Totals only where something actually asked for them. A session trained with no routine
+        // says where the lifter is and claims no plan, because there is not one.
+        state.pace?.let { pace ->
             Text(
-                text = stringResource(R.string.wheel_pace, it.setsDone, it.workingDone),
+                text = if (pace.setsPlanned != null && pace.workingPlanned != null) {
+                    stringResource(
+                        R.string.wheel_pace_planned,
+                        pace.setsDone,
+                        pace.setsPlanned,
+                        pace.workingDone,
+                        pace.workingPlanned,
+                    )
+                } else {
+                    stringResource(R.string.wheel_pace, pace.setsDone, pace.workingDone)
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

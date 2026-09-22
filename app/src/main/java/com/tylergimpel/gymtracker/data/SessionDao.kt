@@ -186,6 +186,20 @@ interface SessionDao {
     @Query("SELECT COUNT(*) FROM session_plan WHERE session_id = :sessionId")
     suspend fun plannedCount(sessionId: Long): Int
 
+    /**
+     * How many working sets this session was asked for of an exercise, or null where none were.
+     *
+     * Null for an exercise the plan never named — a swap, or something the lifter simply did — and
+     * for every session logged before the app prescribed set counts at all.
+     */
+    @Query(
+        """
+        SELECT sets FROM session_plan
+        WHERE session_id = :sessionId AND exercise_id = :exerciseId
+        """,
+    )
+    suspend fun plannedSets(sessionId: Long, exerciseId: String): Int?
+
     @Transaction
     @Query("SELECT * FROM set_entry WHERE session_exercise_id = :sessionExerciseId ORDER BY set_index")
     suspend fun setsFor(sessionExerciseId: Long): List<SetEntryWithDrops>

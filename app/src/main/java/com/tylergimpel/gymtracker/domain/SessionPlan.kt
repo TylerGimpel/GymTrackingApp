@@ -16,8 +16,13 @@ package com.tylergimpel.gymtracker.domain
  * incomplete one.
  */
 data class SessionPlan(
-    /** What the session was for, in the order the routine day held them. */
-    val exercises: List<Exercise> = emptyList(),
+    /**
+     * What the session was for, in the order the routine day held them, and how much of each.
+     *
+     * The set counts are copied with everything else, so a session trained in March still reads
+     * what it was asked for however often the routine has changed since.
+     */
+    val exercises: List<PlannedExercise> = emptyList(),
 ) {
     val isEmpty: Boolean get() = exercises.isEmpty()
 
@@ -32,7 +37,7 @@ data class SessionPlan(
      * planned exercise going untrained — which is exactly what happened.
      */
     fun unperformed(performed: List<SessionExercise>): List<Exercise> =
-        exercises.filterNot { it.id in performed.exerciseIds() }
+        exercises.map(PlannedExercise::exercise).filterNot { it.id in performed.exerciseIds() }
 
     /**
      * The planned exercises [performed] does account for.
@@ -41,7 +46,11 @@ data class SessionPlan(
      * here, because it answers "how much of what this was for got done".
      */
     fun performed(performed: List<SessionExercise>): List<Exercise> =
-        exercises.filter { it.id in performed.exerciseIds() }
+        exercises.map(PlannedExercise::exercise).filter { it.id in performed.exerciseIds() }
+
+    /** How many sets this plan asked for of [exerciseId], or null where it asked for none. */
+    fun setsOf(exerciseId: String): Int? =
+        exercises.firstOrNull { it.exercise.id == exerciseId }?.sets
 }
 
 /**

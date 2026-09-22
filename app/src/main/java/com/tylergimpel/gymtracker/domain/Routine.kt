@@ -20,6 +20,28 @@ enum class RoutineGoal { HYPERTROPHY, STRENGTH, ENDURANCE }
 enum class RepPreference { LOW, MODERATE, HIGH }
 
 /**
+ * One exercise a day holds, and how many working sets it asks for.
+ *
+ * The set count is the engine's answer rather than the lifter's, and it does not care how the
+ * exercise arrived in the day — generated or added by hand, a routine day says what to do and how
+ * much of it. **Nothing enforces it**: a lifter who does more sets has trained more, and the app
+ * has no business saying otherwise.
+ */
+data class PlannedExercise(
+    val exercise: Exercise,
+    /**
+     * How many working sets, or null where nothing asked for any.
+     *
+     * Null is what a session trained before the app prescribed set counts reads back as, and it
+     * is the truth about it: nothing was asked. Writing a number over those would be inventing a
+     * prescription in the log, which is the one thing a training record must not do.
+     *
+     * The ramp is generated per session from the working weight and is not counted here.
+     */
+    val sets: Int? = null,
+)
+
+/**
  * One ordered position within a routine, such as "Push".
  *
  * Never a calendar day and never a day of the week. Rest is implied by not training, so it occupies
@@ -36,7 +58,7 @@ data class RoutineDay(
      * The plan side of the model: what a lifter intends, which a session copies rather than points
      * at. Empty is ordinary — a day is named before it is filled.
      */
-    val exercises: List<Exercise> = emptyList(),
+    val exercises: List<PlannedExercise> = emptyList(),
 )
 
 /**

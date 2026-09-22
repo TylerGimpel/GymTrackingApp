@@ -385,7 +385,7 @@ class RoutinePersistenceTest {
         routines.addExerciseToDay(push.id, BENCH)
         routines.addExerciseToDay(push.id, BENCH)
 
-        assertEquals(listOf(BENCH), dayNow(push).exercises.map { it.id })
+        assertEquals(listOf(BENCH), dayNow(push).exercises.map { it.exercise.id })
     }
 
     @Test
@@ -534,6 +534,53 @@ class RoutinePersistenceTest {
         return session.id
     }
 
+    @Test
+    fun aDaySaysHowManySetsAndTheEngineAnswersForTheGoal() = runBlocking {
+        val push = pushPullLegs().rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+
+        // Nothing has written a number of its own, so the routine's goal answers. Hypertrophy by
+        // default, which is four — a count arrives whether or not a generator ever ran.
+        assertEquals(listOf(4), dayNow(push).exercises.map { it.sets })
+
+        reGoal(RoutineGoal.STRENGTH)
+
+        // And it follows the goal rather than being stamped into the day when it was added. A set
+        // count is not something a lifter is mid-progression on, unlike a rep range.
+        assertEquals(listOf(5), dayNow(push).exercises.map { it.sets })
+    }
+
+    @Test
+    fun aPlanKeepsWhatItAskedForHoweverOftenTheRoutineChangesAfterwards() = runBlocking {
+        val push = pushPullLegs().rotation.first()
+        routines.addExerciseToDay(push.id, BENCH)
+        sessions.startSession(SessionPlan(dayNow(push).exercises))
+        val session = currentSessionId()
+
+        reGoal(RoutineGoal.STRENGTH)
+        routines.removeExerciseFromDay(push.id, BENCH)
+
+        // The routine has been re-goaled and the exercise taken out of it entirely, and the
+        // session still reads what it was actually asked for. A plan is a snapshot, which is what
+        // makes revising a routine safe (ADR 0006).
+        assertEquals(
+            listOf(4),
+            sessions.observeSession(session).first()!!.plan.exercises.map { it.sets },
+        )
+    }
+
+    /** Changes what the routine is for, leaving everything else about it as it was. */
+    private suspend fun reGoal(goal: RoutineGoal) {
+        val routine = routines.observeProgress().first()!!.routine
+        routines.editProperties(
+            name = routine.name,
+            goal = goal,
+            cadence = routine.cadence,
+            equipment = routine.equipment,
+            repPreference = routine.repPreference,
+        )
+    }
+
     /** The day as it stands now, since [pushPullLegs] returned it before it held anything. */
     private suspend fun dayNow(day: RoutineDay): RoutineDay =
         routines.observeProgress().first()!!.routine.rotation.single { it.id == day.id }
@@ -542,7 +589,7 @@ class RoutinePersistenceTest {
         sessions.observeActiveSession().first()!!.id
 
     private suspend fun planOf(sessionId: Long): List<String> =
-        sessions.observeSession(sessionId).first()!!.plan.exercises.map { it.id }
+        sessions.observeSession(sessionId).first()!!.plan.exercises.map { it.exercise.id }
 
     private fun countOf(table: String): Int =
         database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use {

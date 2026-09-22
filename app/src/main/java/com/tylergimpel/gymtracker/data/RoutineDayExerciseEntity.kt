@@ -53,6 +53,18 @@ data class RoutineDayExerciseEntity(
     /** Where this exercise sits within the day, from 1. */
     @ColumnInfo(name = "order_index")
     val orderIndex: Int,
+
+    /**
+     * How many working sets this day asks for, where something has prescribed a number.
+     *
+     * Null is the ordinary state today and means the engine's answer for the routine's goal
+     * stands. What will write a number here is the generator dividing a real volume budget across
+     * a day (#74); until then nothing has made a claim specific to this exercise, and storing the
+     * derived answer would strand it the day the derivation improved — the same move a display
+     * unit and a progression model already make.
+     */
+    @ColumnInfo(name = "sets")
+    val sets: Int? = null,
 )
 
 /** One of a day's exercises, with the bank row and the lifter's choices about it. */

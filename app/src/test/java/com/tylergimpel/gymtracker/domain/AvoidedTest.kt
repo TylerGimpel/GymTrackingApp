@@ -143,7 +143,7 @@ class AvoidedTest {
                     sets = emptyList(),
                 )
             },
-            plan = SessionPlan(planned),
+            plan = SessionPlan(planned.map { PlannedExercise(it) }),
             supersets = emptyList(),
         )
     }

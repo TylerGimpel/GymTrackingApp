@@ -311,13 +311,21 @@ private fun RoutineDayRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        day.exercises.forEach { exercise ->
+        day.exercises.forEach { planned ->
+            val exercise = planned.exercise
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(exercise.name, style = MaterialTheme.typography.bodyMedium)
+                // What to do and how much of it, which is what a day says. The count is the
+                // engine's and arrives whether the exercise was generated or added by hand.
+                Text(
+                    text = planned.sets
+                        ?.let { stringResource(R.string.routine_exercise_sets, exercise.name, it) }
+                        ?: exercise.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 TextButton(onClick = { onRemoveExercise(exercise.id) }) {
                     Text(stringResource(R.string.routine_remove_exercise))
                 }

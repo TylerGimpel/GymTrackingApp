@@ -937,6 +937,7 @@ class GymDatabaseMigrationTest {
         const val NINETEENTH_DATABASE = "gym-migration-test-19.db"
         const val TWENTIETH_DATABASE = "migration-twentieth.db"
         const val TWENTY_FIRST_DATABASE = "migration-twenty-first.db"
+        const val TWENTY_SECOND_DATABASE = "migration-twenty-second.db"
     }
 
     /**
@@ -1024,6 +1025,34 @@ class GymDatabaseMigrationTest {
             ).use {
                 it.moveToFirst()
                 assertEquals(5, it.getInt(0))
+            }
+        }
+    }
+
+    /**
+     * Version 23 lets a day say how many sets, and a session record how many it was asked for.
+     *
+     * Both columns arrive null and stay null, which is the point for the second of them: a
+     * session logged before the app prescribed set counts was asked for none, and writing a
+     * number over it would be a prescription nobody made appearing in a training record.
+     */
+    @Test
+    fun migratesToSetCountsWithNothingAskedOfWhatWasAlreadyTrained() {
+        helper.createDatabase(TWENTY_SECOND_DATABASE, 22).use { version22 ->
+            version22.execSQL(
+                "INSERT INTO session (started_at, finished_at, date, note) " +
+                    "VALUES (1757869200000, NULL, '2026-09-14', NULL)",
+            )
+            version22.execSQL(
+                "INSERT INTO session_plan (session_id, exercise_id, order_index) " +
+                    "VALUES (1, 'Barbell_Bench_Press', 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_SECOND_DATABASE, 23, true, MIGRATION_22_23).use { db ->
+            db.query("SELECT sets FROM session_plan WHERE session_id = 1").use {
+                it.moveToFirst()
+                assertTrue("a set count was invented for a session nobody asked one of", it.isNull(0))
             }
         }
     }

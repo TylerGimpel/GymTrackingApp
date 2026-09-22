@@ -51,13 +51,20 @@ fun RoutineDrawer(
                 item(key = "day-${day.id}") {
                     DayHeading(day, isNext = day.id == progress?.cursor?.id)
                 }
-                items(day.exercises, key = { "${day.id}-${it.id}" }) { exercise ->
+                items(day.exercises, key = { "${day.id}-${it.exercise.id}" }) { planned ->
+                    val exercise = planned.exercise
                     NavigationDrawerItem(
                         label = { Text(exercise.name) },
                         // What has been done, beside what there is to do: the question a lifter
                         // opens this to answer is usually "have I done that one yet".
-                        badge = performed[exercise.id]?.let { done ->
-                            { Text(stringResource(R.string.drawer_sets_done, done)) }
+                        badge = {
+                            Text(
+                                stringResource(
+                                    R.string.drawer_sets_done,
+                                    performed[exercise.id] ?: 0,
+                                    planned.sets ?: 0,
+                                ),
+                            )
                         },
                         selected = false,
                         onClick = { onJumpTo(exercise) },

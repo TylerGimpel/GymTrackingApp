@@ -51,6 +51,20 @@ data class SessionPlanEntity(
     /** Where this exercise sat in the day it was copied from, from 1. */
     @ColumnInfo(name = "order_index")
     val orderIndex: Int,
+
+    /**
+     * How many working sets the session was asked for, or null where it was asked for none.
+     *
+     * Copied with everything else, so a session trained in March still reads what it was asked
+     * for however often the routine has changed since — which is the whole reason a plan is a
+     * snapshot rather than a pointer.
+     *
+     * Null for every session logged before the app prescribed set counts at all. That is the
+     * truth about them and not a gap to be filled: a number written over history would be a
+     * prescription nobody made.
+     */
+    @ColumnInfo(name = "sets")
+    val sets: Int? = null,
 )
 
 /** One planned exercise, with the bank row and the lifter's choices about it. */

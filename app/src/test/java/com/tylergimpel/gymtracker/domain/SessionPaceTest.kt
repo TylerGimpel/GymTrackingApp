@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -38,6 +39,53 @@ class SessionPaceTest {
         // The app had nothing to say and the lifter trained anyway. Counting it as work is the
         // honest reading: they did it.
         assertEquals(2, pace.workingDone)
+    }
+
+    @Test
+    fun `a session that knows what it asked for says how much is left`() {
+        val ramp = listOf(set(SetType.WARMUP), set(SetType.WARMUP))
+
+        val pace = SessionPace.of(ramp, pending = SetType.WORKING, planned = PlannedSets(5, 3))
+
+        // Two rungs down and the first working set in front of them: third of five overall, first
+        // of three that count. Both halves of "how much is left", which is what the header is for.
+        assertEquals(3, pace.setsDone)
+        assertEquals(5, pace.setsPlanned)
+        assertEquals(1, pace.workingDone)
+        assertEquals(3, pace.workingPlanned)
+    }
+
+    @Test
+    fun `a session nothing planned says where the lifter is and claims no total`() {
+        val pace = SessionPace.of(listOf(set(SetType.WORKING)), pending = SetType.WORKING)
+
+        // Training with no routine is an ordinary session, not an incomplete one. A denominator
+        // here would be the screen stating a plan nobody made.
+        assertEquals(2, pace.setsDone)
+        assertNull(pace.setsPlanned)
+        assertNull(pace.workingPlanned)
+    }
+
+    @Test
+    fun `a lifter past what was asked of them is not corrected`() {
+        val done = List(4) { set(SetType.WORKING) }
+
+        val pace = SessionPace.of(done, pending = SetType.WORKING, planned = PlannedSets(3, 3))
+
+        // Five of three. Absurd to read and exactly right to show: they did the sets. A header
+        // that clamped this would be the app telling somebody they had stopped training.
+        assertEquals(5, pace.setsDone)
+        assertEquals(3, pace.setsPlanned)
+        assertEquals(5, pace.workingDone)
+    }
+
+    @Test
+    fun `what an exercise asks for follows what the lifter is training for`() {
+        // Invented numbers, and the only property worth asserting is the one with a reason behind
+        // it: strength is more sets of fewer reps than endurance is. #74 replaces the derivation
+        // with one that divides a real volume budget.
+        assert(setsFor(RoutineGoal.STRENGTH) > setsFor(RoutineGoal.ENDURANCE))
+        RoutineGoal.entries.forEach { assert(setsFor(it) in 1..10) }
     }
 
     private companion object {

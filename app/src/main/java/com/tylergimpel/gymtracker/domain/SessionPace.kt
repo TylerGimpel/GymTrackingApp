@@ -3,6 +3,32 @@ package com.tylergimpel.gymtracker.domain
 import java.time.Duration
 
 /**
+ * What an exercise was asked for in a session: the whole list, and the part of it that is work.
+ *
+ * Two numbers because a ramp is not training. The [total] is the rungs plus the work, which is
+ * what a lifter counting sets off in their head is counting; [working] is what the volume is.
+ */
+data class PlannedSets(val total: Int, val working: Int)
+
+/**
+ * How many working sets an exercise asks for, given what the lifter is training for.
+ *
+ * **Invented, and to be replaced.** There is no dose-response data behind a per-exercise set
+ * count — only behind weekly volume per muscle — and what will prescribe this properly is the
+ * generator dividing a real budget across a day (#74). Until then, more sets of fewer reps for
+ * strength and fewer of more for endurance is the shape the research does support, and these are
+ * three numbers chosen to sit in it.
+ *
+ * Deliberately not a function of the exercise. Whether a compound earns more sets than an
+ * isolation movement is a budgeting question, and budgeting is exactly what this stands in for.
+ */
+fun setsFor(goal: RoutineGoal): Int = when (goal) {
+    RoutineGoal.STRENGTH -> 5
+    RoutineGoal.HYPERTROPHY -> 4
+    RoutineGoal.ENDURANCE -> 3
+}
+
+/**
  * How far through an exercise a lifter is, and how far through the work that counts.
  *
  * Two numbers rather than one, because a lifter three sets into an exercise wants to know both
@@ -10,13 +36,21 @@ import java.time.Duration
  * working set is not four sets of training, and a screen that says `set 4` alone makes it look
  * like one.
  *
- * Two numbers and no totals. Nothing prescribes how many sets an exercise gets until the
- * generator does (#26), and a screen that invented one would be stating a plan nobody made — so
- * `set 3` is the honest thing to say and `set 3 of 5` waits for something that knows.
+ * Each carries a total where the session knows one. **Nothing is clamped to it**: a lifter who
+ * does five of three did five sets, and a counter that stopped at three would be the app telling
+ * somebody they had finished while they were still training.
  */
 data class SessionPace(
     val setsDone: Int,
     val workingDone: Int,
+    /**
+     * How many sets this exercise was asked for, or null where nothing asked.
+     *
+     * Null is an ordinary session trained without a routine, not an incomplete one — and a
+     * denominator invented for it would be the screen stating a plan nobody made.
+     */
+    val setsPlanned: Int? = null,
+    val workingPlanned: Int? = null,
 ) {
     companion object {
         /**
@@ -29,10 +63,16 @@ data class SessionPace(
          * A [pending] nothing prescribed counts as work, because a set the lifter chose to do
          * with the app saying nothing is training they did.
          */
-        fun of(sets: List<PerformedSet>, pending: SetType?): SessionPace = SessionPace(
+        fun of(
+            sets: List<PerformedSet>,
+            pending: SetType?,
+            planned: PlannedSets? = null,
+        ): SessionPace = SessionPace(
             setsDone = sets.size + 1,
             workingDone = sets.count { it.type.countsTowardVolume } +
                 if (pending?.countsTowardVolume != false) 1 else 0,
+            setsPlanned = planned?.total,
+            workingPlanned = planned?.working,
         )
     }
 }

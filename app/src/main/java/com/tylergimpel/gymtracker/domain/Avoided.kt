@@ -34,10 +34,13 @@ fun avoidedExercises(
     val newestFirst = recent.sortedByDescending { it.session.date }
 
     return newestFirst.flatMap { it.plan.exercises }
+        .map(PlannedExercise::exercise)
         .distinctBy(Exercise::id)
         .mapNotNull { exercise ->
             val asking = newestFirst
-                .filter { session -> session.plan.exercises.any { it.id == exercise.id } }
+                .filter { session ->
+                    session.plan.exercises.any { it.exercise.id == exercise.id }
+                }
                 .take(window)
             val missed = asking.count { session ->
                 session.plan.unperformed(session.exercises).any { it.id == exercise.id }

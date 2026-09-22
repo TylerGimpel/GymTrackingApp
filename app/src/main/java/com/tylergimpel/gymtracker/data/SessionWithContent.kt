@@ -10,6 +10,7 @@ import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.PlannedExercise
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetMeasurements
 import com.tylergimpel.gymtracker.domain.SetType
@@ -77,7 +78,8 @@ data class SessionWithContent(
  */
 fun List<SessionPlanWithExercise>.toSessionPlan(lifterUnit: WeightUnit = WeightUnit.DEFAULT) =
     SessionPlan(
-        exercises = sortedBy { it.entry.orderIndex }.map { it.exercise.toDomain(lifterUnit) },
+        exercises = sortedBy { it.entry.orderIndex }
+            .map { PlannedExercise(it.exercise.toDomain(lifterUnit), it.entry.sets) },
     )
 
 fun SessionExerciseWithSets.toDomain(lifterUnit: WeightUnit = WeightUnit.DEFAULT) = SessionExercise(

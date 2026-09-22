@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.domain.ExerciseSource
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.NewExerciseDraft
 import com.tylergimpel.gymtracker.domain.ProgressionModel
+import com.tylergimpel.gymtracker.domain.PlannedExercise
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -173,7 +174,7 @@ class ExerciseOwnershipTest {
     fun anExercisePlannedAndNeverPerformedIsTombstonedToo() = runBlocking {
         // Exactly the case the session plan exists to make visible: asked for, not done, so there
         // is no `session_exercise` row pointing at it at all.
-        sessions.startSession(SessionPlan(listOf(bankExercise(SQUAT))))
+        sessions.startSession(SessionPlan(listOf(PlannedExercise(bankExercise(SQUAT)))))
         sessions.logSet(BENCH, SetDraft("60", "5"))
 
         exercises.applyBankUpdate(listOf(shipped(BENCH, "Barbell Bench Press")))

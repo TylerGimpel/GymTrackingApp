@@ -23,6 +23,7 @@ import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.PlateLine
+import com.tylergimpel.gymtracker.domain.PlannedSets
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.RestAlarms
@@ -389,6 +390,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val recommendation: Recommendation,
         /** How to load the bar for it, where it is a bar. Computed with the weight it explains. */
         val plateLine: PlateLine? = null,
+        /** How many sets this session asked for of it, where it asked for any. */
+        val planned: PlannedSets? = null,
     )
 
     /**
@@ -404,12 +407,13 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             selected
         }.mapLatest { selected ->
             selected?.let { exercise ->
-                recommendations.nextSet(exercise)?.let { next ->
+                recommendations.nextSetWithPlan(exercise)?.let { next ->
                     Recommended(
                         exerciseId = exercise.id,
-                        recommendation = next,
-                        plateLine = next.prescription.load
+                        recommendation = next.recommendation,
+                        plateLine = next.recommendation.prescription.load
                             ?.let { recommendations.plateLine(exercise, it) },
+                        planned = next.planned,
                     )
                 }
             }
@@ -486,7 +490,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 restCountdownVisible = rest.alerts.countdownVisible,
                 plateLine = forThisExercise?.plateLine,
                 pace = screen.selected?.let { chosen ->
-                    SessionPace.of(logged?.setsOf(chosen).orEmpty(), recommendation?.setType)
+                    SessionPace.of(
+                        sets = logged?.setsOf(chosen).orEmpty(),
+                        pending = recommendation?.setType,
+                        planned = forThisExercise?.planned,
+                    )
                 },
                 wheel = screen.selected?.let { chosen ->
                     logged?.setsOf(chosen).orEmpty()
@@ -922,7 +930,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     /** Takes an exercise out of the routine day it keeps going untrained in. */
     fun removeAvoided(avoided: Avoided) {
         val day = state.value.routine?.routine?.rotation
-            ?.firstOrNull { day -> day.exercises.any { it.id == avoided.exercise.id } }
+            ?.firstOrNull { day -> day.exercises.any { it.exercise.id == avoided.exercise.id } }
             ?: return keepAvoided(avoided)
 
         viewModelScope.launch {

@@ -37,6 +37,7 @@
     <string name="wheel_next_set">next set</string>
     <string name="wheel_nothing_asked">Log what you do.</string>
     <string name="wheel_pace">set %1$d · working %2$d</string>
+    <string name="wheel_pace_planned">set %1$d of %2$d · working %3$d of %4$d</string>
     <string name="wheel_time_left">~%1$s left</string>
     <string name="wheel_elapsed_minutes">%1$d min so far</string>
     <string name="wheel_elapsed_hours">%1$d:%2$02d so far</string>
@@ -78,7 +79,8 @@
     <string name="exercise_rep_range">Reps (blank = whatever you are training for)</string>
     <string name="exercise_rep_range_bottom">From</string>
     <string name="exercise_rep_range_top">To</string>
-    <string name="drawer_sets_done">%1$d done</string>
+    <string name="drawer_sets_done">%1$d of %2$d</string>
+    <string name="routine_exercise_sets">%1$s · %2$d sets</string>
     <string name="drawer_day_next">%1$s · next</string>
     <string name="rest_unreliable">This phone will not let the app set an exact alarm, so a rest may reach you late.</string>
     <string name="rest_allow_alarms">Allow alarms</string>
