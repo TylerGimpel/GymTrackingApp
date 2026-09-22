@@ -936,6 +936,7 @@ class GymDatabaseMigrationTest {
         const val EIGHTEENTH_DATABASE = "gym-migration-test-18.db"
         const val NINETEENTH_DATABASE = "gym-migration-test-19.db"
         const val TWENTIETH_DATABASE = "migration-twentieth.db"
+        const val TWENTY_FIRST_DATABASE = "migration-twenty-first.db"
     }
 
     /**
@@ -965,6 +966,64 @@ class GymDatabaseMigrationTest {
             db.query("SELECT display_unit FROM profile WHERE id = 1").use {
                 it.moveToFirst()
                 assertEquals("lb", it.getString(0))
+            }
+        }
+    }
+
+    /**
+     * Version 22 makes a band a decision, and an estimate something that can go without it.
+     *
+     * The point of the rebuild is what is *kept*: `exercise_progress` is otherwise entirely the
+     * app's own working out, recomputed from the log on the next recommendation, but the band in
+     * it was seeded from the routine's goal and is derived from nothing (ADR 0010). A migration
+     * that dropped the table would have been free of every other column and wrong about that one.
+     */
+    @Test
+    fun migratesToABandThatSurvivesTheEstimateBesideIt() {
+        helper.createDatabase(TWENTY_FIRST_DATABASE, 21).use { version21 ->
+            version21.execSQL(
+                "INSERT INTO exercise_progress (exercise_id, anchor_kg, rep_range_bottom, " +
+                    "rep_range_top, working_load_kg) VALUES ('Barbell_Bench_Press', 100.0, 6, 8, 75.0)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_FIRST_DATABASE, 22, true, MIGRATION_21_22).use { db ->
+            db.query(
+                "SELECT anchor_kg, rep_range_bottom, rep_range_top, working_load_kg " +
+                    "FROM exercise_progress WHERE exercise_id = 'Barbell_Bench_Press'",
+            ).use {
+                it.moveToFirst()
+                assertEquals(100.0, it.getDouble(0), 0.0001)
+                assertEquals(6, it.getInt(1))
+                assertEquals(8, it.getInt(2))
+                assertEquals(75.0, it.getDouble(3), 0.0001)
+            }
+
+            // The estimate can now go without taking the band with it, which is the whole change.
+            db.execSQL(
+                "UPDATE exercise_progress SET anchor_kg = NULL, working_load_kg = NULL " +
+                    "WHERE exercise_id = 'Barbell_Bench_Press'",
+            )
+            db.query(
+                "SELECT anchor_kg, rep_range_bottom FROM exercise_progress " +
+                    "WHERE exercise_id = 'Barbell_Bench_Press'",
+            ).use {
+                it.moveToFirst()
+                assertEquals(true, it.isNull(0))
+                assertEquals(6, it.getInt(1))
+            }
+
+            // And the lifter has somewhere of their own to say what they want, which is not here.
+            db.execSQL(
+                "INSERT INTO exercise_preference (exercise_id, rep_range_bottom, rep_range_top) " +
+                    "VALUES ('Barbell_Bench_Press', 5, 5)",
+            )
+            db.query(
+                "SELECT rep_range_bottom FROM exercise_preference " +
+                    "WHERE exercise_id = 'Barbell_Bench_Press'",
+            ).use {
+                it.moveToFirst()
+                assertEquals(5, it.getInt(0))
             }
         }
     }

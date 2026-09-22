@@ -24,6 +24,7 @@ import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.PlateLine
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.RestAlarms
 import com.tylergimpel.gymtracker.domain.resting
 import com.tylergimpel.gymtracker.domain.RoutineDay
@@ -119,7 +120,32 @@ data class ExerciseDetails(
      * positions back in charge.
      */
     val increment: String = "",
-)
+    /**
+     * The band the lifter works this exercise in, as typed: the bottom and the top.
+     *
+     * Two fields rather than one, because the two ends do different jobs — the bottom is what the
+     * load formula reads and the top is what has to be beaten. Both blank means the routine's goal
+     * answers, which is the ordinary state.
+     */
+    val repRangeBottom: String = "",
+    val repRangeTop: String = "",
+) {
+
+    /**
+     * The band as typed, or null where nothing usable was.
+     *
+     * Null for a blank pair, for half a pair, and for a top below its bottom — all three are a
+     * field somebody is partway through rather than an instruction, and the constructor would
+     * throw on the last of them. Clearing the fields is how a lifter hands the question back to
+     * the routine's goal, so "nothing usable" and "nothing chosen" are the same answer here.
+     */
+    fun chosenRepRange(): RepRange? {
+        val bottom = repRangeBottom.trim().toIntOrNull() ?: return null
+        val top = repRangeTop.trim().toIntOrNull() ?: return null
+        if (bottom < 1 || top < bottom || top > RepRange.MAX_PRESCRIBED_REPS) return null
+        return RepRange(bottom, top)
+    }
+}
 
 /**
  * Everything on this screen that is not read from the database.
@@ -773,6 +799,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     increment = exercise.chosenIncrement
                         ?.asTextIn(state.value.lifterUnit)
                         .orEmpty(),
+                    repRangeBottom = exercise.chosenRepRange?.bottom?.toString().orEmpty(),
+                    repRangeTop = exercise.chosenRepRange?.top?.toString().orEmpty(),
                 ),
             )
         }
@@ -813,6 +841,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     ?.takeIf { it > 0 }
                     ?.let { state.value.lifterUnit.toKilograms(it) },
             )
+            // Both ends or neither. Half a band is a field somebody was still typing in, and
+            // guessing the other end of it would be the app deciding what they meant.
+            exercises.setRepRange(open.exerciseId, open.chosenRepRange())
             screen.update {
                 it.copy(
                     editingExercise = null,
@@ -825,6 +856,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                         note = open.note.takeIf(String::isNotBlank),
                         chosenProgressionModel = open.progressionModel
                             .takeIf { model -> model != exercise.bankProgressionModel },
+                        chosenRepRange = open.chosenRepRange(),
                     ),
                 )
             }

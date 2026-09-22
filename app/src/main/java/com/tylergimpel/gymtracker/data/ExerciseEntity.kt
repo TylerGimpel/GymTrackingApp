@@ -7,6 +7,7 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseSource
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.ProgressionModel
+import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import java.time.Duration
 import com.tylergimpel.gymtracker.domain.Kilograms
@@ -130,6 +131,11 @@ fun ExerciseEntity.toDomain(
     chosenRest = preference?.restSeconds?.let { Duration.ofSeconds(it.toLong()) },
     isDisliked = preference?.disliked == true,
     chosenIncrement = preference?.incrementKg?.let(::Kilograms),
+    // Both ends or neither: half a band is not a band, and a row carrying one is a write that
+    // did not finish rather than something to guess the other end of.
+    chosenRepRange = preference?.repRangeBottom?.let { bottom ->
+        preference.repRangeTop?.let { top -> RepRange(bottom, top) }
+    },
     userName = preference?.name,
     note = preference?.note,
     source = ExerciseSource.fromStored(source),

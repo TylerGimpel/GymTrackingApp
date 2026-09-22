@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.RepPreference
+import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
@@ -192,6 +193,22 @@ private fun RoutineProperties(
             selected = routine.repPreference,
             onSelect = { save(repPreference = it) },
         )
+
+        // Said here, at the moment the two are chosen, because this is where the lifter can do
+        // something about it. An override nobody is told about produces training that will not
+        // deliver the goal, and they do not find out for three months.
+        val seeded = seedRepRange(routine.goal, routine.repPreference)
+        if (seeded.overruled != null) {
+            Text(
+                text = stringResource(
+                    R.string.routine_preference_overruled,
+                    seeded.range.bottom,
+                    seeded.range.top,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         Text(stringResource(R.string.routine_equipment), style = MaterialTheme.typography.labelLarge)
         Row(

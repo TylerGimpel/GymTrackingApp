@@ -24,6 +24,11 @@ import com.tylergimpel.gymtracker.domain.RepRange
  * engine writing to the table whose whole point is that only the lifter writes to it.
  *
  * A row exists only once there is something to say, so the shipped asset carries the table empty.
+ *
+ * **The estimate is nullable and the band is not**, which is the one asymmetry here worth knowing.
+ * Everything else in this row is derived from the log and dies with it; the band is a decision
+ * seeded from the routine (ADR 0010), so an exercise whose last logged set is corrected away keeps
+ * the band and loses only the arithmetic. Deleting the row would throw the decision away.
  */
 @Entity(
     tableName = "exercise_progress",
@@ -46,7 +51,7 @@ data class ExerciseProgressEntity(
      * negative on an assisted machine, where help is weight taken off the lifter.
      */
     @ColumnInfo(name = "anchor_kg")
-    val anchorKg: Double,
+    val anchorKg: Double?,
 
     /** The band this exercise is worked in. Both ends, because they do different jobs. */
     @ColumnInfo(name = "rep_range_bottom")
@@ -68,19 +73,24 @@ data class ExerciseProgressEntity(
      * readers for it.
      */
     @ColumnInfo(name = "working_load_kg")
-    val workingLoadKg: Double,
+    val workingLoadKg: Double?,
 )
 
-fun ExerciseProgressEntity.toDomain() = ExerciseProgress(
-    anchor = Anchor(Kilograms(anchorKg)),
-    repRange = RepRange(repRangeBottom, repRangeTop),
-    workingLoad = Kilograms(workingLoadKg),
-)
+/**
+ * What the app has worked out here, or null where all that survives is the band.
+ *
+ * The two go together: an estimate without a working load is not half an answer, it is a row
+ * mid-write. Read [seededRepRange] for the band, which outlives both.
+ */
+fun ExerciseProgressEntity.toDomain(): ExerciseProgress? {
+    val anchor = anchorKg ?: return null
+    val load = workingLoadKg ?: return null
+    return ExerciseProgress(
+        anchor = Anchor(Kilograms(anchor)),
+        repRange = RepRange(repRangeBottom, repRangeTop),
+        workingLoad = Kilograms(load),
+    )
+}
 
-fun ExerciseProgress.toEntity(exerciseId: String) = ExerciseProgressEntity(
-    exerciseId = exerciseId,
-    anchorKg = anchor.estimated1rm.value,
-    repRangeBottom = repRange.bottom,
-    repRangeTop = repRange.top,
-    workingLoadKg = workingLoad.value,
-)
+/** The band this exercise was seeded into, which is here whether or not an estimate is. */
+fun ExerciseProgressEntity.seededRepRange() = RepRange(repRangeBottom, repRangeTop)

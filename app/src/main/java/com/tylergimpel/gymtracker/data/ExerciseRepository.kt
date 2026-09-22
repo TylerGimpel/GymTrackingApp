@@ -6,6 +6,7 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseSource
 import com.tylergimpel.gymtracker.domain.NewExerciseDraft
 import com.tylergimpel.gymtracker.domain.ProgressionModel
+import com.tylergimpel.gymtracker.domain.RepRange
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.domain.planBankUpdate
 import kotlinx.coroutines.flow.Flow
@@ -116,6 +117,18 @@ class ExerciseRepository(
      */
     suspend fun setIncrement(exerciseId: String, increment: Kilograms?) = database.withTransaction {
         exercises.setIncrement(exerciseId, increment?.value)
+        exercises.forgetEmptyPreference(exerciseId)
+    }
+
+    /**
+     * Records the band the lifter works [exerciseId] in, or clears it back to the seeded one.
+     *
+     * Clearing hands the question back to the routine's goal rather than to a constant, which is
+     * why it is null here rather than a band written out: an exercise the lifter has stopped
+     * having an opinion about is one the goal answers for again.
+     */
+    suspend fun setRepRange(exerciseId: String, repRange: RepRange?) = database.withTransaction {
+        exercises.setRepRange(exerciseId, repRange?.bottom, repRange?.top)
         exercises.forgetEmptyPreference(exerciseId)
     }
 

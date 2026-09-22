@@ -708,6 +708,33 @@ private fun ExerciseDetailsDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                // The band this exercise is worked in, where the lifter wants a say in it.
+                // Blank hands the question back to what they are training for, which is where it
+                // normally lives: a goal seeds a band, and a goal edited later does not reach
+                // back and take this one away.
+                Text(
+                    text = stringResource(R.string.exercise_rep_range),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = details.repRangeBottom,
+                        onValueChange = { onChange(details.copy(repRangeBottom = it)) },
+                        label = { Text(stringResource(R.string.exercise_rep_range_bottom)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = details.repRangeTop,
+                        onValueChange = { onChange(details.copy(repRangeTop = it)) },
+                        label = { Text(stringResource(R.string.exercise_rep_range_top)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 ProgressionModelChooser(details.progressionModel) {
                     onChange(details.copy(progressionModel = it))
                 }

@@ -10,7 +10,10 @@ import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.PlateLine
 import com.tylergimpel.gymtracker.domain.stepFor
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RepRange
+import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.warmUpsFor
 import com.tylergimpel.gymtracker.domain.TrainingHistory
@@ -58,6 +61,13 @@ class RecommendationRepository(
     private val plates: PlateRepository = database.plateRepository(),
     /** What the lifter reads in, which decides the step where no equipment has been described. */
     private val profile: ProfileRepository = database.profileRepository(),
+    /**
+     * The routine, read for the goal and rep preference a band is seeded from.
+     *
+     * Only ever read here, and only for an exercise that has not been banded yet: a routine is not
+     * allowed to reach back and re-band an exercise a lifter is mid-progression on.
+     */
+    private val routines: RoutineDao = database.routineDao(),
 ) {
 
     /**
@@ -74,10 +84,15 @@ class RecommendationRepository(
         return database.withTransaction {
             val open = sessions.activeSession()?.id
             val history = historyOf(exercise.id, open)
-            val repRange = repRangeFor(exercise.id)
+            // Two bands, and they are not the same question. The seed is what the routine's
+            // goal put this exercise in and is what gets stored; the lifter's own answer, where
+            // they gave one, is what the set is actually prescribed in. Storing the effective one
+            // would mean clearing a choice fell back to that same choice.
+            val seeded = seededRepRangeFor(exercise)
+            val repRange = exercise.chosenRepRange ?: seeded
             val rounding = incrementFor(exercise)
             val progress = history.progressIn(repRange, rounding, decay, LocalDate.now(clock))
-            remember(exercise.id, progress)
+            remember(exercise.id, progress, seeded)
             recommendNextSet(
                 history = history,
                 progress = progress,
@@ -189,31 +204,52 @@ class RecommendationRepository(
         sessions.trainedSetsFor(exerciseId, open ?: SessionDao.NO_SESSION).toTrainingHistory()
 
     /**
-     * The band this exercise is worked in: the one it already carries, or the default.
+     * The band the routine put this exercise in, which is not necessarily the one it is worked in.
      *
-     * Read back rather than recomputed, because unlike the anchor it is not derived from anything —
-     * it is a decision, and until the generator seeds it from the routine's goal and rep preference
-     * (#26) the default is the whole of that decision.
+     * **Read back rather than recomputed**, once it exists. Unlike the anchor it is derived from
+     * nothing and is a decision (ADR 0010), so a goal edited since must not quietly re-band a
+     * lifter halfway up a progression — offering that as a regeneration is #77's job.
+     *
+     * So only an exercise that has never been banded reads the routine, which is what makes the
+     * seeding happen once. With no routine yet there is no goal to read, and the default answers.
      */
-    private suspend fun repRangeFor(exerciseId: String): RepRange =
-        exercises.progress(exerciseId)?.toDomain()?.repRange ?: RepRange.DEFAULT
+    private suspend fun seededRepRangeFor(exercise: Exercise): RepRange {
+        exercises.progress(exercise.id)?.let { return it.seededRepRange() }
+
+        val routine = routines.routine() ?: return RepRange.DEFAULT
+        return seedRepRange(
+            goal = RoutineGoal.valueOf(routine.goal),
+            preference = RepPreference.valueOf(routine.repPreference),
+        ).range
+    }
 
     /**
-     * Keeps what the app now makes of this exercise, or forgets it where there is nothing to make.
+     * Keeps what the app now makes of this exercise, and the band it was asked in either way.
      *
-     * Forgetting matters: an exercise whose only logged set has been deleted has no estimate, and a
-     * row left behind would go on prescribing from training that is no longer there.
+     * Forgetting the estimate matters: an exercise whose only logged set has been deleted has
+     * nothing to prescribe from, and an estimate left behind would go on prescribing from training
+     * that is no longer there.
      *
-     * It takes the **Rep range** with it, which is safe only while every range in the table is the
-     * default this same code wrote. The ticket that starts storing a chosen one has to keep the row
-     * or make the estimate nullable, and is told so on #26.
+     * **The band is not forgotten with it.** It was seeded from the routine's goal rather than
+     * derived from the log, so it is a decision and outlives the arithmetic (ADR 0010) — which is
+     * also why a row is written for an exercise the app has no estimate for at all. That write is
+     * what pins the band, so the first recommendation an exercise ever gets settles what it is
+     * worked in, and a goal edited afterwards changes nothing until somebody asks it to.
      */
-    private suspend fun remember(exerciseId: String, progress: ExerciseProgress?) {
-        if (progress == null) {
-            exercises.forgetProgress(exerciseId)
-        } else {
-            exercises.upsertProgress(progress.toEntity(exerciseId))
-        }
+    private suspend fun remember(
+        exerciseId: String,
+        progress: ExerciseProgress?,
+        seeded: RepRange,
+    ) {
+        exercises.upsertProgress(
+            ExerciseProgressEntity(
+                exerciseId = exerciseId,
+                anchorKg = progress?.anchor?.estimated1rm?.value,
+                repRangeBottom = seeded.bottom,
+                repRangeTop = seeded.top,
+                workingLoadKg = progress?.workingLoad?.value,
+            ),
+        )
     }
 
     /**

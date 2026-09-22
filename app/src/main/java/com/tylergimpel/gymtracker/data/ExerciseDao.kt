@@ -105,6 +105,22 @@ interface ExerciseDao {
     suspend fun setProgressionModel(exerciseId: String, progressionModel: String?)
 
     /**
+     * Records the band the lifter works an exercise in, or clears it back to the seeded one.
+     *
+     * Both ends written together, because half a band is not one.
+     */
+    @Query(
+        """
+        INSERT INTO exercise_preference (exercise_id, rep_range_bottom, rep_range_top)
+        VALUES (:exerciseId, :bottom, :top)
+        ON CONFLICT(exercise_id) DO UPDATE SET
+            rep_range_bottom = excluded.rep_range_bottom,
+            rep_range_top = excluded.rep_range_top
+        """,
+    )
+    suspend fun setRepRange(exerciseId: String, bottom: Int?, top: Int?)
+
+    /**
      * Drops a preference row that no longer records a choice.
      *
      * Absence is this table's way of saying "nothing chosen" (ADR 0009). A row left behind by a
@@ -117,7 +133,7 @@ interface ExerciseDao {
         WHERE exercise_id = :exerciseId
           AND display_unit IS NULL AND name IS NULL AND note IS NULL
           AND progression_model IS NULL AND rest_seconds IS NULL AND disliked = 0
-          AND increment_kg IS NULL
+          AND increment_kg IS NULL AND rep_range_bottom IS NULL
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)
@@ -137,19 +153,15 @@ interface ExerciseDao {
      * A whole-row write, unlike the preferences above, and safely so: every column here is the
      * app's own and is written together from the same reading of the log. There is nothing of the
      * lifter's in this table to clear by accident.
+     *
+     * **An exercise the app has nothing to say about still gets a row**, carrying the band and a
+     * null estimate. That is how the estimate is forgotten when the history it came from is
+     * corrected away — by writing null over it rather than by deleting the row, because the band
+     * beside it was seeded from the routine's goal and is a decision that outlives the arithmetic
+     * (ADR 0010). Deleting the row to forget the estimate would take the decision with it.
      */
     @Upsert
     suspend fun upsertProgress(progress: ExerciseProgressEntity)
-
-    /**
-     * Forgets what the app had worked out about an exercise.
-     *
-     * For the case where the history it was derived from has gone — the last logged set corrected
-     * away or deleted. Absence is this table's way of saying "nothing to go on", and a stale
-     * estimate of training that no longer exists is worse than no estimate at all.
-     */
-    @Query("DELETE FROM exercise_progress WHERE exercise_id = :exerciseId")
-    suspend fun forgetProgress(exerciseId: String)
 
     /** Adds a row: the lifter's own exercise, or one a bank update brought. */
     @Insert

@@ -75,6 +75,22 @@ data class ExercisePreferenceEntity(
     val restSeconds: Int? = null,
 
     /**
+     * The band this lifter works this exercise in, where they have said.
+     *
+     * Overrules the band the routine's goal seeded, and here rather than beside that seed because
+     * the two answer different questions: a seed is what the app worked out from a goal, and this
+     * is somebody saying they want their curls in eights whatever they are training for. Keeping
+     * them apart is what stops a goal change quietly taking a decision back.
+     *
+     * Both ends or neither, which the two being written together is what enforces.
+     */
+    @ColumnInfo(name = "rep_range_bottom")
+    val repRangeBottom: Int? = null,
+
+    @ColumnInfo(name = "rep_range_top")
+    val repRangeTop: Int? = null,
+
+    /**
      * Whether the lifter never wants this exercise suggested again.
      *
      * A hard ban rather than a ranking penalty, and not nullable like the rest of this row: a

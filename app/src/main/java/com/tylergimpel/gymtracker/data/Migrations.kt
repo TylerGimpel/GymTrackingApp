@@ -539,6 +539,43 @@ internal val MIGRATION_20_21 = object : Migration(20, 21) {
     }
 }
 
+/**
+ * A band the lifter chose, and an estimate that can be absent without taking the band with it.
+ *
+ * Two halves of one change. A **Rep range** stops being the same constant for every exercise and
+ * becomes a decision — seeded from the routine's goal and rep preference, or stated outright by
+ * the lifter — and a decision must survive the arithmetic beside it being forgotten.
+ *
+ * SQLite cannot relax a NOT NULL, so `exercise_progress` is rebuilt. It is the app's own working
+ * out and every row in it is recomputed from the log on the next recommendation, but the band is
+ * not recomputed from anything, so the rows are copied rather than dropped.
+ */
+internal val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `exercise_preference` ADD COLUMN `rep_range_bottom` INTEGER")
+        db.execSQL("ALTER TABLE `exercise_preference` ADD COLUMN `rep_range_top` INTEGER")
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `exercise_progress_new` " +
+                "(`exercise_id` TEXT NOT NULL, `anchor_kg` REAL, " +
+                "`rep_range_bottom` INTEGER NOT NULL, `rep_range_top` INTEGER NOT NULL, " +
+                "`working_load_kg` REAL, PRIMARY KEY(`exercise_id`), " +
+                "FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "INSERT INTO `exercise_progress_new` " +
+                "(`exercise_id`, `anchor_kg`, `rep_range_bottom`, `rep_range_top`, " +
+                "`working_load_kg`) " +
+                "SELECT `exercise_id`, `anchor_kg`, `rep_range_bottom`, `rep_range_top`, " +
+                "`working_load_kg` FROM `exercise_progress`",
+        )
+        db.execSQL("DROP TABLE `exercise_progress`")
+        db.execSQL("ALTER TABLE `exercise_progress_new` RENAME TO `exercise_progress`")
+        db.failIfReferencesBroke("exercise_progress")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -560,6 +597,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_18_19,
     MIGRATION_19_20,
     MIGRATION_20_21,
+    MIGRATION_21_22,
 )
 
 /**

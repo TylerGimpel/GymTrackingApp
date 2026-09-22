@@ -101,6 +101,13 @@ data class Exercise(
      * said, which is the ordinary state and the one where the equipment answers.
      */
     val chosenIncrement: Kilograms? = null,
+    /**
+     * The **Rep range** the lifter works this exercise in, where they have said.
+     *
+     * Overrules the band the routine's goal seeded. Null is the ordinary case and means the seed
+     * stands — not that they asked for the seed.
+     */
+    val chosenRepRange: RepRange? = null,
     /** What the lifter calls this, where they have renamed it. */
     val userName: String? = null,
     /** A standing note — "seat notch 3, use the long bar" — shown wherever the exercise is used. */
@@ -196,6 +203,7 @@ data class Exercise(
         chosenRest = chosen.chosenRest,
         isDisliked = chosen.isDisliked,
         chosenIncrement = chosen.chosenIncrement,
+        chosenRepRange = chosen.chosenRepRange,
     )
 }
 

@@ -75,6 +75,9 @@
     <string name="session_open_plates">Plates</string>
     <string name="exercise_increment">Smallest step (blank = whatever the equipment does)</string>
     <string name="exercise_disliked">Never suggest this</string>
+    <string name="exercise_rep_range">Reps (blank = whatever you are training for)</string>
+    <string name="exercise_rep_range_bottom">From</string>
+    <string name="exercise_rep_range_top">To</string>
     <string name="drawer_sets_done">%1$d done</string>
     <string name="drawer_day_next">%1$s · next</string>
     <string name="rest_unreliable">This phone will not let the app set an exact alarm, so a rest may reach you late.</string>
@@ -137,6 +140,7 @@
     <string name="routine_cadence">Sessions per week</string>
     <string name="routine_goal">Goal</string>
     <string name="routine_rep_preference">Rep preference</string>
+    <string name="routine_preference_overruled">Training for strength needs heavy sets, so your exercises are set to %1$d - %2$d reps rather than the higher reps you prefer.</string>
     <string name="routine_equipment">Equipment at your gym</string>
     <string name="routine_days">Days</string>
     <string name="routine_new_day">New day</string>

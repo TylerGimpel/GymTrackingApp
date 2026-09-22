@@ -8,6 +8,9 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.ProgressionModel
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.RepPreference
+import com.tylergimpel.gymtracker.domain.RepRange
+import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetOutcome
@@ -492,6 +495,87 @@ class RecommendationPersistenceTest {
      * by the clock the repository was built with, and pinning one per session says what each test
      * means more plainly than advancing a shared one.
      */
+    @Test
+    fun aRoutineTrainingForStrengthPutsAnExerciseInLowReps() = runBlocking {
+        routines().createRoutine(
+            name = "Strength",
+            goal = RoutineGoal.STRENGTH,
+            repPreference = RepPreference.MODERATE,
+        )
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("100", "5")) }
+
+        // Not 8 - 12. The band comes from what the lifter said they are training for, which is
+        // the whole of this ticket: a hundred for five is a 116 kg single, read back down a
+        // 4 - 6 band rather than a hypertrophy one.
+        val next = recommendations.nextSet(exercise(BENCH))!!
+        assertEquals(RepRange(4, 6), (next as Recommendation.Prescribing).repRange)
+    }
+
+    @Test
+    fun theBandAnExerciseWasSeededIntoOutlivesTheHistoryBesideIt() = runBlocking {
+        routines().createRoutine(
+            name = "Strength",
+            goal = RoutineGoal.STRENGTH,
+            repPreference = RepPreference.MODERATE,
+        )
+        val sessions = train("2026-09-14T18:00", finish = false) {
+            logSet(BENCH, SetDraft("100", "5"))
+        }
+        recommendations.nextSet(exercise(BENCH))
+        val open = sessions.observeActiveSession().first()!!.id
+        val bench = sessions.observeSession(open).first()!!
+            .exercises.single { entry -> entry.exercise.id == BENCH }
+
+        // The only set of this exercise, typed wrongly and corrected away. What the app had worked
+        // out goes with it; what the routine decided does not (ADR 0010).
+        sessions.deleteSet(bench.id, bench.sets.single().setIndex)
+        recommendations.nextSet(exercise(BENCH))
+
+        database.openHelper.readableDatabase.query(
+            "SELECT anchor_kg, rep_range_bottom, rep_range_top FROM exercise_progress " +
+                "WHERE exercise_id = '$BENCH'",
+        ).use {
+            assertEquals(1, it.count)
+            it.moveToFirst()
+            assertTrue("the estimate outlived the history it came from", it.isNull(0))
+            assertEquals(4, it.getInt(1))
+            assertEquals(6, it.getInt(2))
+        }
+    }
+
+    @Test
+    fun aBandTheLifterChoseBeatsTheOneTheirGoalSeeded() = runBlocking {
+        routines().createRoutine(
+            name = "Strength",
+            goal = RoutineGoal.STRENGTH,
+            repPreference = RepPreference.MODERATE,
+        )
+        exercises.setRepRange(BENCH, RepRange(10, 12))
+        train("2026-09-14T18:00") { logSet(BENCH, SetDraft("60", "10")) }
+
+        val next = recommendations.nextSet(exercise(BENCH))!!
+
+        // They said what they want this one worked in, and a goal does not overrule a lifter.
+        assertEquals(RepRange(10, 12), (next as Recommendation.Prescribing).repRange)
+
+        // And the seed is still underneath it, untouched, so clearing the choice hands the
+        // question back to the goal rather than to the choice they just cleared.
+        database.openHelper.readableDatabase.query(
+            "SELECT rep_range_bottom FROM exercise_progress WHERE exercise_id = '$BENCH'",
+        ).use {
+            it.moveToFirst()
+            assertEquals(4, it.getInt(0))
+        }
+    }
+
+    /** A routine repository on the same fixed clock everything else here uses. */
+    private fun routines() = RoutineRepository(
+        database = database,
+        routines = database.routineDao(),
+        sessions = database.sessionDao(),
+        clock = Clock.fixed(at("2026-09-14T18:00"), zone),
+    )
+
     private suspend fun train(
         localDateTime: String,
         finish: Boolean = true,
