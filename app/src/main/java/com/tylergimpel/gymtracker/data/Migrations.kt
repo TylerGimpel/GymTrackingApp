@@ -546,9 +546,14 @@ internal val MIGRATION_20_21 = object : Migration(20, 21) {
  * becomes a decision — seeded from the routine's goal and rep preference, or stated outright by
  * the lifter — and a decision must survive the arithmetic beside it being forgotten.
  *
- * SQLite cannot relax a NOT NULL, so `exercise_progress` is rebuilt. It is the app's own working
- * out and every row in it is recomputed from the log on the next recommendation, but the band is
- * not recomputed from anything, so the rows are copied rather than dropped.
+ * SQLite cannot relax a NOT NULL, so `exercise_progress` is rebuilt.
+ *
+ * **The old rows are not carried over, and that is deliberate.** Every band in a version 21 row
+ * is `8 - 12`, because that constant is the only thing the engine could write before this: none
+ * of them is a decision to preserve, and keeping them would pin every exercise an upgrading
+ * lifter has ever trained to a band their goal never chose. Dropping them costs nothing, since
+ * the estimate and the working load beside them are folded from the log again on the next
+ * recommendation (ADR 0010), and the band is seeded the first time each exercise is asked about.
  */
 internal val MIGRATION_21_22 = object : Migration(21, 22) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -563,16 +568,8 @@ internal val MIGRATION_21_22 = object : Migration(21, 22) {
                 "FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) " +
                 "ON UPDATE NO ACTION ON DELETE CASCADE )",
         )
-        db.execSQL(
-            "INSERT INTO `exercise_progress_new` " +
-                "(`exercise_id`, `anchor_kg`, `rep_range_bottom`, `rep_range_top`, " +
-                "`working_load_kg`) " +
-                "SELECT `exercise_id`, `anchor_kg`, `rep_range_bottom`, `rep_range_top`, " +
-                "`working_load_kg` FROM `exercise_progress`",
-        )
         db.execSQL("DROP TABLE `exercise_progress`")
         db.execSQL("ALTER TABLE `exercise_progress_new` RENAME TO `exercise_progress`")
-        db.failIfReferencesBroke("exercise_progress")
     }
 }
 

@@ -80,6 +80,7 @@
     <string name="exercise_rep_range_bottom">From</string>
     <string name="exercise_rep_range_top">To</string>
     <string name="drawer_sets_done">%1$d of %2$d</string>
+    <string name="drawer_sets_logged">%1$d done</string>
     <string name="routine_exercise_sets">%1$s · %2$d sets</string>
     <string name="drawer_day_next">%1$s · next</string>
     <string name="rest_unreliable">This phone will not let the app set an exact alarm, so a rest may reach you late.</string>

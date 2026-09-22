@@ -429,6 +429,7 @@ class RoutinePersistenceTest {
             cadence = 5,
             equipment = setOf("barbell"),
             repPreference = RepPreference.LOW,
+            cardio = CardioPlacement.NONE,
         )
 
         val after = routines.observeProgress().first()!!
@@ -605,7 +606,7 @@ class RoutinePersistenceTest {
 
             // Three positions, two of them training — the two numbers that stop a lifter with a
             // cardio day being under-prescribed by 40% (ADR 0005).
-            assertEquals(3, routine.positions)
+            assertEquals(3, routine.days.size)
             assertEquals(2, routine.liftingPositions)
 
             // Cardio after lifting is a choice about how they train, and it moves neither number:
@@ -620,7 +621,7 @@ class RoutinePersistenceTest {
             )
             val after = routines.observeProgress().first()!!.routine
             assertEquals(CardioPlacement.AFTER_LIFTING, after.cardio)
-            assertEquals(3, after.positions)
+            assertEquals(3, after.days.size)
             assertEquals(2, after.liftingPositions)
         }
 
@@ -637,6 +638,7 @@ class RoutinePersistenceTest {
             cadence = routine.cadence,
             equipment = routine.equipment,
             repPreference = routine.repPreference,
+            cardio = routine.cardio,
         )
     }
 

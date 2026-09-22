@@ -189,8 +189,8 @@ interface SessionDao {
     /**
      * How many working sets this session was asked for of an exercise, or null where none were.
      *
-     * Null for an exercise the plan never named — a swap, or something the lifter simply did — and
-     * for every session logged before the app prescribed set counts at all.
+     * Null for an exercise the plan never named — a swap, or something the lifter simply did —
+     * and for every session logged before the app prescribed set counts at all.
      */
     @Query(
         """

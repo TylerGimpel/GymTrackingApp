@@ -133,7 +133,8 @@ interface ExerciseDao {
         WHERE exercise_id = :exerciseId
           AND display_unit IS NULL AND name IS NULL AND note IS NULL
           AND progression_model IS NULL AND rest_seconds IS NULL AND disliked = 0
-          AND increment_kg IS NULL AND rep_range_bottom IS NULL
+          AND increment_kg IS NULL
+          AND rep_range_bottom IS NULL AND rep_range_top IS NULL
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)

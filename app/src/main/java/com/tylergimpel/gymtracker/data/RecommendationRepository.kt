@@ -13,6 +13,7 @@ import com.tylergimpel.gymtracker.domain.stepFor
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RepRange
+import com.tylergimpel.gymtracker.domain.repRangeOf
 import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.SetType
@@ -24,6 +25,17 @@ import com.tylergimpel.gymtracker.domain.resting
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
+
+/**
+ * What to do next, and how much of this exercise the session was asked for.
+ *
+ * Paired because they come out of one reading of the log: the recommendation folds the history and
+ * the ramp falls out of the weight it arrives at.
+ */
+data class PrescribedNext(
+    val recommendation: Recommendation,
+    val planned: PlannedSets?,
+)
 
 /**
  * Tells the lifter what to lift: from what they have lifted before, or from a ramp where there is
@@ -40,17 +52,6 @@ import java.time.LocalDate
  * or deleted heals the estimate instead of poisoning it for good, and an installed copy carrying
  * years of history needs no backfill to arrive at the same numbers as a fresh one.
  */
-/**
- * What to do next, and how much of this exercise the session was asked for.
- *
- * Paired because they come out of one reading of the log: the recommendation folds the history and
- * the ramp falls out of the weight it arrives at.
- */
-data class PrescribedNext(
-    val recommendation: Recommendation,
-    val planned: PlannedSets?,
-)
-
 class RecommendationRepository(
     private val database: GymDatabase,
     private val exercises: ExerciseDao,
@@ -111,7 +112,7 @@ class RecommendationRepository(
             // they gave one, is what the set is actually prescribed in. Storing the effective one
             // would mean clearing a choice fell back to that same choice.
             val seeded = seededRepRangeFor(exercise)
-            val repRange = exercise.chosenRepRange ?: seeded
+            val repRange = repRangeOf(chosen = exercise.chosenRepRange, seeded = seeded)
             val rounding = incrementFor(exercise)
             val progress = history.progressIn(repRange, rounding, decay, LocalDate.now(clock))
             remember(exercise.id, progress, seeded)
@@ -136,7 +137,7 @@ class RecommendationRepository(
     }
 
     /**
-     * How many sets this session asked for of [exercise], or null where it asked for none.
+     * How many sets this session asked for of [exercise], or null where nothing asked.
      *
      * The working half is the plan's, copied from the routine day when the session began. The
      * whole is that plus the ramp — which is settled only once the work starts: until then the
@@ -144,7 +145,11 @@ class RecommendationRepository(
      * actually did. A total that kept counting rungs nobody climbed would leave somebody reading
      * `6 of 7` with nothing left to do.
      *
-     * Null for a session trained with no routine, which is ordinary rather than incomplete.
+     * **Nothing is claimed while the app is calibrating.** The session *is* the ramp then — the
+     * plan's working sets are not what the lifter is doing, and counting their calibration rungs
+     * against a total meant for work reads `set 5 of 4`. A mode that announces it is guessing has
+     * no business also stating how much is left, which is the same rule that keeps a denominator
+     * off a session trained with no routine at all.
      */
     private suspend fun plannedSetsOf(
         next: Recommendation,
@@ -152,6 +157,7 @@ class RecommendationRepository(
         open: Long?,
         rounding: Increment,
     ): PlannedSets? {
+        if (next is Recommendation.Calibrating) return null
         val session = open ?: return null
         val working = sessions.plannedSets(session, exercise.id) ?: return null
         val rampDone = sessions.setsOfTypeInSession(exercise.id, session, SetType.WARMUP.stored)

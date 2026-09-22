@@ -47,10 +47,6 @@ data class SessionPlan(
      */
     fun performed(performed: List<SessionExercise>): List<Exercise> =
         exercises.map(PlannedExercise::exercise).filter { it.id in performed.exerciseIds() }
-
-    /** How many sets this plan asked for of [exerciseId], or null where it asked for none. */
-    fun setsOf(exerciseId: String): Int? =
-        exercises.firstOrNull { it.exercise.id == exerciseId }?.sets
 }
 
 /**

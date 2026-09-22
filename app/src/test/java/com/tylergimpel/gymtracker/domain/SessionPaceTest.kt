@@ -50,9 +50,8 @@ class SessionPaceTest {
         // Two rungs down and the first working set in front of them: third of five overall, first
         // of three that count. Both halves of "how much is left", which is what the header is for.
         assertEquals(3, pace.setsDone)
-        assertEquals(5, pace.setsPlanned)
+        assertEquals(PlannedSets(5, 3), pace.planned)
         assertEquals(1, pace.workingDone)
-        assertEquals(3, pace.workingPlanned)
     }
 
     @Test
@@ -62,8 +61,7 @@ class SessionPaceTest {
         // Training with no routine is an ordinary session, not an incomplete one. A denominator
         // here would be the screen stating a plan nobody made.
         assertEquals(2, pace.setsDone)
-        assertNull(pace.setsPlanned)
-        assertNull(pace.workingPlanned)
+        assertNull(pace.planned)
     }
 
     @Test
@@ -75,7 +73,7 @@ class SessionPaceTest {
         // Five of three. Absurd to read and exactly right to show: they did the sets. A header
         // that clamped this would be the app telling somebody they had stopped training.
         assertEquals(5, pace.setsDone)
-        assertEquals(3, pace.setsPlanned)
+        assertEquals(PlannedSets(3, 3), pace.planned)
         assertEquals(5, pace.workingDone)
     }
 

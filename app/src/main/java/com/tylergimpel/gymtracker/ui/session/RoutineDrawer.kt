@@ -57,15 +57,11 @@ fun RoutineDrawer(
                         label = { Text(exercise.name) },
                         // What has been done, beside what there is to do: the question a lifter
                         // opens this to answer is usually "have I done that one yet".
-                        badge = {
-                            Text(
-                                stringResource(
-                                    R.string.drawer_sets_done,
-                                    performed[exercise.id] ?: 0,
-                                    planned.sets ?: 0,
-                                ),
-                            )
-                        },
+                        //
+                        // Out of how many only where something asked for a number. `0 of 0` would
+                        // be the drawer stating a plan nobody made, which is the same rule the
+                        // session header keeps.
+                        badge = badgeFor(performed[exercise.id] ?: 0, planned.sets),
                         selected = false,
                         onClick = { onJumpTo(exercise) },
                         modifier = Modifier.padding(horizontal = 12.dp),
@@ -74,6 +70,25 @@ fun RoutineDrawer(
             }
         }
     }
+}
+
+/**
+ * How much of an exercise is done, out of how many where a number was asked for.
+ *
+ * Null rather than a badge reading `0 of 0`: an exercise nothing prescribed for has been trained
+ * nought times out of no plan, and saying so in numbers is worse than saying nothing.
+ */
+@Composable
+private fun badgeFor(done: Int, planned: Int?): (@Composable () -> Unit)? = when {
+    planned != null -> {
+        { Text(stringResource(R.string.drawer_sets_done, done, planned)) }
+    }
+
+    done > 0 -> {
+        { Text(stringResource(R.string.drawer_sets_logged, done)) }
+    }
+
+    else -> null
 }
 
 @Composable

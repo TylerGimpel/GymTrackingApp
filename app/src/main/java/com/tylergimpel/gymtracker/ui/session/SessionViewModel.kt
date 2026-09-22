@@ -105,6 +105,18 @@ data class AddingDrop(val effortId: Long, val draft: SetDraft)
  * Both at once, because they are the same conversation: this is the machine in the corner, and
  * here is what you need to remember about it.
  */
+/** What a typed **Rep range** means for the one that is stored. */
+sealed interface RepRangeEdit {
+    /** Both fields empty: hand the question back to the routine's goal. */
+    data object Clear : RepRangeEdit
+
+    /** A usable band, which becomes the lifter's own. */
+    data class Set(val range: RepRange) : RepRangeEdit
+
+    /** Half a pair or a top under its bottom. Leave what is stored exactly as it is. */
+    data object Unusable : RepRangeEdit
+}
+
 data class ExerciseDetails(
     val exerciseId: String,
     val name: String,
@@ -133,18 +145,23 @@ data class ExerciseDetails(
 ) {
 
     /**
-     * The band as typed, or null where nothing usable was.
+     * What the typed band should do to what is stored.
      *
-     * Null for a blank pair, for half a pair, and for a top below its bottom — all three are a
-     * field somebody is partway through rather than an instruction, and the constructor would
-     * throw on the last of them. Clearing the fields is how a lifter hands the question back to
-     * the routine's goal, so "nothing usable" and "nothing chosen" are the same answer here.
+     * Three answers, not two, because **an unusable pair is not the same as an empty one**. Both
+     * fields blank is a lifter handing the question back to their goal, and it clears. A top
+     * below its bottom, or half a pair, is somebody mid-edit or mistyping — and writing that
+     * through as "clear it" would silently delete a band they had already chosen, which is the
+     * opposite of what a save is for.
      */
-    fun chosenRepRange(): RepRange? {
-        val bottom = repRangeBottom.trim().toIntOrNull() ?: return null
-        val top = repRangeTop.trim().toIntOrNull() ?: return null
-        if (bottom < 1 || top < bottom || top > RepRange.MAX_PRESCRIBED_REPS) return null
-        return RepRange(bottom, top)
+    fun repRangeEdit(): RepRangeEdit = when {
+        repRangeBottom.isBlank() && repRangeTop.isBlank() -> RepRangeEdit.Clear
+        else -> {
+            val bottom = repRangeBottom.trim().toIntOrNull()
+            val top = repRangeTop.trim().toIntOrNull()
+            val usable = bottom != null && top != null &&
+                bottom >= 1 && top >= bottom && top <= RepRange.MAX_PRESCRIBED_REPS
+            if (usable) RepRangeEdit.Set(RepRange(bottom, top)) else RepRangeEdit.Unusable
+        }
     }
 }
 
@@ -849,9 +866,12 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     ?.takeIf { it > 0 }
                     ?.let { state.value.lifterUnit.toKilograms(it) },
             )
-            // Both ends or neither. Half a band is a field somebody was still typing in, and
-            // guessing the other end of it would be the app deciding what they meant.
-            exercises.setRepRange(open.exerciseId, open.chosenRepRange())
+            // Both ends or neither, and a mistyped pair leaves what was there alone.
+            when (val edit = open.repRangeEdit()) {
+                RepRangeEdit.Clear -> exercises.setRepRange(open.exerciseId, null)
+                is RepRangeEdit.Set -> exercises.setRepRange(open.exerciseId, edit.range)
+                RepRangeEdit.Unusable -> Unit
+            }
             screen.update {
                 it.copy(
                     editingExercise = null,
@@ -864,7 +884,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                         note = open.note.takeIf(String::isNotBlank),
                         chosenProgressionModel = open.progressionModel
                             .takeIf { model -> model != exercise.bankProgressionModel },
-                        chosenRepRange = open.chosenRepRange(),
+                        chosenRepRange = when (val edit = open.repRangeEdit()) {
+                            RepRangeEdit.Clear -> null
+                            is RepRangeEdit.Set -> edit.range
+                            RepRangeEdit.Unusable -> it.selected?.chosenRepRange
+                        },
                     ),
                 )
             }

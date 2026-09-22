@@ -45,7 +45,8 @@ class CardioDayTest {
     fun `skipping a cardio day holds the cursor exactly as skipping a lifting day does`() {
         val routine = upperLowerCardio()
 
-        val skippedCardio = cycleWith(routine, done = listOf("Upper", "Lower"), skipped = listOf("Cardio"))
+        val skippedCardio =
+            cycleWith(routine, done = listOf("Upper", "Lower"), skipped = listOf("Cardio"))
         val skippedLower = cycleWith(routine, done = listOf("Upper"), skipped = listOf("Lower"))
 
         // A skip is a position dealt with, whichever kind it was: the cycle moves past it and
@@ -61,33 +62,42 @@ class CardioDayTest {
         // Three positions, two of which are training. The arithmetic that keeps a lifter from
         // being under-prescribed by 40% reads these two numbers, and reading the first for both
         // is the mistake ADR 0005 exists to prevent.
-        assertEquals(3, routine.positions)
+        assertEquals(3, routine.days.size)
         assertEquals(2, routine.liftingPositions)
     }
 
     @Test
     fun `a routine with no cardio day counts every position as training`() {
-        val routine = routineOf("Upper" to RoutineDayKind.LIFTING, "Lower" to RoutineDayKind.LIFTING)
-
-        assertEquals(2, routine.positions)
-        assertEquals(2, routine.liftingPositions)
-    }
-
-    @Test
-    fun `cardio trained after lifting takes no position at all`() {
-        // Same-day cardio is an exercise inside a lifting day, not a day. The lifting session
-        // still happened, so the rotation is untouched and so is the cadence — what it does
-        // affect is how long the session takes, which is the time ceiling's problem (#76).
         val routine = routineOf(
             "Upper" to RoutineDayKind.LIFTING,
             "Lower" to RoutineDayKind.LIFTING,
         )
 
-        assertEquals(2, routine.positions)
+        assertEquals(2, routine.days.size)
         assertEquals(2, routine.liftingPositions)
-        assertEquals(CardioPlacement.AFTER_LIFTING, routine.copy(
-            cardio = CardioPlacement.AFTER_LIFTING,
-        ).cardio)
+    }
+
+    @Test
+    fun `cardio trained after lifting takes no position at all`() {
+        // Same-day cardio is an exercise inside a lifting day, not a day of its own. The lifting
+        // session still happened, so every position still carries resistance work and the cadence
+        // is untouched — what it does affect is how long the session runs, which belongs to the
+        // time ceiling (#76).
+        val routine = routineOf(
+            "Upper" to RoutineDayKind.LIFTING,
+            "Lower" to RoutineDayKind.LIFTING,
+        ).copy(cardio = CardioPlacement.AFTER_LIFTING)
+
+        assertEquals(2, routine.days.size)
+        assertEquals(2, routine.liftingPositions)
+
+        // The contrast that makes the point: the same lifter with cardio on its own day has a
+        // position that counts for nothing toward lifting, and this one does not.
+        assertEquals(
+            routine.days.size,
+            routine.liftingPositions,
+        )
+        assert(upperLowerCardio().liftingPositions < upperLowerCardio().days.size)
     }
 
     private companion object {

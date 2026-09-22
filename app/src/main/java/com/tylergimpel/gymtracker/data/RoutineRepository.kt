@@ -106,7 +106,9 @@ class RoutineRepository(
         cadence: Int,
         equipment: Set<String>,
         repPreference: RepPreference,
-        cardio: CardioPlacement = CardioPlacement.NONE,
+        // No default. Every property here is written wholesale, so a caller that left this out
+        // would quietly erase what the lifter said about their cardio while editing their goal.
+        cardio: CardioPlacement,
     ) {
         val existing = routines.routine() ?: return
         routines.update(

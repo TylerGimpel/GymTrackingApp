@@ -81,6 +81,24 @@ data class PlannedExercise(
 )
 
 /**
+ * How many working sets an exercise asks for, given what the lifter is training for.
+ *
+ * **Invented, and to be replaced.** There is no dose-response data behind a per-exercise set
+ * count — only behind weekly volume per muscle — and what will prescribe this properly is the
+ * generator dividing a real budget across a day (#74). Until then, more sets of fewer reps for
+ * strength and fewer of more for endurance is the shape the research does support, and these are
+ * three numbers chosen to sit in it.
+ *
+ * Deliberately not a function of the exercise. Whether a compound earns more sets than an
+ * isolation movement is a budgeting question, and budgeting is exactly what this stands in for.
+ */
+fun setsFor(goal: RoutineGoal): Int = when (goal) {
+    RoutineGoal.STRENGTH -> 5
+    RoutineGoal.HYPERTROPHY -> 4
+    RoutineGoal.ENDURANCE -> 3
+}
+
+/**
  * One ordered position within a routine, such as "Push".
  *
  * Never a calendar day and never a day of the week. Rest is implied by not training, so it occupies
@@ -132,11 +150,9 @@ data class Routine(
     /** The days in rotation order, whatever order they arrived in. */
     val rotation: List<RoutineDay> get() = days.sortedBy(RoutineDay::orderIndex)
 
-    /** How many positions a full pass through this routine has, cardio days included. */
-    val positions: Int get() = days.size
-
     /**
-     * How many of those positions carry resistance work.
+     * How many positions carry resistance work, out of [days] in total.
+     *
      *
      * The denominator half of the one piece of arithmetic in this project that is wrong silently.
      * Training five times a week on `Upper / Lower / Cardio` is **3.33 lifting sessions a week**,

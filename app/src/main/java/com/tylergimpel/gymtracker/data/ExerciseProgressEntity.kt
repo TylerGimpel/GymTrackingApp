@@ -19,16 +19,19 @@ import com.tylergimpel.gymtracker.domain.RepRange
  *
  * Its own table rather than more columns on `exercise_preference`, because the two answer different
  * questions. That one holds what a lifter *chose*, where absence means "they have not said"; this
- * holds what the app *computed*, where absence means "it has nothing to go on yet". Sharing a row
- * would make clearing a choice and forgetting an estimate the same operation, and would have the
- * engine writing to the table whose whole point is that only the lifter writes to it.
+ * holds what the app *worked out*. Sharing a row would make clearing a choice and forgetting an
+ * estimate the same operation, and would have the engine writing to the table whose whole point is
+ * that only the lifter writes to it.
  *
- * A row exists only once there is something to say, so the shipped asset carries the table empty.
+ * A row appears the first time an exercise is asked about and stays, so the shipped asset carries
+ * the table empty.
  *
- * **The estimate is nullable and the band is not**, which is the one asymmetry here worth knowing.
- * Everything else in this row is derived from the log and dies with it; the band is a decision
- * seeded from the routine (ADR 0010), so an exercise whose last logged set is corrected away keeps
- * the band and loses only the arithmetic. Deleting the row would throw the decision away.
+ * **The estimate is nullable and the band is not**, which is the one asymmetry here worth knowing,
+ * and it is why the row stays rather than being deleted. Everything else in it is folded from the
+ * log and dies with it; the band was seeded from the routine's goal and is derived from nothing
+ * (ADR 0010). So an exercise whose last logged set is corrected away keeps its band and loses only
+ * the arithmetic — and a row with a null estimate says "nothing to go on yet" without also saying
+ * "and nothing was ever decided here".
  */
 @Entity(
     tableName = "exercise_progress",

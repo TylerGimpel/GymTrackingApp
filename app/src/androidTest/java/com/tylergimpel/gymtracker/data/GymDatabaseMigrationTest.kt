@@ -975,32 +975,35 @@ class GymDatabaseMigrationTest {
     /**
      * Version 22 makes a band a decision, and an estimate something that can go without it.
      *
-     * The point of the rebuild is what is *kept*: `exercise_progress` is otherwise entirely the
-     * app's own working out, recomputed from the log on the next recommendation, but the band in
-     * it was seeded from the routine's goal and is derived from nothing (ADR 0010). A migration
-     * that dropped the table would have been free of every other column and wrong about that one.
+     * Two things to hold at once. The old rows go, because every band in one is the constant the
+     * engine wrote rather than anything decided — keeping them would pin every exercise an
+     * upgrading lifter has trained to a band their goal never chose, and dropping them costs
+     * nothing, since what is beside the band is folded from the log again (ADR 0010).
+     *
+     * From here on the band outlives the arithmetic, which is what the nullable estimate is for.
      */
     @Test
-    fun migratesToABandThatSurvivesTheEstimateBesideIt() {
+    fun migratesToABandThatOutlivesTheEstimateBesideIt() {
         helper.createDatabase(TWENTY_FIRST_DATABASE, 21).use { version21 ->
             version21.execSQL(
                 "INSERT INTO exercise_progress (exercise_id, anchor_kg, rep_range_bottom, " +
-                    "rep_range_top, working_load_kg) VALUES ('Barbell_Bench_Press', 100.0, 6, 8, 75.0)",
+                    "rep_range_top, working_load_kg) " +
+                    "VALUES ('Barbell_Bench_Press', 100.0, 8, 12, 75.0)",
             )
         }
 
         helper.runMigrationsAndValidate(TWENTY_FIRST_DATABASE, 22, true, MIGRATION_21_22).use { db ->
-            db.query(
-                "SELECT anchor_kg, rep_range_bottom, rep_range_top, working_load_kg " +
-                    "FROM exercise_progress WHERE exercise_id = 'Barbell_Bench_Press'",
-            ).use {
+            // Gone, so the goal gets to seed this exercise the first time it is asked about.
+            db.query("SELECT COUNT(*) FROM exercise_progress").use {
                 it.moveToFirst()
-                assertEquals(100.0, it.getDouble(0), 0.0001)
-                assertEquals(6, it.getInt(1))
-                assertEquals(8, it.getInt(2))
-                assertEquals(75.0, it.getDouble(3), 0.0001)
+                assertEquals(0, it.getInt(0))
             }
 
+            db.execSQL(
+                "INSERT INTO exercise_progress (exercise_id, anchor_kg, rep_range_bottom, " +
+                    "rep_range_top, working_load_kg) " +
+                    "VALUES ('Barbell_Bench_Press', 100.0, 4, 6, 75.0)",
+            )
             // The estimate can now go without taking the band with it, which is the whole change.
             db.execSQL(
                 "UPDATE exercise_progress SET anchor_kg = NULL, working_load_kg = NULL " +
@@ -1012,7 +1015,7 @@ class GymDatabaseMigrationTest {
             ).use {
                 it.moveToFirst()
                 assertEquals(true, it.isNull(0))
-                assertEquals(6, it.getInt(1))
+                assertEquals(4, it.getInt(1))
             }
 
             // And the lifter has somewhere of their own to say what they want, which is not here.
@@ -1050,10 +1053,11 @@ class GymDatabaseMigrationTest {
             )
         }
 
-        helper.runMigrationsAndValidate(TWENTY_SECOND_DATABASE, 23, true, MIGRATION_22_23).use { db ->
+        helper.runMigrationsAndValidate(TWENTY_SECOND_DATABASE, 23, true, MIGRATION_22_23)
+            .use { db ->
             db.query("SELECT sets FROM session_plan WHERE session_id = 1").use {
                 it.moveToFirst()
-                assertTrue("a set count was invented for a session nobody asked one of", it.isNull(0))
+                assertTrue("a set count was invented for a session nobody asked of", it.isNull(0))
             }
         }
     }
@@ -1078,7 +1082,8 @@ class GymDatabaseMigrationTest {
             )
         }
 
-        helper.runMigrationsAndValidate(TWENTY_THIRD_DATABASE, 24, true, MIGRATION_23_24).use { db ->
+        helper.runMigrationsAndValidate(TWENTY_THIRD_DATABASE, 24, true, MIGRATION_23_24)
+            .use { db ->
             db.query("SELECT kind FROM routine_day WHERE routine_id = 1").use {
                 it.moveToFirst()
                 assertEquals("LIFTING", it.getString(0))
