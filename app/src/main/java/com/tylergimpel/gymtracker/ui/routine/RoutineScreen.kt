@@ -39,10 +39,13 @@ import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
-import com.tylergimpel.gymtracker.domain.seedRepRange
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.conflictsFor
+import com.tylergimpel.gymtracker.domain.Experience
+import com.tylergimpel.gymtracker.domain.bindingOn
+import com.tylergimpel.gymtracker.domain.Binding
 import com.tylergimpel.gymtracker.domain.weeklyVolumeTargetFor
 import com.tylergimpel.gymtracker.domain.splitShapesFor
 import com.tylergimpel.gymtracker.domain.SplitShape
@@ -130,6 +133,7 @@ fun RoutineScreen(
                 )
             }
             item { WhatItTrains(state.progress?.routine) }
+            item { WhatIsBinding(state.progress?.routine) }
             item {
                 TextButton(
                     onClick = viewModel::deleteRoutine,
@@ -231,6 +235,70 @@ private fun WhatItTrains(routine: Routine?) {
             )
         }
     }
+}
+
+/**
+ * What the routine cannot satisfy, and what would give.
+ *
+ * **Never a refusal.** Nothing on this screen stops a lifter saving or training what they built —
+ * an impossible request is a conversation, so the app says what is binding, offers what could be
+ * relaxed, and leaves the decision where it belongs.
+ *
+ * Silent when everything holds, like the rest of this screen.
+ */
+@Composable
+private fun WhatIsBinding(routine: Routine?) {
+    val findings = remember(routine) { routine?.let { bindingOn(it) }.orEmpty() }
+    if (findings.isEmpty()) return
+
+    Column(
+        modifier = Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.routine_binding),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        findings.forEach { finding ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = finding.said(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // What to relax, rather than what they did wrong. Every finding carries its own,
+                // because a constraint named without a way out is just a complaint.
+                finding.relax.forEach {
+                    Text(
+                        text = stringResource(R.string.routine_relax, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One finding, in the lifter's terms rather than the model's. */
+@Composable
+private fun Binding.said(): String = when (this) {
+    is Binding.SessionTooLong -> stringResource(
+        R.string.routine_too_long,
+        day,
+        estimated.toMinutes().toInt(),
+        ceiling.toMinutes().toInt(),
+    )
+
+    is Binding.VolumeOutsideBand -> stringResource(
+        R.string.routine_off_band,
+        muscle,
+        weeklySets.asSetsText(),
+        target.start.asSetsText(),
+        target.endInclusive.asSetsText(),
+    )
+
+    is Binding.OnlyDislikedLeft -> stringResource(R.string.routine_only_disliked, muscle)
 }
 
 /**
@@ -437,14 +505,17 @@ private fun RoutineProperties(
         // Said here, at the moment the two are chosen, because this is where the lifter can do
         // something about it. An override nobody is told about produces training that will not
         // deliver the goal, and they do not find out for three months.
-        val seeded = seedRepRange(routine.goal, routine.repPreference)
-        if (seeded.overruled != null) {
+        //
+        // The whole table, so they meet every one of these in one place rather than finding one
+        // here and another on the routine below.
+        conflictsFor(
+            goal = routine.goal,
+            preference = routine.repPreference,
+            experience = Experience.TRAINED,
+            equipment = routine.equipment,
+        ).forEach {
             Text(
-                text = stringResource(
-                    R.string.routine_preference_overruled,
-                    seeded.range.bottom,
-                    seeded.range.top,
-                ),
+                text = it.explanation,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

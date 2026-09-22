@@ -153,7 +153,6 @@
     <string name="routine_cadence">Sessions per week</string>
     <string name="routine_goal">Goal</string>
     <string name="routine_rep_preference">Rep preference</string>
-    <string name="routine_preference_overruled">Training for strength needs heavy sets, so your exercises are set to %1$d - %2$d reps rather than the higher reps you prefer.</string>
     <string name="routine_equipment">Equipment at your gym</string>
     <string name="routine_days">Days</string>
     <string name="routine_regenerate">Build it again</string>
@@ -162,6 +161,11 @@
     <string name="routine_pinned">Keeping</string>
     <string name="routine_pin_explainer">Anything you keep stays put when you build the routine again. This is about the shape of your routine — your history for an exercise follows the exercise, whatever any routine does.</string>
     <string name="routine_what_it_trains">What this cycle trains</string>
+    <string name="routine_binding">What is getting in the way</string>
+    <string name="routine_too_long">%1$s runs about %2$d minutes, past the %3$d you have to play with.</string>
+    <string name="routine_off_band">%1$s gets %2$s sets a week, outside the %3$s to %4$s this routine aims at.</string>
+    <string name="routine_only_disliked">Nothing is left to train %1$s except ones you said never to suggest. Which is least bad?</string>
+    <string name="routine_relax">· %1$s</string>
     <string name="routine_muscle_load">%1$s · %2$d× a cycle · %3$s sets a week</string>
     <string name="routine_muscle_target">aiming for %1$s to %2$s</string>
     <string name="routine_past_session_cap">%1$s gets %2$s sets in one day. Past about eleven, more sets in the same session stop showing up — the same work on another day would.</string>
