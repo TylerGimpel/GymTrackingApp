@@ -7,7 +7,9 @@ import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.SplitShape
+import com.tylergimpel.gymtracker.domain.fillDays
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.Session
@@ -114,10 +116,19 @@ class RoutineRepository(
         equipment: Set<String>,
         repPreference: RepPreference,
         cardio: CardioPlacement,
+        /**
+         * The bank to fill the days from, or empty to lay out the shape and stop there.
+         *
+         * Empty is a real answer rather than a degenerate one: a lifter who wants to choose every
+         * exercise themselves gets the rotation and an empty day under each name.
+         */
+        bank: List<Exercise> = emptyList(),
     ): Long = database.withTransaction {
         val id = createRoutine(name, goal, cadence, equipment, repPreference, cardio)
+        val filled = fillDays(shape, bank, equipment).associateBy { it.shape.name }
+
         shape.days.forEach { day ->
-            routines.insert(
+            val dayId = routines.insert(
                 RoutineDayEntity(
                     routineId = id,
                     orderIndex = routines.highestDayOrder(id) + 1,
@@ -125,6 +136,15 @@ class RoutineRepository(
                     kind = day.kind.name,
                 ),
             )
+            filled[day.name]?.exercises?.forEach { exercise ->
+                routines.insert(
+                    RoutineDayExerciseEntity(
+                        routineDayId = dayId,
+                        exerciseId = exercise.id,
+                        orderIndex = routines.highestDayExerciseOrder(dayId) + 1,
+                    ),
+                )
+            }
         }
         id
     }

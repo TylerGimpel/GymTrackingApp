@@ -80,9 +80,16 @@ fun RoutineScreen(
         if (routine == null) {
             EmptyRoutine(
                 insets = insets,
+                availableEquipment = state.availableEquipment,
                 onCreate = { viewModel.createRoutine(defaultName) },
-                onCreateFromShape = { shape, frequency, cardio ->
-                    viewModel.createFromShape(shape.description, shape, frequency, cardio)
+                onCreateFromShape = { shape, frequency, cardio, equipment ->
+                    viewModel.createFromShape(
+                        name = shape.description,
+                        shape = shape,
+                        weeklyFrequency = frequency,
+                        cardio = cardio,
+                        equipment = equipment,
+                    )
                 },
             )
             return@Scaffold
@@ -213,14 +220,16 @@ private fun Double.asSetsText(): String =
 @Composable
 private fun EmptyRoutine(
     insets: PaddingValues,
+    availableEquipment: List<String>,
     onCreate: () -> Unit,
-    onCreateFromShape: (SplitShape, Int, CardioPlacement) -> Unit,
+    onCreateFromShape: (SplitShape, Int, CardioPlacement, Set<String>) -> Unit,
 ) {
     // The one question everybody can answer, and the one the volume arithmetic actually needs.
     // What is never asked is a cycle length: "how many days is your routine" reads as both this
     // and the number of positions, and conflating them makes sound routines look invalid.
     var frequency by rememberSaveable { mutableStateOf(3) }
     var cardio by rememberSaveable { mutableStateOf(CardioPlacement.NONE) }
+    var equipment by rememberSaveable { mutableStateOf(emptySet<String>()) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(insets),
@@ -275,6 +284,32 @@ private fun EmptyRoutine(
         }
         item {
             Text(
+                text = stringResource(R.string.routine_equipment),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        item {
+            // One row of chips off the bank's own equipment vocabulary, which is a dozen values
+            // and finishable in a sitting. A checklist nobody completes is a checklist that leaves
+            // the generator guessing, and it guesses by offering everything.
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                availableEquipment.forEach { item ->
+                    FilterChip(
+                        selected = item in equipment,
+                        onClick = {
+                            equipment =
+                                if (item in equipment) equipment - item else equipment + item
+                        },
+                        label = { Text(item) },
+                    )
+                }
+            }
+        }
+        item {
+            Text(
                 text = stringResource(R.string.routine_setup_shape),
                 style = MaterialTheme.typography.labelLarge,
             )
@@ -292,7 +327,7 @@ private fun EmptyRoutine(
         // choose, and "a 2-position cycle" is not. Nothing invalid is here to be rejected,
         // because nothing invalid was ever authored.
         items(splitShapesFor(frequency, cardio), key = SplitShape::id) { shape ->
-            TextButton(onClick = { onCreateFromShape(shape, frequency, cardio) }) {
+            TextButton(onClick = { onCreateFromShape(shape, frequency, cardio, equipment) }) {
                 Text(
                     stringResource(
                         R.string.routine_shape_days,

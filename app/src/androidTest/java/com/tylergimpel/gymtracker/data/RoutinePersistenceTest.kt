@@ -6,6 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.domain.liftingCadence
 import com.tylergimpel.gymtracker.domain.SPLIT_SHAPES
 import com.tylergimpel.gymtracker.domain.CardioPlacement
@@ -43,6 +44,7 @@ class RoutinePersistenceTest {
     private lateinit var database: GymDatabase
     private lateinit var routines: RoutineRepository
     private lateinit var sessions: SessionRepository
+    private lateinit var exercises: ExerciseRepository
 
     @Before
     fun setUp() {
@@ -62,6 +64,12 @@ class RoutinePersistenceTest {
             database.sessionDao(),
             clock,
             zone,
+            ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS),
+        )
+        exercises = ExerciseRepository(
+            database,
+            database.exerciseDao(),
+            database.sessionDao(),
             ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS),
         )
     }
@@ -651,6 +659,35 @@ class RoutinePersistenceTest {
         // Three positions at five sessions a week, two of them lifting: 3.33 lifting sessions.
         assertEquals(2, routine.liftingPositions)
         assertEquals(3.333, routine.liftingCadence, 0.001)
+    }
+
+    @Test
+    fun theGeneratorFillsEveryDayAgainstTheRealBank() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = exercises.observeBank().first()
+
+        routines.createFromShape(
+            name = shape.description,
+            shape = shape,
+            goal = RoutineGoal.HYPERTROPHY,
+            cadence = 3,
+            equipment = setOf("barbell", "dumbbell", "cable", "machine", "body only"),
+            repPreference = RepPreference.MODERATE,
+            cardio = CardioPlacement.NONE,
+            bank = bank,
+        )
+
+        val routine = routines.observeProgress().first()!!.routine
+
+        // Against the shipped 893 rows rather than a fixture, because what this proves is that
+        // the bank the app actually carries can answer the days the app actually offers.
+        assertEquals(3, routine.rotation.size)
+        routine.rotation.forEach { day ->
+            assertTrue("${day.name} came back empty", day.exercises.isNotEmpty())
+        }
+
+        // And the cycle trains something everywhere, which is the coverage check the report reads.
+        assertTrue(routine.whatItTrains().isNotEmpty())
     }
 
     /** Where the cursor points now, which is the one question the rotation answers. */

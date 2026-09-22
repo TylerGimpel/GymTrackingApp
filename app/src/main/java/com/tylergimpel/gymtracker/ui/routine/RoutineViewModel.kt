@@ -91,16 +91,22 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         shape: SplitShape,
         weeklyFrequency: Int,
         cardio: CardioPlacement,
+        equipment: Set<String>,
+        goal: RoutineGoal = RoutineGoal.HYPERTROPHY,
+        repPreference: RepPreference = RepPreference.MODERATE,
     ) {
         viewModelScope.launch {
             repository.createFromShape(
                 name = name,
                 shape = shape,
-                goal = RoutineGoal.HYPERTROPHY,
+                goal = goal,
                 cadence = weeklyFrequency,
-                equipment = emptySet(),
-                repPreference = RepPreference.MODERATE,
+                equipment = equipment,
+                repPreference = repPreference,
                 cardio = cardio,
+                // Their exclusions travel on the rows themselves, so the generator reads what
+                // they decided without being told about it separately.
+                bank = exercises.observeBank().first(),
             )
         }
     }
