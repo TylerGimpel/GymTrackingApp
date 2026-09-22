@@ -129,6 +129,60 @@ class GeneratorTest {
     }
 
     @Test
+    fun `asking for variety gives something else, and asking again gives the same something else`() {
+        val first = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, 3, seed = 0)
+        val second = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, 3, seed = 1)
+        val secondAgain = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, 3, seed = 1)
+
+        // Different, because they asked. Reproducible, because a lifter who regenerates, gets
+        // something worse and wants the old one back has to be able to get there.
+        assertNotEquals(
+            first.map { it.chosen.map(Exercise::id) },
+            second.map { it.chosen.map(Exercise::id) },
+        )
+        assertEquals(
+            second.map { it.chosen.map(Exercise::id) },
+            secondAgain.map { it.chosen.map(Exercise::id) },
+        )
+    }
+
+    @Test
+    fun `variety still trains everything the day asks for`() {
+        (0..4).forEach { seed ->
+            val filled = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, 3, seed = seed)
+            filled.forEach { day ->
+                day.shape.muscles.forEach { muscle ->
+                    assertTrue(
+                        "seed $seed left $muscle untrained on ${day.shape.name}",
+                        day.chosen.any { muscle in it.primaryMuscles },
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `a pinned exercise survives regeneration and is not chosen for twice`() {
+        val kept = bank.single { it.id == "Bench" }
+        val pinned = mapOf("Push" to listOf(PlannedExercise(kept, 4)))
+
+        val filled = fillDays(
+            pushPullLegs,
+            bank,
+            allEquipment,
+            HYPERTROPHY,
+            weeklyFrequency = 3,
+            pinned = pinned,
+            seed = 3,
+        )
+
+        val push = filled.single { it.shape.name == "Push" }
+        assertTrue(push.chosen.any { it.id == "Bench" })
+        // And it answered for chest, so the generator did not put a second press beside it.
+        assertEquals(1, push.chosen.count { "chest" in it.primaryMuscles })
+    }
+
+    @Test
     fun `the order the bank happens to arrive in changes nothing`() {
         val shuffled = bank.reversed()
 

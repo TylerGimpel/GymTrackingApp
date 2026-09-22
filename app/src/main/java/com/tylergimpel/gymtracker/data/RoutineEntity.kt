@@ -121,5 +121,11 @@ fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
 fun RoutineDayWithExercises.toDomain(goal: RoutineGoal) = day.toDomain().copy(
     exercises = exercises
         .sortedBy { it.entry.orderIndex }
-        .map { PlannedExercise(it.exercise.toDomain(), it.entry.sets ?: setsFor(goal)) },
+        .map {
+            PlannedExercise(
+                exercise = it.exercise.toDomain(),
+                sets = it.entry.sets ?: setsFor(goal),
+                pinned = it.entry.pinned,
+            )
+        },
 )

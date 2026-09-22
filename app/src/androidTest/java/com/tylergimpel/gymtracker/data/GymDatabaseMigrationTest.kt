@@ -939,6 +939,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_FIRST_DATABASE = "migration-twenty-first.db"
         const val TWENTY_SECOND_DATABASE = "migration-twenty-second.db"
         const val TWENTY_THIRD_DATABASE = "migration-twenty-third.db"
+        const val TWENTY_FOURTH_DATABASE = "migration-twenty-fourth.db"
     }
 
     /**
@@ -1093,5 +1094,45 @@ class GymDatabaseMigrationTest {
                 assertEquals("NONE", it.getString(0))
             }
         }
+    }
+
+    /**
+     * Version 25 adds a pin and somewhere to keep one step of undo.
+     *
+     * Nothing existing is pinned, and the undo table arrives empty. Both are right: a pin is
+     * something a lifter does and an installed routine has never been asked, and there is nothing
+     * to step back to until somebody regenerates.
+     */
+    @Test
+    fun migratesToPinsWithNothingPinnedAndNothingToUndo() {
+        helper.createDatabase(TWENTY_FOURTH_DATABASE, 24).use { version24 ->
+            version24.execSQL(
+                "INSERT INTO routine (name, goal, cadence, equipment, rep_preference, cardio) " +
+                    "VALUES ('Push / Pull / Legs', 'HYPERTROPHY', 3, '', 'MODERATE', 'NONE')",
+            )
+            version24.execSQL(
+                "INSERT INTO routine_day (routine_id, order_index, name, kind) " +
+                    "VALUES (1, 1, 'Push', 'LIFTING')",
+            )
+            version24.execSQL(
+                "INSERT INTO routine_day_exercise (routine_day_id, exercise_id, order_index, sets) " +
+                    "VALUES (1, 'Barbell_Bench_Press', 1, 4)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_FOURTH_DATABASE, 25, true, MIGRATION_24_25)
+            .use { db ->
+                db.query("SELECT pinned, sets FROM routine_day_exercise WHERE routine_day_id = 1")
+                    .use {
+                        it.moveToFirst()
+                        assertEquals(0, it.getInt(0))
+                        // And what it already held is untouched.
+                        assertEquals(4, it.getInt(1))
+                    }
+                db.query("SELECT COUNT(*) FROM routine_day_exercise_undo").use {
+                    it.moveToFirst()
+                    assertEquals(0, it.getInt(0))
+                }
+            }
     }
 }

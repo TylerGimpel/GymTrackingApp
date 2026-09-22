@@ -61,6 +61,15 @@ fun fillDays(
      * shape of the routine and not about the exercise itself (#75).
      */
     pinned: Map<String, List<PlannedExercise>> = emptyMap(),
+    /**
+     * Which of the equally good candidates to take, so that asking again gives something else.
+     *
+     * Zero is the first answer and the one a routine is generated with. **Nothing reseeds on its
+     * own**: routines do not self-rotate exercises across cycles, so a different number here only
+     * ever arrives because the lifter asked for variety (#75). Same seed, same routine — which is
+     * what keeps "regenerate" reproducible rather than a slot machine.
+     */
+    seed: Int = 0,
 ): List<FilledDay> {
     val pool = bank.availableFor(equipment)
 
@@ -75,7 +84,7 @@ fun fillDays(
         val generated = pool.coveringMusclesOf(day, already = answered)
             .flatMap { (muscle, chosen) ->
                 val sets = setsPerSessionFor(muscle, shape, goal, weeklyFrequency)
-                val across = chosen.take(exercisesForSets(sets))
+                val across = chosen.rotatedBy(seed).take(exercisesForSets(sets))
                 across.zip(setsAcross(across.size, sets)) { exercise, count ->
                     PlannedExercise(exercise, count)
                 }
@@ -85,6 +94,21 @@ fun fillDays(
         // who kept their squat still wants it before their curls.
         val all = (kept + generated).distinctBy { it.exercise.id }
         FilledDay(day, all.orderedBy(goal))
+    }
+}
+
+/**
+ * The same candidates, starting from a different one.
+ *
+ * A rotation rather than a shuffle, because the list is already in the order the app would
+ * recommend: rotating keeps every candidate reachable and keeps the answer reproducible from the
+ * seed alone, where a shuffle would need its own random source threaded through everything.
+ */
+private fun List<Exercise>.rotatedBy(seed: Int): List<Exercise> = when {
+    isEmpty() || seed % size == 0 -> this
+    else -> {
+        val from = ((seed % size) + size) % size
+        drop(from) + take(from)
     }
 }
 

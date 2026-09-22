@@ -8,6 +8,7 @@ import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.PlannedExercise
 import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.fillDays
 import com.tylergimpel.gymtracker.domain.CardioPlacement
@@ -152,6 +153,122 @@ class RoutineRepository(
         }
         id
     }
+
+    /**
+     * Marks one of a day's exercises as one to keep through a regeneration, or stops keeping it.
+     *
+     * Not a **Revision**: the rotation is untouched, so the cycle carries on.
+     */
+    suspend fun setPinned(dayId: Long, exerciseId: String, pinned: Boolean) =
+        routines.setPinned(dayId, exerciseId, pinned)
+
+    /**
+     * Builds the routine's days again, keeping what the lifter pinned.
+     *
+     * **Only ever because they asked.** Routines do not self-rotate exercises across cycles, so
+     * nothing calls this on its own — a different routine is a decision, and [seed] is how that
+     * decision reaches the generator.
+     *
+     * The shape is unchanged: this replaces what unpinned days *hold*, which is not a revision
+     * and ends no cycle (ADR 0006). Which is also why one step of undo can point at the live day
+     * ids and still mean something afterwards.
+     */
+    suspend fun regenerate(
+        shape: SplitShape,
+        bank: List<Exercise>,
+        seed: Int,
+    ): Unit = database.withTransaction {
+        val routine = routines.routine() ?: return@withTransaction
+        val days = routines.days(routine.id)
+
+        // The step back, taken before anything moves. Replacing the previous one rather than
+        // stacking: one step is the whole promise.
+        routines.clearUndo()
+        days.forEach { day ->
+            routines.dayExercises(day.id).forEach { held ->
+                routines.insertUndo(
+                    RoutineDayExerciseUndoEntity(
+                        routineDayId = held.routineDayId,
+                        exerciseId = held.exerciseId,
+                        orderIndex = held.orderIndex,
+                        sets = held.sets,
+                        pinned = held.pinned,
+                    ),
+                )
+            }
+        }
+
+        val goal = RoutineGoal.valueOf(routine.goal)
+        val pinned = days.associate { day ->
+            day.name to routines.pinnedIn(day.id).mapNotNull { held ->
+                bank.firstOrNull { it.id == held.exerciseId }
+                    ?.let { PlannedExercise(it, held.sets) }
+            }
+        }
+
+        val filled = fillDays(
+            shape = shape,
+            bank = bank,
+            equipment = routine.equipment.toSet(),
+            goal = goal,
+            weeklyFrequency = routine.cadence,
+            pinned = pinned,
+            seed = seed,
+        ).associateBy { it.shape.name }
+
+        days.forEach { day ->
+            val kept = routines.pinnedIn(day.id).associateBy { it.exerciseId }
+            routines.clearDay(day.id)
+            filled[day.name]?.exercises?.forEachIndexed { index, planned ->
+                routines.insert(
+                    RoutineDayExerciseEntity(
+                        routineDayId = day.id,
+                        exerciseId = planned.exercise.id,
+                        orderIndex = index + 1,
+                        sets = planned.sets,
+                        // A pin survives its own regeneration, or it was not a pin.
+                        pinned = planned.exercise.id in kept,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Whether there is a step back to take. */
+    suspend fun canUndo(): Boolean = routines.undoRows().isNotEmpty()
+
+    /**
+     * Puts back what the days held before the last regeneration.
+     *
+     * One step, and taking it spends it. Nothing here touches the rotation, so the cycle and the
+     * cursor are where the lifter left them.
+     */
+    suspend fun undoRegeneration(): Unit = database.withTransaction {
+        val rows = routines.undoRows()
+        if (rows.isEmpty()) return@withTransaction
+
+        rows.map { it.routineDayId }.distinct().forEach { routines.clearDay(it) }
+        rows.forEach { row ->
+            routines.insert(
+                RoutineDayExerciseEntity(
+                    routineDayId = row.routineDayId,
+                    exerciseId = row.exerciseId,
+                    orderIndex = row.orderIndex,
+                    sets = row.sets,
+                    pinned = row.pinned,
+                ),
+            )
+        }
+        routines.clearUndo()
+    }
+
+    /**
+     * Forgets the step back, because the routine has now been trained.
+     *
+     * ADR 0006 retains undo only until the next session is logged: past that, what it would
+     * restore is no longer what the lifter is doing.
+     */
+    suspend fun forgetUndo() = routines.clearUndo()
 
     /**
      * Edits the routine's properties.

@@ -78,6 +78,14 @@ data class PlannedExercise(
      * The ramp is generated per session from the working weight and is not counted here.
      */
     val sets: Int? = null,
+    /**
+     * Whether the lifter marked this one to keep through a regeneration.
+     *
+     * Means something on a **Routine day** and nothing in a session's **Plan**, where it is always
+     * false: a plan records what a session was asked for, and whether the lifter intended to keep
+     * an exercise next time they rebuilt the routine is not part of that.
+     */
+    val pinned: Boolean = false,
 )
 
 /**

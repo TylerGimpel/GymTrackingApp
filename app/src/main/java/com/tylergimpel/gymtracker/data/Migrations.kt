@@ -605,6 +605,40 @@ internal val MIGRATION_23_24 = object : Migration(23, 24) {
     }
 }
 
+/**
+ * A pin, and somewhere to put one step of undo.
+ *
+ * Nothing existing is pinned, which is right: a pin is something a lifter does, and an installed
+ * routine has never been asked. The undo table arrives empty, which is also right — there is
+ * nothing to go back to until somebody regenerates.
+ */
+internal val MIGRATION_24_25 = object : Migration(24, 25) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `routine_day_exercise` ADD COLUMN `pinned` INTEGER NOT NULL DEFAULT 0",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `routine_day_exercise_undo` " +
+                "(`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`routine_day_id` INTEGER NOT NULL, `exercise_id` TEXT NOT NULL, " +
+                "`order_index` INTEGER NOT NULL, `sets` INTEGER, " +
+                "`pinned` INTEGER NOT NULL, " +
+                "FOREIGN KEY(`routine_day_id`) REFERENCES `routine_day`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                "FOREIGN KEY(`exercise_id`) REFERENCES `exercise`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_routine_day_exercise_undo_routine_day_id` " +
+                "ON `routine_day_exercise_undo` (`routine_day_id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_routine_day_exercise_undo_exercise_id` " +
+                "ON `routine_day_exercise_undo` (`exercise_id`)",
+        )
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -629,6 +663,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_21_22,
     MIGRATION_22_23,
     MIGRATION_23_24,
+    MIGRATION_24_25,
 )
 
 /**

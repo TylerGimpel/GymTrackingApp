@@ -294,6 +294,12 @@ class SessionRepository(
             // routine changed mid-session, which is the best that can honestly be had for a session
             // that did not say what it was for until it was over.
             if (day != null) plan(sessionId, SessionPlan(day.exercises))
+
+            // A regeneration can be undone until the routine has been trained. Past this point
+            // what undo would restore is no longer what the lifter is doing (ADR 0006), and a
+            // step back that reached across a logged session would be restoring somebody else's
+            // evening.
+            sessions.clearRoutineUndo()
         }
     }
 

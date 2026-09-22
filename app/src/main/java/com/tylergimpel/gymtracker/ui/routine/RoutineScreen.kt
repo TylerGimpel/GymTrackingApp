@@ -116,10 +116,19 @@ fun RoutineScreen(
                     onRemove = { viewModel.removeDay(day.id) },
                     onAddExercise = { viewModel.startPicking(day.id) },
                     onRemoveExercise = { viewModel.removeExerciseFromDay(day.id, it) },
+                    onPin = { id, pinned -> viewModel.setPinned(day.id, id, pinned) },
                 )
                 HorizontalDivider()
             }
             item { AddDay(onAdd = viewModel::addDay) }
+            item {
+                Regenerate(
+                    canRegenerate = state.shape != null,
+                    canUndo = state.canUndo,
+                    onRegenerate = viewModel::regenerate,
+                    onUndo = viewModel::undoRegeneration,
+                )
+            }
             item { WhatItTrains(state.progress?.routine) }
             item {
                 TextButton(
@@ -511,6 +520,7 @@ private fun RoutineDayRow(
     onMove: (Int) -> Unit,
     onRemove: () -> Unit,
     onAddExercise: () -> Unit,
+    onPin: (String, Boolean) -> Unit,
     onRemoveExercise: (String) -> Unit,
 ) {
     var name by rememberSaveable(day.id) { mutableStateOf(day.name) }
@@ -579,8 +589,28 @@ private fun RoutineDayRow(
                         ?: exercise.name,
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                TextButton(onClick = { onRemoveExercise(exercise.id) }) {
-                    Text(stringResource(R.string.routine_remove_exercise))
+                Row {
+                    // A pin is about the shape of the routine and nothing else. The copy stays
+                    // away from anything that sounds like history being at stake, because it
+                    // never is: history follows the exercise whatever a routine does.
+                    FilterChip(
+                        selected = planned.pinned,
+                        onClick = { onPin(exercise.id, !planned.pinned) },
+                        label = {
+                            Text(
+                                stringResource(
+                                    if (planned.pinned) {
+                                        R.string.routine_pinned
+                                    } else {
+                                        R.string.routine_pin
+                                    },
+                                ),
+                            )
+                        },
+                    )
+                    TextButton(onClick = { onRemoveExercise(exercise.id) }) {
+                        Text(stringResource(R.string.routine_remove_exercise))
+                    }
                 }
             }
         }
@@ -618,6 +648,47 @@ private fun RoutinePicker(
         onCancel = onCancel,
         note = addingDisliked?.let { stringResource(R.string.picker_disliked, it.name) },
     )
+}
+
+/**
+ * Asking for a different routine, and taking it back.
+ *
+ * **Variety is asked for and never inflicted.** Routines do not self-rotate exercises across
+ * cycles, so this button is the only thing in the app that changes what a generated routine
+ * holds without the lifter choosing each exercise themselves.
+ *
+ * Undo is one step and lives until the next session is logged, which is exactly as long as the
+ * case it exists for: "I regenerated and I hate it" surfaces in seconds.
+ */
+@Composable
+private fun Regenerate(
+    canRegenerate: Boolean,
+    canUndo: Boolean,
+    onRegenerate: () -> Unit,
+    onUndo: () -> Unit,
+) {
+    if (!canRegenerate && !canUndo) return
+
+    Column(
+        modifier = Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (canRegenerate) {
+                TextButton(onClick = onRegenerate) {
+                    Text(stringResource(R.string.routine_regenerate))
+                }
+            }
+            if (canUndo) {
+                TextButton(onClick = onUndo) { Text(stringResource(R.string.routine_undo)) }
+            }
+        }
+        Text(
+            text = stringResource(R.string.routine_pin_explainer),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

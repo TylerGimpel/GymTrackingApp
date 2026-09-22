@@ -182,6 +182,16 @@ interface SessionDao {
     @Insert
     suspend fun insert(planned: SessionPlanEntity): Long
 
+    /**
+     * Forgets a regeneration the lifter could have stepped back from.
+     *
+     * Here rather than on the routine DAO because finishing a session is what spends it, and the
+     * two happen in one transaction: a session that landed and an undo that survived it would let
+     * somebody restore a routine they have since trained past.
+     */
+    @Query("DELETE FROM routine_day_exercise_undo")
+    suspend fun clearRoutineUndo()
+
     /** Whether this session has already been planned. A session is planned once, when it begins. */
     @Query("SELECT COUNT(*) FROM session_plan WHERE session_id = :sessionId")
     suspend fun plannedCount(sessionId: Long): Int

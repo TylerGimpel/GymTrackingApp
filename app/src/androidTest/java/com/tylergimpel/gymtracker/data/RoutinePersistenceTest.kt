@@ -9,6 +9,8 @@ import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.domain.liftingCadence
 import com.tylergimpel.gymtracker.domain.SPLIT_SHAPES
+import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.SessionPlan
@@ -20,6 +22,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -689,6 +693,93 @@ class RoutinePersistenceTest {
         // And the cycle trains something everywhere, which is the coverage check the report reads.
         assertTrue(routine.whatItTrains().isNotEmpty())
     }
+
+    @Test
+    fun regeneratingKeepsWhatWasPinnedAndReplacesWhatWasNot() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        val push = routines.observeProgress().first()!!.routine.rotation.first()
+        val kept = dayNow(push).exercises.first().exercise
+
+        routines.setPinned(push.id, kept.id, pinned = true)
+        routines.regenerate(shape, bank, seed = 1)
+
+        val after = dayNow(push).exercises.map { it.exercise.id }
+
+        // The pin is a fixed constraint the day is rebuilt around, and it stays pinned — a pin
+        // that did not survive its own regeneration was not a pin.
+        assertTrue("the pinned exercise was replaced", kept.id in after)
+        assertTrue(
+            routines.observeProgress().first()!!.routine.rotation
+                .first().exercises.isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun askingForVarietyChangesTheRoutineAndNothingElseDoes() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        val before = everyExercise()
+
+        // Reading the routine, editing a property, finishing a session: none of them reseeds.
+        reGoal(RoutineGoal.HYPERTROPHY)
+        assertEquals(before, everyExercise())
+
+        routines.regenerate(shape, bank, seed = 2)
+        assertNotEquals("asking for variety gave back the same routine", before, everyExercise())
+    }
+
+    @Test
+    fun oneStepBackFromARegenerationPutsTheOldRoutineBack() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        val before = everyExercise()
+
+        routines.regenerate(shape, bank, seed = 4)
+        assertTrue(routines.canUndo())
+
+        routines.undoRegeneration()
+
+        // Byte for byte what they had, which is the whole of "I regenerated and I hate it".
+        assertEquals(before, everyExercise())
+        // And one step is one step: taking it spends it.
+        assertFalse(routines.canUndo())
+    }
+
+    @Test
+    fun aRegenerationCanNoLongerBeUndoneOnceTheRoutineHasBeenTrained() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        routines.regenerate(shape, bank, seed = 5)
+        assertTrue(routines.canUndo())
+
+        complete(routines.observeProgress().first()!!.routine.rotation.first())
+
+        // Past a logged session, what undo would restore is no longer what the lifter is doing
+        // (ADR 0006) — and a step back reaching across it would restore somebody else's evening.
+        assertFalse(routines.canUndo())
+    }
+
+    /** A routine generated from [shape] against the real bank, and that bank. */
+    private suspend fun generated(shape: SplitShape): List<Exercise> {
+        val bank = exercises.observeBank().first()
+        routines.createFromShape(
+            name = shape.description,
+            shape = shape,
+            goal = RoutineGoal.HYPERTROPHY,
+            cadence = 3,
+            equipment = setOf("barbell", "dumbbell", "cable", "machine", "body only"),
+            repPreference = RepPreference.MODERATE,
+            cardio = CardioPlacement.NONE,
+            bank = bank,
+        )
+        return bank
+    }
+
+    /** Every exercise the routine holds, in order, which is what a regeneration changes. */
+    private suspend fun everyExercise(): List<String> =
+        routines.observeProgress().first()!!.routine.rotation
+            .flatMap { day -> day.exercises.map { "${day.name}:${it.exercise.id}:${it.sets}" } }
 
     /** Where the cursor points now, which is the one question the rotation answers. */
     private suspend fun cursorNow(): RoutineDay? =

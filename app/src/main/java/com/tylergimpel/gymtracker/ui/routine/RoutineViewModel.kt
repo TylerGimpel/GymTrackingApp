@@ -38,6 +38,16 @@ data class RoutineUiState(
     /** The day having an exercise added to it, while the picker is open. */
     val picking: PickingFor? = null,
     /**
+     * Whether the last regeneration can still be stepped back from.
+     *
+     * One step, and only until the routine has been trained (ADR 0006).
+     */
+    val canUndo: Boolean = false,
+    /** The shape this routine was laid out from, which is what regenerating rebuilds against. */
+    val shape: SplitShape? = null,
+    /** How many times variety has been asked for, which is what makes each answer a new one. */
+    val seed: Int = 0,
+    /**
      * An exercise the lifter picked that they had banned, waiting on them to say yes anyway.
      *
      * **A warning and never a refusal.** A dislike stops the app suggesting something; it was
@@ -108,6 +118,10 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 // they decided without being told about it separately.
                 bank = exercises.observeBank().first(),
             )
+            // Remembered so that "build it again" has something to build against. A routine
+            // created by hand has no shape, and regenerating one would be inventing a structure
+            // nobody chose.
+            held.update { it.copy(shape = shape, seed = 0) }
         }
     }
 
@@ -143,6 +157,35 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun cancelPicking() = held.update { it.copy(picking = null, addingDisliked = null) }
+
+    /** Keeps one of a day's exercises through the next regeneration, or stops keeping it. */
+    fun setPinned(dayId: Long, exerciseId: String, pinned: Boolean) {
+        viewModelScope.launch { repository.setPinned(dayId, exerciseId, pinned) }
+    }
+
+    /**
+     * Builds the routine's days again, keeping what was pinned.
+     *
+     * **Only from here.** Nothing else in the app calls it: a routine is fixed until the lifter
+     * asks for something different, and the seed going up is what makes the next answer a
+     * different one rather than the same one again.
+     */
+    fun regenerate() {
+        val shape = state.value.shape ?: return
+        viewModelScope.launch {
+            val next = state.value.seed + 1
+            repository.regenerate(shape, exercises.observeBank().first(), seed = next)
+            held.update { it.copy(seed = next, canUndo = repository.canUndo()) }
+        }
+    }
+
+    /** Puts back what the days held before the last regeneration. */
+    fun undoRegeneration() {
+        viewModelScope.launch {
+            repository.undoRegeneration()
+            held.update { it.copy(canUndo = repository.canUndo()) }
+        }
+    }
 
     /**
      * Adds what was picked, or asks first where they had banned it.

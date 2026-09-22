@@ -28,6 +28,7 @@ import androidx.room.TypeConverters
         RoutineEntity::class,
         RoutineDayEntity::class,
         RoutineDayExerciseEntity::class,
+    RoutineDayExerciseUndoEntity::class,
         CycleEntity::class,
         CycleCompletionEntity::class,
         SkipEntity::class,
@@ -54,7 +55,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun plateDao(): PlateDao
 
     companion object {
-        const val VERSION = 24
+        const val VERSION = 25
 
         /** Path inside assets, written there at build time by `generate<Variant>ExerciseBank`. */
         const val ASSET_PATH = "databases/gym-bank.db"
