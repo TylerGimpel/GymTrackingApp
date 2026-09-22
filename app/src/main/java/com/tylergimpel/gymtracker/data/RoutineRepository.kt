@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.PlannedExercise
+import com.tylergimpel.gymtracker.domain.RecoveredDay
 import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.fillDays
 import com.tylergimpel.gymtracker.domain.CardioPlacement
@@ -146,6 +147,52 @@ class RoutineRepository(
                         // What the generator budgeted, rather than the goal's default: a muscle
                         // trained twice a cycle gets half as many sets each time as one trained
                         // once, and that is the whole of what #74 works out.
+                        sets = planned.sets,
+                    ),
+                )
+            }
+        }
+        id
+    }
+
+    /**
+     * Creates a routine from what a run of sessions was following.
+     *
+     * **A read and a create.** The plan snapshots are already there and so is the create path, so
+     * nothing new is stored to make this work — which is exactly the argument for one active
+     * routine rather than concurrent ones, each needing its own cursor, cycle state and cadence.
+     *
+     * What comes back is an ordinary routine, editable like any other, and it **replaces** the
+     * active one rather than running beside it.
+     */
+    suspend fun rebuildFromSessions(
+        name: String,
+        recovered: List<RecoveredDay>,
+        goal: RoutineGoal,
+        cadence: Int,
+        equipment: Set<String>,
+        repPreference: RepPreference,
+        cardio: CardioPlacement,
+    ): Long = database.withTransaction {
+        routines.routine()?.let { routines.delete(it) }
+
+        val id = createRoutine(name, goal, cadence, equipment, repPreference, cardio)
+        recovered.forEach { day ->
+            val dayId = routines.insert(
+                RoutineDayEntity(
+                    routineId = id,
+                    orderIndex = routines.highestDayOrder(id) + 1,
+                    name = day.name,
+                ),
+            )
+            day.exercises.forEachIndexed { index, planned ->
+                routines.insert(
+                    RoutineDayExerciseEntity(
+                        routineDayId = dayId,
+                        exerciseId = planned.exercise.id,
+                        orderIndex = index + 1,
+                        // What that session was actually asked for, which is the point of
+                        // rebuilding from it rather than generating something new.
                         sets = planned.sets,
                     ),
                 )

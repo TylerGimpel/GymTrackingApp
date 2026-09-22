@@ -14,6 +14,8 @@ import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import kotlinx.coroutines.flow.SharingStarted
 import com.tylergimpel.gymtracker.data.ExerciseRepository
+import com.tylergimpel.gymtracker.domain.rebuildFrom
+import com.tylergimpel.gymtracker.data.SessionRepository
 import com.tylergimpel.gymtracker.data.profileRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,6 +84,14 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         routines = database.routineDao(),
         sessions = database.sessionDao(),
         clock = Clock.systemDefaultZone(),
+    )
+
+    private val sessions = SessionRepository(
+        database = database,
+        sessions = database.sessionDao(),
+        clock = Clock.systemDefaultZone(),
+        zone = java.time.ZoneId.systemDefault(),
+        profile = database.profileRepository(),
     )
 
     private val exercises = ExerciseRepository(
@@ -223,6 +233,33 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * Brings back the routine a run of past sessions was following.
+     *
+     * Read out of the **Plan** snapshots the log already holds, which is why this needs no storage
+     * of its own — and why one active routine is non-lossy rather than approximately so. What
+     * comes back replaces the current one; it does not run beside it.
+     */
+    fun rebuildFromLog(weeklyFrequency: Int, cardio: CardioPlacement, equipment: Set<String>) {
+        viewModelScope.launch {
+            val recovered = rebuildFrom(sessions.observeRecent(RECOVERABLE_SESSIONS).first())
+            if (recovered.isEmpty()) return@launch
+
+            repository.rebuildFromSessions(
+                name = recovered.first().name,
+                recovered = recovered,
+                goal = RoutineGoal.HYPERTROPHY,
+                cadence = weeklyFrequency,
+                equipment = equipment,
+                repPreference = RepPreference.MODERATE,
+                cardio = cardio,
+            )
+            // No shape, because this one was not laid out from one. Regenerating it would be
+            // inventing a structure the lifter never chose.
+            held.update { it.copy(shape = null, seed = 0) }
+        }
+    }
+
     /** Puts back what the days held before the last regeneration. */
     fun undoRegeneration() {
         viewModelScope.launch {
@@ -296,5 +333,14 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+
+        /**
+         * How far back to read for a routine worth rebuilding.
+         *
+         * Enough to hold several passes through any rotation the app offers, so the *last* time
+         * each day was trained is in there — which is the version a lifter rebuilding from last
+         * spring actually wants.
+         */
+        const val RECOVERABLE_SESSIONS = 40
     }
 }

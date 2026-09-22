@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.domain.liftingCadence
 import com.tylergimpel.gymtracker.domain.SPLIT_SHAPES
+import com.tylergimpel.gymtracker.domain.rebuildFrom
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.CardioPlacement
@@ -796,6 +797,37 @@ class RoutinePersistenceTest {
         // Somebody ticking a machine because they joined a new gym has said nothing about wanting
         // a different routine. Quietly rebuilding it for them would be the worst kind of helpful.
         assertEquals(before, everyExercise())
+    }
+
+    @Test
+    fun aRoutineComesBackFromTheSessionsThatFollowedIt() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        generated(shape)
+        val was = everyExercise()
+        val rotation = routines.observeProgress().first()!!.routine.rotation
+
+        // A cycle's worth of training, each session snapshotting the day it realised.
+        rotation.forEach { complete(it) }
+
+        // Then the routine is gone entirely — deleted, as if they moved on from it months ago.
+        routines.deleteRoutine()
+        assertEquals(null, routines.observeProgress().first())
+
+        val recovered = rebuildFrom(sessions.observeRecent(40).first())
+        routines.rebuildFromSessions(
+            name = "Last spring",
+            recovered = recovered,
+            goal = RoutineGoal.HYPERTROPHY,
+            cadence = 3,
+            equipment = setOf("barbell"),
+            repPreference = RepPreference.MODERATE,
+            cardio = CardioPlacement.NONE,
+        )
+
+        // Back, out of the log alone. ADR 0006 leans on exactly this to justify not versioning
+        // routines: the snapshots were taken for a different reason and happen to preserve every
+        // routine day the lifter ever trained.
+        assertEquals(was, everyExercise())
     }
 
     /** A routine generated from [shape] against the real bank, and that bank. */

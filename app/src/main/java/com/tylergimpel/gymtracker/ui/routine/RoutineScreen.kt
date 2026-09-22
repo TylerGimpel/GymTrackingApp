@@ -87,6 +87,7 @@ fun RoutineScreen(
                 insets = insets,
                 availableEquipment = state.availableEquipment,
                 onCreate = { viewModel.createRoutine(defaultName) },
+                onRebuildFromLog = viewModel::rebuildFromLog,
                 onCreateFromShape = { shape, frequency, cardio, equipment ->
                     viewModel.createFromShape(
                         name = shape.description,
@@ -345,6 +346,7 @@ private fun EmptyRoutine(
     availableEquipment: List<String>,
     onCreate: () -> Unit,
     onCreateFromShape: (SplitShape, Int, CardioPlacement, Set<String>) -> Unit,
+    onRebuildFromLog: (Int, CardioPlacement, Set<String>) -> Unit,
 ) {
     // The one question everybody can answer, and the one the volume arithmetic actually needs.
     // What is never asked is a cycle length: "how many days is your routine" reads as both this
@@ -464,6 +466,13 @@ private fun EmptyRoutine(
             // want and does not need a shape suggested to them.
             TextButton(onClick = onCreate) {
                 Text(stringResource(R.string.routine_build_by_hand))
+            }
+        }
+        item {
+            // And the seasonal case: something that worked last spring, read back out of the log.
+            // This is what makes one active routine non-lossy rather than approximately so.
+            TextButton(onClick = { onRebuildFromLog(frequency, cardio, equipment) }) {
+                Text(stringResource(R.string.routine_rebuild_from_log))
             }
         }
     }

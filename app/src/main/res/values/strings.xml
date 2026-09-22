@@ -144,6 +144,8 @@
     <string name="routine_done">Done</string>
     <string name="routine_none">No routine yet. One is a name and an ordered list of days — rest is implied by not training, so it takes no position.</string>
     <string name="routine_build_by_hand">Start from an empty routine</string>
+    <string name="routine_rebuild_from_log">Rebuild what I used to do</string>
+    <string name="routine_rebuild_none">Nothing in your log to rebuild from yet.</string>
     <string name="routine_setup_frequency">How many times a week do you train?</string>
     <string name="routine_setup_frequency_why">Used to work out how much work a week your routine adds up to. It never schedules anything.</string>
     <string name="routine_setup_shape">Pick a shape</string>
