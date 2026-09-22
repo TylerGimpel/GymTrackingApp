@@ -1,9 +1,9 @@
 package com.tylergimpel.gymtracker.domain
 
-/** One position of a shape, with what the generator put in it. */
+/** One position of a shape, with what the generator put in it and how much of each. */
 data class FilledDay(
     val shape: SplitDay,
-    val exercises: List<Exercise>,
+    val exercises: List<PlannedExercise>,
 )
 
 /**
@@ -24,8 +24,9 @@ data class FilledDay(
  * no exercise of their own. What keeps a day from being as long as the muscles it names is the
  * **shape** naming what the day is *for*, not the generator counting incidental work as done.
  *
- * **How many sets each of these gets, and what order they are trained in, is not decided here**
- * (#74). This answers what, and only what.
+ * **How much of each, and in what order**, comes from the set budget: a muscle's weekly target
+ * divided by how often this shape trains it, spread over as many movements as that many sets
+ * should be spread over, and ordered compound-first where the goal is one the order matters to.
  *
  * **Equipment filters the pool and limits nothing else.** Machines, free weights and bands are
  * equivalent for hypertrophy, so a sparse gym gets a routine that satisfies the same coverage
@@ -43,6 +44,23 @@ fun fillDays(
     shape: SplitShape,
     bank: List<Exercise>,
     equipment: Set<String>,
+    goal: RoutineGoal,
+    /**
+     * How often the lifter trains, which is the only thing that turns a cycle into a week.
+     *
+     * **No default**, because every plausible one is wrong somewhere: assuming the cycle comes
+     * round weekly asks a once-a-week full-body day for a whole week's volume in one session, and
+     * the budget dutifully produces a twenty-exercise day. The lifter has already answered this
+     * question at setup; nothing here should be guessing at it.
+     */
+    weeklyFrequency: Int,
+    /**
+     * Exercises the lifter marked to keep, which regeneration treats as fixed.
+     *
+     * Keyed by the day they were pinned in, because a pin is about where an exercise sits in the
+     * shape of the routine and not about the exercise itself (#75).
+     */
+    pinned: Map<String, List<PlannedExercise>> = emptyMap(),
 ): List<FilledDay> {
     val pool = bank.availableFor(equipment)
 
@@ -51,8 +69,29 @@ fun fillDays(
         // would put volume into a day that is meant to carry none.
         if (day.kind == RoutineDayKind.CARDIO) return@map FilledDay(day, emptyList())
 
-        FilledDay(day, pool.coveringMusclesOf(day))
+        val kept = pinned[day.name].orEmpty()
+        val answered = kept.flatMap { it.exercise.primaryMuscles }.toSet()
+
+        val generated = pool.coveringMusclesOf(day, already = answered)
+            .flatMap { (muscle, chosen) ->
+                val sets = setsPerSessionFor(muscle, shape, goal, weeklyFrequency)
+                val across = chosen.take(exercisesForSets(sets))
+                across.zip(setsAcross(across.size, sets)) { exercise, count ->
+                    PlannedExercise(exercise, count)
+                }
+            }
+
+        // Pinned first, then what was generated around them, then ordered as one day: a lifter
+        // who kept their squat still wants it before their curls.
+        val all = (kept + generated).distinctBy { it.exercise.id }
+        FilledDay(day, all.orderedBy(goal))
     }
+}
+
+/** The day's exercises in training order, carrying their set counts with them. */
+private fun List<PlannedExercise>.orderedBy(goal: RoutineGoal): List<PlannedExercise> {
+    val order = map(PlannedExercise::exercise).orderedFor(goal).map(Exercise::id)
+    return sortedBy { order.indexOf(it.exercise.id) }
 }
 
 /**
@@ -82,16 +121,26 @@ private fun List<Exercise>.availableFor(equipment: Set<String>): List<Exercise> 
  * does not train it. The day comes back honestly short, and what to do about that is a
  * conversation for the validation (#76).
  */
-private fun List<Exercise>.coveringMusclesOf(day: SplitDay): List<Exercise> {
-    val chosen = mutableListOf<Exercise>()
-    val answered = mutableSetOf<String>()
+private fun List<Exercise>.coveringMusclesOf(
+    day: SplitDay,
+    already: Set<String> = emptySet(),
+): List<Pair<String, List<Exercise>>> {
+    val chosen = mutableListOf<Pair<String, List<Exercise>>>()
+    val answered = already.toMutableSet()
+    val taken = mutableSetOf<String>()
 
     day.muscles.forEach { muscle ->
         if (muscle in answered) return@forEach
 
-        val pick = firstOrNull { muscle in it.primaryMuscles } ?: return@forEach
-        chosen += pick
-        answered += pick.primaryMuscles
+        // As many as the budget could possibly want, so the caller can take what it needs without
+        // asking again. Fewer where the gym has fewer, which is a short day rather than an error.
+        val picks = filter { muscle in it.primaryMuscles && it.id !in taken }
+            .take(MOST_EXERCISES_PER_MUSCLE)
+        if (picks.isEmpty()) return@forEach
+
+        chosen += muscle to picks
+        taken += picks.map(Exercise::id)
+        answered += picks.first().primaryMuscles
     }
 
     return chosen

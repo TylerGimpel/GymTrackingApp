@@ -125,7 +125,7 @@ class RoutineRepository(
         bank: List<Exercise> = emptyList(),
     ): Long = database.withTransaction {
         val id = createRoutine(name, goal, cadence, equipment, repPreference, cardio)
-        val filled = fillDays(shape, bank, equipment).associateBy { it.shape.name }
+        val filled = fillDays(shape, bank, equipment, goal, cadence).associateBy { it.shape.name }
 
         shape.days.forEach { day ->
             val dayId = routines.insert(
@@ -136,12 +136,16 @@ class RoutineRepository(
                     kind = day.kind.name,
                 ),
             )
-            filled[day.name]?.exercises?.forEach { exercise ->
+            filled[day.name]?.exercises?.forEach { planned ->
                 routines.insert(
                     RoutineDayExerciseEntity(
                         routineDayId = dayId,
-                        exerciseId = exercise.id,
+                        exerciseId = planned.exercise.id,
                         orderIndex = routines.highestDayExerciseOrder(dayId) + 1,
+                        // What the generator budgeted, rather than the goal's default: a muscle
+                        // trained twice a cycle gets half as many sets each time as one trained
+                        // once, and that is the whole of what #74 works out.
+                        sets = planned.sets,
                     ),
                 )
             }

@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import com.tylergimpel.gymtracker.domain.RoutineGoal.HYPERTROPHY
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -17,7 +18,7 @@ class GeneratorTest {
 
     @Test
     fun `every muscle a day asks for is trained in it`() {
-        val filled = fillDays(pushPullLegs, bank, equipment = allEquipment)
+        val filled = fillDays(pushPullLegs, bank, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
         filled.forEach { day ->
             day.shape.muscles.forEach { muscle ->
@@ -27,7 +28,7 @@ class GeneratorTest {
                 // the rule rather than a check on it.
                 assertTrue(
                     "${day.shape.name} asks for $muscle and nothing in it trains that directly",
-                    day.exercises.any { muscle in it.primaryMuscles },
+                    day.chosen.any { muscle in it.primaryMuscles },
                 )
             }
         }
@@ -35,27 +36,39 @@ class GeneratorTest {
 
     @Test
     fun `nothing the lifter cannot do is ever chosen`() {
-        val filled = fillDays(pushPullLegs, bank, equipment = setOf("dumbbell", "body only"))
+        val filled = fillDays(
+            pushPullLegs,
+            bank,
+            equipment = setOf("dumbbell", "body only"),
+            goal = HYPERTROPHY,
+            weeklyFrequency = 3,
+        )
 
         // Equipment filters the pool. It does not limit what the routine can achieve — machines,
         // free weights and bands are equivalent for hypertrophy — which is why a sparse gym is
         // not a worse routine, only a different one.
         assertTrue(
-            filled.flatMap { it.exercises }
+            filled.flatMap { it.chosen }
                 .all { it.equipment == null || it.equipment in setOf("dumbbell", "body only") },
         )
     }
 
     @Test
     fun `a sparse gym still trains everything the days ask for`() {
-        val filled = fillDays(pushPullLegs, bank, equipment = setOf("dumbbell", "body only"))
+        val filled = fillDays(
+            pushPullLegs,
+            bank,
+            equipment = setOf("dumbbell", "body only"),
+            goal = HYPERTROPHY,
+            weeklyFrequency = 3,
+        )
 
         // The same coverage check as a fully equipped gym. Training at home is not second-class.
         filled.forEach { day ->
             day.shape.muscles.forEach { muscle ->
                 assertTrue(
                     "${day.shape.name} asks for $muscle and a sparse gym left it untrained",
-                    day.exercises.any { muscle in it.primaryMuscles },
+                    day.chosen.any { muscle in it.primaryMuscles },
                 )
             }
         }
@@ -65,21 +78,21 @@ class GeneratorTest {
     fun `an exercise the lifter banned is never chosen`() {
         val banned = bank.map { if (it.id == "Squat") it.copy(isDisliked = true) else it }
 
-        val filled = fillDays(pushPullLegs, banned, equipment = allEquipment)
+        val filled = fillDays(pushPullLegs, banned, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
         // A hard constraint, respected here as everywhere. The alternative — including it because
         // what was left scored worse — would break the only promise a dislike makes.
-        assertTrue(filled.flatMap { it.exercises }.none { it.id == "Squat" })
+        assertTrue(filled.flatMap { it.chosen }.none { it.id == "Squat" })
     }
 
     @Test
     fun `banning something does not leave the muscle it worked untrained`() {
         val banned = bank.map { if (it.id == "Squat") it.copy(isDisliked = true) else it }
 
-        val filled = fillDays(pushPullLegs, banned, equipment = allEquipment)
+        val filled = fillDays(pushPullLegs, banned, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
         assertTrue(
-            filled.flatMap { it.exercises }.any { "quadriceps" in it.primaryMuscles },
+            filled.flatMap { it.chosen }.any { "quadriceps" in it.primaryMuscles },
         )
     }
 
@@ -88,8 +101,8 @@ class GeneratorTest {
         val dropped = bank.map { if (it.id == "Squat") it.copy(isTombstoned = true) else it }
 
         assertTrue(
-            fillDays(pushPullLegs, dropped, equipment = allEquipment)
-                .flatMap { it.exercises }.none { it.id == "Squat" },
+            fillDays(pushPullLegs, dropped, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
+                .flatMap { it.chosen }.none { it.id == "Squat" },
         )
     }
 
@@ -97,21 +110,21 @@ class GeneratorTest {
     fun `an exercise the lifter added is chosen on the same terms as a shipped one`() {
         // Only their own machine works this muscle, so a generator that treated user-authored
         // rows as second-class would leave the day short and never say why.
-        val filled = fillDays(neck, bank, equipment = allEquipment)
+        val filled = fillDays(neck, bank, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
-        assertTrue(filled.single().exercises.any { it.source == ExerciseSource.USER })
+        assertTrue(filled.single().chosen.any { it.source == ExerciseSource.USER })
     }
 
     @Test
     fun `the same answers produce the same routine`() {
-        val once = fillDays(pushPullLegs, bank, equipment = allEquipment)
-        val again = fillDays(pushPullLegs, bank, equipment = allEquipment)
+        val once = fillDays(pushPullLegs, bank, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
+        val again = fillDays(pushPullLegs, bank, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
         // A generator nobody can reproduce is miserable to debug and worse to live with: a lifter
         // who regenerates, gets something worse and cannot get back is justifiably annoyed.
         assertEquals(
-            once.map { day -> day.exercises.map(Exercise::id) },
-            again.map { day -> day.exercises.map(Exercise::id) },
+            once.map { day -> day.chosen.map(Exercise::id) },
+            again.map { day -> day.chosen.map(Exercise::id) },
         )
     }
 
@@ -120,27 +133,70 @@ class GeneratorTest {
         val shuffled = bank.reversed()
 
         assertEquals(
-            fillDays(pushPullLegs, bank, allEquipment).map { it.exercises.map(Exercise::id) },
-            fillDays(pushPullLegs, shuffled, allEquipment).map { it.exercises.map(Exercise::id) },
+            fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, weeklyFrequency = 3).map { it.chosen.map(Exercise::id) },
+            fillDays(pushPullLegs, shuffled, allEquipment, HYPERTROPHY, weeklyFrequency = 3).map { it.chosen.map(Exercise::id) },
         )
     }
 
     @Test
-    fun `a day is as long as what it is for, and what it is for is a day's worth`() {
-        val filled = fillDays(fullBody, bank, equipment = allEquipment)
+    fun `a day is as long as its budget, not as long as its anatomy`() {
+        val filled = fillDays(
+            fullBody,
+            bank,
+            equipment = allEquipment,
+            goal = HYPERTROPHY,
+            weeklyFrequency = 3,
+        )
 
-        // One exercise per muscle named, now that coverage means direct work — so what keeps a
-        // day sane is the shape naming what the day is *for* rather than an anatomy list. A
-        // full-body day of six is a session; one of seventeen is not.
-        assertEquals(fullBody.days.single().muscles.size, filled.single().exercises.size)
-        assertTrue(filled.single().exercises.size <= 8)
+        // At least one movement for every muscle the day is for, and more where the budget says
+        // that muscle's sets should not all sit on one exercise. What keeps it a session rather
+        // than an afternoon is the shape naming what the day is *for* rather than an anatomy
+        // list, and the budget shrinking as a muscle is trained more often.
+        val day = filled.single()
+        assertTrue(day.chosen.size >= fullBody.days.single().muscles.size)
+        assertTrue("a full-body day came back as ${day.chosen.size} exercises", day.chosen.size <= 12)
+    }
+
+    @Test
+    fun `a muscle trained more often gets fewer sets each time`() {
+        val once = fillDays(fullBody, bank, allEquipment, HYPERTROPHY, weeklyFrequency = 1)
+        val thrice = fillDays(fullBody, bank, allEquipment, HYPERTROPHY, weeklyFrequency = 3)
+
+        // The whole point of the budget being weekly: the same target spread over three sessions
+        // is a third of the work in each. Frequency is distribution, never extra volume.
+        assertTrue(
+            once.single().exercises.sumOf { it.sets ?: 0 } >
+                thrice.single().exercises.sumOf { it.sets ?: 0 },
+        )
+    }
+
+    @Test
+    fun `every exercise comes back with sets to do`() {
+        val filled = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, weeklyFrequency = 3)
+
+        // A prescription of nought sets is not a prescription.
+        assertTrue(filled.flatMap { it.exercises }.all { (it.sets ?: 0) >= 1 })
+    }
+
+    @Test
+    fun `training for strength trains the compounds first`() {
+        val filled = fillDays(pushPullLegs, bank, allEquipment, RoutineGoal.STRENGTH, 3)
+
+        filled.filter { it.chosen.isNotEmpty() }.forEach { day ->
+            val compounds = day.chosen.map { it.isCompound }
+            assertEquals(
+                "${day.shape.name} trained an isolation movement before a compound",
+                compounds.sortedByDescending { it },
+                compounds,
+            )
+        }
     }
 
     @Test
     fun `an exercise is never picked twice for one day`() {
-        val filled = fillDays(fullBody, bank, equipment = allEquipment)
+        val filled = fillDays(fullBody, bank, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
-        val chosen = filled.single().exercises.map(Exercise::id)
+        val chosen = filled.single().chosen.map(Exercise::id)
         assertEquals(chosen.distinct(), chosen)
     }
 
@@ -148,14 +204,14 @@ class GeneratorTest {
     fun `sessions a shape promises differ actually differ`() {
         val twoDifferent = SPLIT_SHAPES.single { it.id == "full-body-2" }
 
-        val filled = fillDays(twoDifferent, bank, equipment = allEquipment)
+        val filled = fillDays(twoDifferent, bank, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
         // Selection is deterministic, so two days naming the same muscles come back holding the
         // same exercises. A shape offering "two sessions that differ" has to differ in what its
         // days are for, or it is a lie told twice.
         assertNotEquals(
-            filled[0].exercises.map(Exercise::id),
-            filled[1].exercises.map(Exercise::id),
+            filled[0].chosen.map(Exercise::id),
+            filled[1].chosen.map(Exercise::id),
         )
     }
 
@@ -163,21 +219,24 @@ class GeneratorTest {
     fun `a cardio day is left alone`() {
         val withCardio = pushPullLegs.withCardioDay()
 
-        val filled = fillDays(withCardio, bank, equipment = allEquipment)
+        val filled = fillDays(withCardio, bank, equipment = allEquipment, goal = HYPERTROPHY, weeklyFrequency = 3)
 
         // Nothing here knows what to put in one, and a resistance exercise in a cardio position
         // would put volume into a day that is supposed to carry none.
-        assertTrue(filled.single { it.shape.kind == RoutineDayKind.CARDIO }.exercises.isEmpty())
+        assertTrue(filled.single { it.shape.kind == RoutineDayKind.CARDIO }.chosen.isEmpty())
     }
 
     @Test
     fun `a muscle nothing in the gym can train is left untrained rather than faked`() {
-        val filled = fillDays(neck, bank, equipment = setOf("barbell"))
+        val filled = fillDays(neck, bank, setOf("barbell"), HYPERTROPHY, weeklyFrequency = 3)
 
         // Honest emptiness. What to do about it is a conversation the validation has with the
         // lifter (#76), not something to paper over by putting in a bench press.
-        assertFalse(filled.single().exercises.any { "neck" in it.primaryMuscles })
+        assertFalse(filled.single().chosen.any { "neck" in it.primaryMuscles })
     }
+
+    /** What a day holds, without its set counts, which is what most of these are about. */
+    private val FilledDay.chosen: List<Exercise> get() = exercises.map(PlannedExercise::exercise)
 
     private companion object {
         val allEquipment = setOf("barbell", "dumbbell", "machine", "body only")
