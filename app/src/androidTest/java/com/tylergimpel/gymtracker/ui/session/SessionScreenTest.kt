@@ -144,7 +144,7 @@ class SessionScreenTest {
         compose.onNodeWithText("Let the app build one").performClick()
         assertEquals(1, built)
         assertEquals(1, generated)
-        compose.onNodeWithText("Change exercise").assertExists()
+        compose.onNodeWithText("Change exercise", useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -170,7 +170,7 @@ class SessionScreenTest {
 
         // The two things the screen leaves undecorated on purpose, taught in one place (#92).
         compose.onNodeWithText("tap the unit", substring = true).assertExists()
-        compose.onNodeWithText("Routine", substring = true).assertExists()
+        compose.onNodeWithText("swipe right anywhere", substring = true).assertExists()
 
         // And never in the way: a set logs with the tip still up.
         compose.onNodeWithTag(LOG_SET).performClick()
