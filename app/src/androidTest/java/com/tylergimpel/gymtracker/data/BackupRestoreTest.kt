@@ -79,13 +79,51 @@ class BackupRestoreTest {
         context.deleteDatabase(TEST_DATABASE)
         database = fresh()
         val restoring = BackupRepository(database, clock)
-        assertFalse(restoring.holdsAnything())
+        assertTrue(restoring.wouldReplace().isNothing)
 
         restoring.restore(restoring.read(ByteArrayInputStream(file)))
 
         val after = everyTable().associateWith(::rowsOf)
         assertEquals(before.keys, after.keys)
         before.forEach { (table, rows) -> assertEquals("table $table", rows, after.getValue(table)) }
+    }
+
+    @Test
+    fun aNewPhoneHasNothingARestoreWouldReplace() = runBlocking {
+        val backups = BackupRepository(database, clock)
+        val profile = ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)
+        val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
+
+        // Opening an exercise asks the engine for a prescription, and the engine writes down what it
+        // worked out. That is the app's arithmetic, not the lifter's data, and must not make a new
+        // phone look like one with something to lose (#104).
+        RecommendationRepository(
+            database,
+            database.exerciseDao(),
+            database.sessionDao(),
+            clock,
+            plates = PlateRepository(database.plateDao(), profile),
+            profile = profile,
+        ).nextSet(exercises.observeBank().first().single { it.id == BENCH })
+
+        assertTrue(backups.wouldReplace().isNothing)
+    }
+
+    @Test
+    fun whatARestoreWouldReplaceIsCountedInTheLiftersTerms() = runBlocking {
+        val backups = BackupRepository(database, clock)
+        sessions().logSet(BENCH, SetDraft("60", "8"))
+        BodyweightRepository(database, database.bodyweightDao())
+            .record(clock.instant(), LocalDate.parse("2026-09-14"), Kilograms(72.5))
+        ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS).setSex(Sex.MALE)
+
+        val there = backups.wouldReplace()
+
+        assertEquals(1, there.sessions)
+        assertEquals(1, there.weighIns)
+        assertFalse(there.routine)
+        assertTrue("a profile answer is the lifter's, and a restore would replace it", there.customised)
+        assertFalse(there.isNothing)
     }
 
     @Test

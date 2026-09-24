@@ -20,6 +20,8 @@ import android.net.Uri
 import com.tylergimpel.gymtracker.data.SessionRepository
 import com.tylergimpel.gymtracker.data.BackupRepository
 import com.tylergimpel.gymtracker.data.NotABackup
+import com.tylergimpel.gymtracker.data.Backup
+import com.tylergimpel.gymtracker.data.WouldReplace
 import com.tylergimpel.gymtracker.domain.spreadsheetExport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -35,7 +37,17 @@ data class SettingsUiState(
     val restAlerts: RestAlerts = RestAlerts(),
     /** What the last export or backup did, said once and then cleared. */
     val dataMessage: DataMessage? = null,
+    /**
+     * A restore waiting on the lifter, because it would replace something they have (#104).
+     *
+     * The one operation in the app that can destroy data logged since, so the one place a
+     * confirmation earns its keep.
+     */
+    val confirmingRestore: ConfirmRestore? = null,
 )
+
+/** A backup ready to restore, and what restoring it would replace. */
+data class ConfirmRestore(val backup: Backup, val replacing: WouldReplace)
 
 /** The outcome of writing the lifter's data out, in their terms. */
 sealed interface DataMessage {
@@ -75,12 +87,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val restAlerts = MutableStateFlow(readRestAlerts())
     private val dataMessage = MutableStateFlow<DataMessage?>(null)
+    private val confirming = MutableStateFlow<ConfirmRestore?>(null)
 
     val state: StateFlow<SettingsUiState> = combine(
         profile.observeDisplayUnit(),
         profile.observeTheme(),
         restAlerts,
         dataMessage,
+        confirming,
         ::SettingsUiState,
     ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState())
 
@@ -153,6 +167,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val backup = getApplication<Application>().contentResolver.openInputStream(source)
                     ?.use { backups.read(it) }
                     ?: throw NotABackup("the file could not be opened")
+                // Asked first where there is anything to lose; a new phone is simply restored.
+                val replacing = backups.wouldReplace()
+                if (!replacing.isNothing) {
+                    confirming.value = ConfirmRestore(backup, replacing)
+                    return@launch
+                }
                 backups.restore(backup)
                 DataMessage.Restored(backup.sessions)
             } catch (refused: NotABackup) {
@@ -161,6 +181,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 DataMessage.NotRestorable(failed.message.orEmpty())
             }
         }
+    }
+
+    /** Replaces what is here with the backup the lifter was warned about. */
+    fun confirmRestore() {
+        val confirmed = confirming.value ?: return
+        confirming.value = null
+        viewModelScope.launch {
+            dataMessage.value = try {
+                backups.restore(confirmed.backup)
+                DataMessage.Restored(confirmed.backup.sessions)
+            } catch (failed: Exception) {
+                DataMessage.NotRestorable(failed.message.orEmpty())
+            }
+        }
+    }
+
+    /** Leaves everything exactly as it was. */
+    fun cancelRestore() {
+        confirming.value = null
     }
 
     fun dismissDataMessage() {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -96,6 +97,8 @@ fun SettingsScreen(
         // backup itself says whether it is one.
         onRestore = { restore.launch(arrayOf("application/json", "text/plain", "*/*")) },
         onDismissDataMessage = viewModel::dismissDataMessage,
+        onConfirmRestore = viewModel::confirmRestore,
+        onCancelRestore = viewModel::cancelRestore,
     )
 }
 
@@ -114,6 +117,8 @@ fun SettingsScreen(
     onBackUp: () -> Unit = {},
     onRestore: () -> Unit = {},
     onDismissDataMessage: () -> Unit = {},
+    onConfirmRestore: () -> Unit = {},
+    onCancelRestore: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -228,12 +233,47 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
+            state.confirmingRestore?.let {
+                ConfirmRestoreDialog(confirm = it, onConfirm = onConfirmRestore, onCancel = onCancelRestore)
+            }
+
             TextButton(onClick = onOpenProfile) { Text(stringResource(R.string.settings_profile)) }
             TextButton(onClick = onOpenPlates) { Text(stringResource(R.string.settings_plates)) }
             // Everything excluded from swap and dislike, where each can be taken back (#93).
             TextButton(onClick = onOpenExcluded) { Text(stringResource(R.string.settings_excluded)) }
         }
     }
+}
+
+/**
+ * Said before a restore replaces what is here: what there is now, and what comes back instead.
+ *
+ * Never a silent merge and never a silent wipe. Declining is as easy as confirming, and leaves
+ * everything exactly as it was.
+ */
+@Composable
+private fun ConfirmRestoreDialog(confirm: ConfirmRestore, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val here = confirm.replacing
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.restore_confirm_title)) },
+        text = {
+            Text(
+                stringResource(
+                    R.string.restore_confirm_body,
+                    here.sessions,
+                    here.weighIns,
+                    confirm.backup.sessions,
+                ) + if (here.routine) " " + stringResource(R.string.restore_confirm_routine) else "",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.restore_confirm_replace)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.restore_confirm_keep)) }
+        },
+    )
 }
 
 @Composable

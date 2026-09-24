@@ -222,6 +222,11 @@
     <string name="settings_restore">Restore from a backup</string>
     <string name="settings_backup_why">The backup is the file to keep. It holds everything, and restoring it on a new phone brings the app back exactly as it was: your training, routine, exercises, exclusions, plates, weigh-ins and profile.</string>
     <string name="settings_backed_up">Backed up %1$d sessions. Keep the file somewhere other than this phone.</string>
+    <string name="restore_confirm_title">Replace what is here?</string>
+    <string name="restore_confirm_body">This phone has %1$d sessions and %2$d weigh-ins, plus whatever you have set up. Restoring replaces all of it with the backup, which has %3$d sessions. Anything logged here since that backup was made will be gone.</string>
+    <string name="restore_confirm_routine">Your current routine is replaced too.</string>
+    <string name="restore_confirm_replace">Replace with the backup</string>
+    <string name="restore_confirm_keep">Keep what is here</string>
     <string name="settings_restored">Restored %1$d sessions.</string>
     <string name="settings_not_restorable">Nothing was changed: that file could not be restored (%1$s).</string>
     <string name="settings_export_why">Every set you have logged, one row each, for a spreadsheet. It is not a backup: supersets are not kept, drops and sides become rows of their own, and routines, exclusions, plates and your profile are left out. Nothing here needs an account or the internet.</string>

@@ -27,6 +27,24 @@ data class Backup(
     val sessions: Int get() = tables["session"].orEmpty().size
 }
 
+/**
+ * What a restore would replace, in the lifter's terms (#104).
+ *
+ * Only what is the lifter's: their training, their routine, their weigh-ins, and anything they
+ * have said — their own exercises, choices about bank ones, plates, profile answers. What the
+ * engine worked out for itself is left out, because it is rebuilt from the log (ADR 0010) and
+ * merely opening an exercise writes some.
+ */
+data class WouldReplace(
+    val sessions: Int,
+    val routine: Boolean,
+    val weighIns: Int,
+    /** Whether the lifter has made any choice of their own: exercises, units, plates, profile. */
+    val customised: Boolean,
+) {
+    val isNothing: Boolean get() = sessions == 0 && !routine && weighIns == 0 && !customised
+}
+
 /** Why a file could not be restored, in terms the lifter can act on. */
 class NotABackup(message: String) : Exception(message)
 
@@ -113,16 +131,26 @@ class BackupRepository(
     }
 
     /**
-     * Whether there is anything a restore would replace.
+     * What restoring now would replace, so the lifter can be told before it happens (#104).
      *
-     * The lifter's own data only — the shipped bank is always there and is not theirs to lose.
+     * A profile row only counts where it holds an answer: dismissing the first-session tip or
+     * choosing a theme writes one too, and neither is training a lifter could lose.
      */
-    suspend fun holdsAnything(): Boolean = withContext(Dispatchers.IO) {
-        backedUpTables().any { table ->
-            db.query("SELECT EXISTS(SELECT 1 FROM `$table`" + whereFor(table) + ")").use {
-                it.moveToFirst() && it.getInt(0) == 1
-            }
-        }
+    suspend fun wouldReplace(): WouldReplace = withContext(Dispatchers.IO) {
+        fun count(sql: String): Int = db.query(sql).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        WouldReplace(
+            sessions = count("SELECT COUNT(*) FROM session"),
+            routine = count("SELECT COUNT(*) FROM routine") > 0,
+            weighIns = count("SELECT COUNT(*) FROM bodyweight_entry"),
+            customised = count(
+                "SELECT (SELECT COUNT(*) FROM exercise WHERE source = '${ExerciseSource.USER.stored}') + " +
+                    "(SELECT COUNT(*) FROM exercise_preference) + " +
+                    "(SELECT COUNT(*) FROM plate_inventory) + " +
+                    "(SELECT COUNT(*) FROM profile WHERE sex IS NOT NULL OR birth_year IS NOT NULL " +
+                    "OR height_cm IS NOT NULL OR bar_kg IS NOT NULL OR display_unit IS NOT NULL " +
+                    "OR experience != 'TRAINED')",
+            ) > 0,
+        )
     }
 
     /** Every table the lifter's data lives in: all of them, less SQLite's and Room's own. */
