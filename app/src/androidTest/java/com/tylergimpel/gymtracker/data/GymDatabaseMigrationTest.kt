@@ -943,6 +943,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_FIFTH_DATABASE = "migration-twenty-fifth.db"
         const val TWENTY_SIXTH_DATABASE = "migration-twenty-sixth.db"
         const val TWENTY_SEVENTH_DATABASE = "migration-twenty-seventh.db"
+        const val TWENTY_EIGHTH_DATABASE = "migration-twenty-eighth.db"
     }
 
     /**
@@ -1243,5 +1244,21 @@ class GymDatabaseMigrationTest {
                     assertTrue("a height was invented on upgrade", it.isNull(5))
                 }
             }
+    }
+
+    /** Version 29 gives the app somewhere to keep a theme, empty — following the phone — for all. */
+    @Test
+    fun migratesToAThemeThatFollowsThePhoneUntilChosen() {
+        helper.createDatabase(TWENTY_EIGHTH_DATABASE, 28).use { version28 ->
+            version28.execSQL("INSERT INTO profile (id, display_unit, experience) VALUES (1, 'kg', 'TRAINED')")
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_EIGHTH_DATABASE, 29, true, MIGRATION_28_29).use { db ->
+            db.query("SELECT display_unit, theme FROM profile WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals("kg", it.getString(0))
+                assertTrue("a theme was chosen for somebody on upgrade", it.isNull(1))
+            }
+        }
     }
 }

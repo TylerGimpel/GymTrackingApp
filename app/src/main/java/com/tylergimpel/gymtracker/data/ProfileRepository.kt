@@ -4,6 +4,7 @@ import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Experience
 import com.tylergimpel.gymtracker.domain.Profile
 import com.tylergimpel.gymtracker.domain.Sex
+import com.tylergimpel.gymtracker.domain.Theme
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -57,6 +58,15 @@ class ProfileRepository(
             experience = row?.experience?.let(::experienceOf) ?: Experience.TRAINED,
         )
     }
+
+    /** Whether the app is light, dark, or following the phone — which is the default. */
+    fun observeTheme(): Flow<Theme> = profiles.observe().map { row ->
+        row?.theme?.let { stored -> Theme.entries.firstOrNull { it.name == stored } } ?: Theme.SYSTEM
+    }
+
+    /** Records a theme; following the phone is stored as no choice, so it keeps following. */
+    suspend fun setTheme(theme: Theme) =
+        update { it.copy(theme = theme.takeIf { chosen -> chosen != Theme.SYSTEM }?.name) }
 
     /** Records the lifter's sex, or withdraws it with null. */
     suspend fun setSex(sex: Sex?) = update { it.copy(sex = sex?.name) }

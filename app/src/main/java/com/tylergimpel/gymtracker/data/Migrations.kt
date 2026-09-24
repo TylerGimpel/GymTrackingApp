@@ -684,6 +684,16 @@ internal val MIGRATION_27_28 = object : Migration(27, 28) {
     }
 }
 
+/**
+ * Somewhere to keep whether the app is light or dark. Empty for everybody upgrading, which is
+ * following the phone: the answer they had before there was a question (#91).
+ */
+internal val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `profile` ADD COLUMN `theme` TEXT")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -712,6 +722,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_25_26,
     MIGRATION_26_27,
     MIGRATION_27_28,
+    MIGRATION_28_29,
 )
 
 /**

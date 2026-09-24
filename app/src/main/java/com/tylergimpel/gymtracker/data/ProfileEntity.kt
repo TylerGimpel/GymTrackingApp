@@ -67,6 +67,15 @@ data class ProfileEntity(
     /** Kept if the lifter wants it kept, and never asked for: nothing reads it (#87). */
     @ColumnInfo(name = "height_cm")
     val heightCm: Double? = null,
+
+    /**
+     * `LIGHT` or `DARK`, or null to follow the phone — which is what everybody starts with.
+     *
+     * About the app rather than the lifter's body, and here for the reason the display unit is:
+     * there is one lifter, one row, and a column a migration and a backup can both see.
+     */
+    @ColumnInfo(name = "theme")
+    val theme: String? = null,
 ) {
     companion object {
         /** There is one lifter, so there is one row, and it has a known id to be written over. */

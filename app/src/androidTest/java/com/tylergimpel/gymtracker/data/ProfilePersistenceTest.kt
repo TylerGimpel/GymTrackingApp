@@ -7,6 +7,7 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.Experience
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Sex
+import com.tylergimpel.gymtracker.domain.Theme
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -78,6 +79,21 @@ class ProfilePersistenceTest {
         assertEquals(168.0, kept.heightCm!!, 0.0)
         assertEquals(Experience.NOVICE, kept.experience)
         assertEquals(Kilograms(20.0), profile.bar())
+    }
+
+    @Test
+    fun theAppFollowsThePhoneUntilTheLifterSaysOtherwise() = runBlocking {
+        val profile = profile(seededWith = WeightUnit.KILOGRAMS)
+        assertEquals(Theme.SYSTEM, profile.observeTheme().first())
+
+        profile.setTheme(Theme.DARK)
+        assertEquals(Theme.DARK, profile.observeTheme().first())
+
+        // Back to following the phone is no choice at all, so a phone that switches at dusk is
+        // followed again rather than pinned to whatever it was when they tapped.
+        profile.setTheme(Theme.SYSTEM)
+        assertEquals(Theme.SYSTEM, profile.observeTheme().first())
+        assertNull(database.profileDao().profile()?.theme)
     }
 
     @Test

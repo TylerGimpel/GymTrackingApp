@@ -15,6 +15,12 @@ import com.tylergimpel.gymtracker.ui.bank.ExerciseBankScreen
 import com.tylergimpel.gymtracker.ui.bodyweight.BodyweightScreen
 import com.tylergimpel.gymtracker.ui.plates.PlatesScreen
 import com.tylergimpel.gymtracker.ui.profile.ProfileScreen
+import com.tylergimpel.gymtracker.ui.settings.SettingsScreen
+import com.tylergimpel.gymtracker.data.GymDatabase
+import com.tylergimpel.gymtracker.data.profileRepository
+import com.tylergimpel.gymtracker.domain.Theme
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tylergimpel.gymtracker.ui.routine.RoutineScreen
 import com.tylergimpel.gymtracker.ui.routine.RoutineViewModel
 import com.tylergimpel.gymtracker.ui.session.SessionScreen
@@ -26,50 +32,73 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        val themes = GymDatabase.getInstance(this).profileRepository().observeTheme()
         setContent {
-            GymTrackerTheme {
+            // Following the phone until the lifter says otherwise, which is also what shows for
+            // the moment before the stored choice has been read.
+            val theme by themes.collectAsStateWithLifecycle(initialValue = Theme.SYSTEM)
+            GymTrackerTheme(
+                darkTheme = when (theme) {
+                    Theme.SYSTEM -> isSystemInDarkTheme()
+                    Theme.LIGHT -> false
+                    Theme.DARK -> true
+                },
+            ) {
                 GymTracker()
             }
         }
     }
 }
 
-private enum class Destination { SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE }
+private enum class Destination {
+    SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE, SETTINGS,
+}
 
 /**
- * Four destinations, switched by hand.
+ * A handful of destinations and a back stack of them, kept by hand.
  *
- * A navigation library would earn its place once there is a back stack worth modelling; with a
- * session, a picker, an editor and a weigh-in list it would be more machinery than the app has
- * behaviour.
+ * A stack rather than one destination because Settings opened a second level: Profile and Plates
+ * are reached from it and should return to it, and Weigh-ins is reached from both the session and
+ * the profile and should return to whichever opened it. A navigation library would still be more
+ * machinery than that needs.
  */
 @Composable
 private fun GymTracker(
     viewModel: SessionViewModel = viewModel(),
     routineViewModel: RoutineViewModel = viewModel(),
 ) {
-    var destination by rememberSaveable { mutableStateOf(Destination.SESSION) }
+    // Saved as names, which a Bundle holds without question, and never empty: the session is
+    // always at the bottom, because it is where the app opens and where everything returns.
+    var stack by rememberSaveable { mutableStateOf(listOf(Destination.SESSION.name)) }
+    val destination = Destination.valueOf(stack.last())
+
+    fun open(next: Destination) {
+        stack = stack + next.name
+    }
+
+    fun back() {
+        if (stack.size > 1) stack = stack.dropLast(1)
+    }
 
     // Which routine day is being filled, if the bank was opened to write down a machine for one.
     // The bank screen is the same either way; only where the new exercise lands differs.
     var pickingForDay by rememberSaveable { mutableStateOf<Long?>(null) }
 
     fun leavePicker() {
-        destination = if (pickingForDay == null) Destination.SESSION else Destination.ROUTINE
         pickingForDay = null
+        back()
     }
 
     if (destination != Destination.SESSION) {
-        BackHandler { leavePicker() }
+        BackHandler { if (destination == Destination.EXERCISE_PICKER) leavePicker() else back() }
     }
 
     when (destination) {
         Destination.SESSION -> SessionScreen(
-            onPickExercise = { destination = Destination.EXERCISE_PICKER },
-            onOpenRoutine = { destination = Destination.ROUTINE },
-            onOpenBodyweight = { destination = Destination.BODYWEIGHT },
-            onOpenPlates = { destination = Destination.PLATES },
-            onOpenProfile = { destination = Destination.PROFILE },
+            onPickExercise = { open(Destination.EXERCISE_PICKER) },
+            onOpenRoutine = { open(Destination.ROUTINE) },
+            onOpenBodyweight = { open(Destination.BODYWEIGHT) },
+            onOpenSettings = { open(Destination.SETTINGS) },
             viewModel = viewModel,
         )
 
@@ -82,27 +111,29 @@ private fun GymTracker(
             },
         )
 
-        Destination.BODYWEIGHT -> BodyweightScreen(
-            onBack = { destination = Destination.SESSION },
-        )
+        Destination.BODYWEIGHT -> BodyweightScreen(onBack = ::back)
 
-        Destination.PLATES -> PlatesScreen(
-            onBack = { destination = Destination.SESSION },
-        )
+        Destination.PLATES -> PlatesScreen(onBack = ::back)
 
         Destination.PROFILE -> ProfileScreen(
-            onBack = { destination = Destination.SESSION },
-            onOpenBodyweight = { destination = Destination.BODYWEIGHT },
+            onBack = ::back,
+            onOpenBodyweight = { open(Destination.BODYWEIGHT) },
+        )
+
+        Destination.SETTINGS -> SettingsScreen(
+            onBack = ::back,
+            onOpenPlates = { open(Destination.PLATES) },
+            onOpenProfile = { open(Destination.PROFILE) },
         )
 
         Destination.ROUTINE -> RoutineScreen(
-            onBack = { destination = Destination.SESSION },
+            onBack = ::back,
             // The only reason left to leave the routine: writing down a machine the app has
             // never heard of, which is the one form in the app that does that. The day comes
             // with them, so what they add lands where they were putting it.
             onAddNewExercise = { dayId ->
                 pickingForDay = dayId
-                destination = Destination.EXERCISE_PICKER
+                open(Destination.EXERCISE_PICKER)
             },
             viewModel = routineViewModel,
         )

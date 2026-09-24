@@ -108,7 +108,9 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.ui.DayPickerDialog
+import com.tylergimpel.gymtracker.ui.RestFix
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
+import com.tylergimpel.gymtracker.ui.settingsFor
 import com.tylergimpel.gymtracker.ui.label
 import java.time.Instant
 import java.time.LocalDate
@@ -126,8 +128,7 @@ fun SessionScreen(
     onPickExercise: () -> Unit,
     onOpenRoutine: () -> Unit,
     onOpenBodyweight: () -> Unit,
-    onOpenPlates: () -> Unit,
-    onOpenProfile: () -> Unit = {},
+    onOpenSettings: () -> Unit,
     viewModel: SessionViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -224,8 +225,7 @@ fun SessionScreen(
             onSessionNoteChange = viewModel::noteSession,
             onOpenRoutine = onOpenRoutine,
             onOpenBodyweight = onOpenBodyweight,
-            onOpenPlates = onOpenPlates,
-            onOpenProfile = onOpenProfile,
+            onOpenSettings = onOpenSettings,
         ),
     )
 }
@@ -311,8 +311,7 @@ data class SessionActions(
     val onSessionNoteChange: (String) -> Unit = {},
     val onOpenRoutine: () -> Unit = {},
     val onOpenBodyweight: () -> Unit = {},
-    val onOpenPlates: () -> Unit = {},
-    val onOpenProfile: () -> Unit = {},
+    val onOpenSettings: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -411,15 +410,11 @@ fun SessionScreen(
                     TextButton(onClick = wholeSession.onOpenBodyweight) {
                         Text(stringResource(R.string.session_open_bodyweight))
                     }
-                    // Where the plates live. Global equipment rather than anything about today,
-                    // so it sits beside the routine and the weigh-ins rather than in a session.
-                    TextButton(onClick = wholeSession.onOpenPlates) {
-                        Text(stringResource(R.string.session_open_plates))
-                    }
-                    // Who the lifter is, if they choose to say. Beside the weigh-ins because it
-                    // is theirs rather than any session's, and gates nothing in one.
-                    TextButton(onClick = wholeSession.onOpenProfile) {
-                        Text(stringResource(R.string.session_open_profile))
+                    // Everything that is the lifter's rather than a routine's — the plates, their
+                    // profile, the unit, the theme, whether a rest can reach them — in one place
+                    // rather than a button each (#91).
+                    TextButton(onClick = wholeSession.onOpenSettings) {
+                        Text(stringResource(R.string.session_open_settings))
                     }
                     if (state.session != null) {
                         TextButton(onClick = cycle.onFinish) {
@@ -1349,8 +1344,6 @@ private fun RestDialog(
  * Both are permissions the app is allowed to ask for and neither is one it can grant itself, so
  * what the screen offers is the trip to the place that can.
  */
-enum class RestFix { EXACT_ALARMS, NOTIFICATIONS }
-
 /** A silent failure said out loud, with the one tap that fixes it. */
 @Composable
 private fun RestAlertWarning(
@@ -2200,19 +2193,3 @@ internal fun Effort.summary(displayUnit: WeightUnit, lifterUnit: WeightUnit): St
         }
     }
 
-/**
- * Where to send a lifter to let a rest reach them.
- *
- * Settings rather than a second permission dialog: the alarm one has no dialog at all, and the
- * notification one is shown at most once by the system, after which the only honest route is the
- * page that can still change the answer.
- */
-private fun settingsFor(fix: RestFix, context: Context): Intent = when (fix) {
-    RestFix.EXACT_ALARMS -> Intent(
-        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-        Uri.fromParts("package", context.packageName, null),
-    )
-
-    RestFix.NOTIFICATIONS -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-}
