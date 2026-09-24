@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -111,7 +112,7 @@ fun SettingsScreen(
             ) {
                 // The same setting a weigh-in's chip settles, and the one every exercise falls
                 // back to until it says otherwise.
-                WeightUnitChips(selected = state.displayUnit, onReadIn = onDisplayUnit)
+                WeightUnitChips(selected = state.preferredUnit, onReadIn = onDisplayUnit)
             }
 
             Setting(label = stringResource(R.string.settings_theme)) {
@@ -181,9 +182,9 @@ private fun Setting(label: String, why: String? = null, content: @Composable () 
 @Composable
 private fun RestAlertLine(
     fine: Boolean,
-    fineText: Int,
-    brokenText: Int,
-    fixText: Int,
+    @StringRes fineText: Int,
+    @StringRes brokenText: Int,
+    @StringRes fixText: Int,
     onFix: () -> Unit,
 ) {
     Text(

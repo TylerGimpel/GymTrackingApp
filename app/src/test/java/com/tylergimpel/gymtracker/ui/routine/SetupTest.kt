@@ -5,7 +5,6 @@ import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.RoutineGoal
-import com.tylergimpel.gymtracker.domain.splitShapesFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -99,9 +98,10 @@ class SetupTest {
     fun `everything skipped is built from what each skipped question says it assumes`() {
         val setup = SetupAnswers().toRoutineSetup()
 
-        assertEquals(RoutineSetup.ASSUMED_GOAL, setup.goal)
-        assertEquals(RoutineSetup.ASSUMED_REP_PREFERENCE, setup.repPreference)
-        assertEquals(SetupAnswers.ASSUMED_CADENCE, setup.cadence)
+        // The same assumptions each skipped question says out loud on screen.
+        assertEquals(RoutineGoal.HYPERTROPHY, setup.goal)
+        assertEquals(RepPreference.MODERATE, setup.repPreference)
+        assertEquals(3, setup.cadence)
         assertEquals(CardioPlacement.NONE, setup.cardio)
         // Nothing ticked is "nobody has described the gym yet", which offers everything rather
         // than nothing.
@@ -109,10 +109,23 @@ class SetupTest {
     }
 
     @Test
-    fun `a skipped shape is the likeliest one for the week they train`() {
-        val answers = SetupAnswers(cadence = 4)
+    fun `a skipped shape is one that comes round about weekly for the week they train`() {
+        // Four sessions a week most often wants a four-position cycle: the likeliest answer, not
+        // a claim that it is the best one.
+        assertEquals(4, SetupAnswers(cadence = 4).shapeToBuild().liftingPositions)
+        assertEquals(2, SetupAnswers(cadence = 2).shapeToBuild().liftingPositions)
+    }
 
-        assertEquals(splitShapesFor(4).first().id, answers.shapeToBuild().id)
+    @Test
+    fun `a shape chosen survives going back to change the week`() {
+        val chosen = SetupAnswers(cadence = 3, shapeId = "push-pull-legs-3")
+
+        val changed = chosen.copy(cadence = 5)
+
+        // Weekly frequency narrows nothing — every shape is offered at every cadence, only in a
+        // different order — so the choice is still on screen, still chosen, and still built.
+        assertTrue(changed.shapesOffered().any { it.id == "push-pull-legs-3" })
+        assertEquals("push-pull-legs-3", changed.shapeToBuild().id)
     }
 
     @Test

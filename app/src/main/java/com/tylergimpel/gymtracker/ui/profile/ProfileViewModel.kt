@@ -21,7 +21,8 @@ data class ProfileUiState(
     val profile: Profile = Profile(),
     /** The latest weigh-in, which is what anything wanting a bodyweight reads. */
     val bodyweight: BodyweightEntry? = null,
-    val displayUnit: WeightUnit = WeightUnit.KILOGRAMS,
+    /** The **Preferred unit**, which the latest weigh-in is read in. */
+    val preferredUnit: WeightUnit = WeightUnit.KILOGRAMS,
 )
 
 /**
@@ -41,7 +42,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         bodyweight.observeHistory(),
         profile.observeDisplayUnit(),
     ) { chosen, history, unit ->
-        ProfileUiState(profile = chosen, bodyweight = history.latest, displayUnit = unit)
+        ProfileUiState(profile = chosen, bodyweight = history.latest, preferredUnit = unit)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), ProfileUiState())
 
     fun setSex(sex: Sex?) {

@@ -18,7 +18,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
-    val displayUnit: WeightUnit = WeightUnit.KILOGRAMS,
+    /** The **Preferred unit**: what the app starts in, and what every exercise falls back to. */
+    val preferredUnit: WeightUnit = WeightUnit.KILOGRAMS,
     val theme: Theme = Theme.SYSTEM,
     /** What the rest timer can currently do, read from the platform as the session reads it. */
     val restAlerts: RestAlerts = RestAlerts(),

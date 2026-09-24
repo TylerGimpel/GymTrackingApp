@@ -223,12 +223,15 @@ class CalibrationRampTest {
 
     @Test
     fun `a pressing lift is raised less than a squat`() {
-        val body = BodySize(Kilograms(95.0), Sex.MALE)
+        // Heavy enough that the press clears the bar at all, so this is a comparison between two
+        // raised starts rather than two ramps that both begin at 20 kg.
+        val body = BodySize(Kilograms(130.0), Sex.MALE)
 
         val squatStart = CalibrationRamp.of(squat, body = body)!!.rung(0)!!.value
         val benchStart = CalibrationRamp.of(exercise("barbell"), body = body)!!.rung(0)!!.value
 
-        assertTrue(benchStart <= squatStart)
+        assertTrue("the press was not raised at all", benchStart > 20.0)
+        assertTrue(benchStart < squatStart)
     }
 
     @Test

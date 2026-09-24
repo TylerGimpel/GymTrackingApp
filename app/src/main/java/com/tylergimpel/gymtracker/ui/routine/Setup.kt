@@ -100,6 +100,8 @@ data class SetupAnswers(
      * resistance work, so no shape offered is ever made invalid by it.
      */
     fun shapeToBuild(): SplitShape {
+        // Every shape is offered at every cadence — frequency only orders them — so a shape chosen
+        // before the cadence was changed is still one the lifter can see chosen.
         val base = shapeId?.let { id -> SPLIT_SHAPES.firstOrNull { it.id == id } }
             ?: shapesOffered().first()
         return if (resolvedCardio == CardioPlacement.OWN_DAY) base.withCardioDay() else base

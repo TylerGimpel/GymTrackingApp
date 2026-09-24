@@ -309,11 +309,11 @@ fun shapeOf(id: String): SplitShape? = when {
 private const val CARDIO_SUFFIX = "-cardio"
 
 /**
- * The equipment values that are cardio machines rather than lifting kit.
+ * The equipment values that are for cardio rather than lifting: five machines, and outdoors.
  *
  * Six, re-tagged onto the bank so a gym with a rower and no treadmill can say so (`data/README.md`).
  * Asked about only once a lifter has said they do cardio: somebody who does none should not have to
- * scroll past six machines they will never use to tick the ones they will.
+ * scroll past six things they will never use to tick the ones they will.
  */
 val CARDIO_EQUIPMENT: Set<String> =
     setOf("treadmill", "stationary bike", "rower", "elliptical", "stair climber", "outdoor")

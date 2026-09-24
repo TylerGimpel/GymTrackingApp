@@ -133,10 +133,11 @@ fun List<Exercise>.worthOffering(
 }
 
 /**
- * Every exercise the lifter has excluded, by name, so each can be looked at and taken back (#93).
+ * Every exercise the lifter has a **Dislike** on, by name, so each can be looked at and taken back
+ * (#93). "Excluded" is the lifter's word for it on screen, as spec #29 uses it.
  *
- * A dropped row is left out even if it was excluded: it is there for the history pointing at it
- * and can never be offered again, so there is nothing to take back.
+ * A **Tombstone** is left out even where it was disliked: it is there for the history pointing at
+ * it and can never be offered again, so there is nothing to take back.
  */
 fun List<Exercise>.excluded(): List<Exercise> =
     filter { it.isDisliked && !it.isTombstoned }.sortedBy { it.name.lowercase() }

@@ -34,6 +34,22 @@ class SessionTest {
     }
 
     @Test
+    fun `a session needs no routine to start, to be trained or to finish`() {
+        // "Let me just try it" is the most common first move in any app (#29). A session usually
+        // realises a routine day and does not have to: nothing here asks for one, and finishing
+        // without one is an ordinary ending rather than an error (#85).
+        val tried = Session.start(at("2026-09-14T18:30"), zone)
+
+        assertEquals(null, tried.routineName)
+        assertEquals(null, tried.routineDayName)
+
+        val finished = tried.finish(at("2026-09-14T19:15"))
+        assertFalse(finished.isActive)
+        assertFalse(finished.isBackdated(zone))
+        assertEquals(null, finished.routineDayName)
+    }
+
+    @Test
     fun `a session is active until it is finished`() {
         val session = Session.start(at("2026-09-14T18:30"), zone)
 

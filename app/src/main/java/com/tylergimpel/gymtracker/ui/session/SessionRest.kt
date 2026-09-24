@@ -64,7 +64,7 @@ class SessionRest(
 ) {
     private val held = MutableStateFlow(RestState())
 
-    /** Whether this session has already asked; the lifter's answer is theirs to change, not ours. */
+    /** Whether the app has asked since it opened; the lifter's answer is theirs to change, not ours. */
     private var askedToShowCountdown = false
 
     val state: StateFlow<RestState> = held.asStateFlow()

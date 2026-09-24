@@ -1363,24 +1363,11 @@ private fun RestDialog(
 }
 
 /**
- * The line under the wheel: where the lifter is, how long is left, and any rest that is running.
- *
- * Both halves of "where" together — "set 4 · working 2" — because a ramp of three warm-ups and one
- * working set is not four sets of training, and a screen that counts them as four makes it look
- * like one. Totals appear only where something has actually planned them; inventing one would be
- * stating a plan nobody made.
- */
-/**
- * What a lifter can be sent to fix, when a rest cannot reach them.
- *
- * Both are permissions the app is allowed to ask for and neither is one it can grant itself, so
- * what the screen offers is the trip to the place that can.
- */
-/**
  * One tip on the first session, covering the two things the screen leaves undecorated.
  *
- * The unit carries no underline and the routine drawer's handle no label, on the understanding
- * that both are taught here. Two things at once is fine; ten would not be. Neither depends on it:
+ * The unit carries no underline and the routine drawer is reached by a swipe as well as by its
+ * one-word handle, on the understanding that both are taught here. Two things at once is fine;
+ * ten would not be. Neither depends on it:
  * the unit is also set from the exercise's own screen (#89), and the drawer opens by a tap on its
  * handle as well as a swipe.
  */
@@ -1519,6 +1506,14 @@ private fun PlateLineRow(line: PlateLine, unit: WeightUnit) {
     )
 }
 
+/**
+ * The line under the wheel: where the lifter is, how long is left, and any rest that is running.
+ *
+ * Both halves of "where" together — "set 4 · working 2" — because a ramp of three warm-ups and one
+ * working set is not four sets of training, and a screen that counts them as four makes it look
+ * like one. Totals appear only where something has actually planned them; inventing one would be
+ * stating a plan nobody made.
+ */
 @Composable
 private fun WheelFooting(
     state: SessionUiState,

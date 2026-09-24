@@ -40,8 +40,8 @@ import java.time.Year
  *
  * **Every field is optional, and the screen says what each is for** (#87). The engine runs a
  * calibration ramp rather than a prediction, so a profile only shortens it: somebody who fills in
- * nothing trains exactly as well. Height is here to be kept if a lifter wants it kept, and is
- * never asked for anywhere.
+ * nothing trains exactly as well. Height has a field here for a lifter who wants it kept, and no
+ * flow anywhere prompts for it.
  */
 @Composable
 fun ProfileScreen(
@@ -106,8 +106,8 @@ fun ProfileScreen(
                     text = state.bodyweight?.let {
                         stringResource(
                             R.string.profile_bodyweight_latest,
-                            it.weight.asTextIn(state.displayUnit),
-                            stringResource(state.displayUnit.label),
+                            it.weight.asTextIn(state.preferredUnit),
+                            stringResource(state.preferredUnit.label),
                         )
                     } ?: stringResource(R.string.profile_bodyweight_none),
                     style = MaterialTheme.typography.bodyLarge,

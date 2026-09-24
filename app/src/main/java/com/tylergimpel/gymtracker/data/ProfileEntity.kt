@@ -64,7 +64,7 @@ data class ProfileEntity(
     @ColumnInfo(name = "birth_year")
     val birthYear: Int? = null,
 
-    /** Kept if the lifter wants it kept, and never asked for: nothing reads it (#87). */
+    /** Kept if the lifter wants it kept, and never asked for: the engine never reads it (#87). */
     @ColumnInfo(name = "height_cm")
     val heightCm: Double? = null,
 

@@ -142,8 +142,9 @@ data class CalibrationRamp(
          * near the light end of the stack rather than a load: pulley ratios differ between
          * manufacturers and nothing can be inferred across machines.
          *
-         * A barbell compound starts higher for a lifter who has given their bodyweight — see
-         * [raisedBy] — and never below the bar. Nothing else is raised.
+         * A barbell compound may start higher for a lifter who has given their bodyweight — see
+         * [raisedBy] — where that comes out above the bar, which for a pressing lift takes a heavy
+         * lifter. Never below the bar, and nothing else is raised.
          */
         private fun seedFor(exercise: Exercise, bar: Kilograms?, body: BodySize?): Kilograms {
             // A barbell starts at the bar, and the bar is a thing in the room rather than a

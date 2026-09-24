@@ -189,7 +189,7 @@
     <string name="profile_sex_male">Male</string>
     <string name="profile_experience_why">Only ever used to suggest moderate reps to somebody new who asks for high ones. Nothing is changed for you.</string>
     <string name="profile_birth_year">Age</string>
-    <string name="profile_birth_year_why">Kept as the year you were born, so it never goes out of date.</string>
+    <string name="profile_birth_year_why">Nothing uses it yet. Kept as the year you were born, so it never goes out of date.</string>
     <string name="profile_birth_year_field">Year born</string>
     <string name="profile_height">Height</string>
     <string name="profile_height_why">Kept if you want it kept. Nothing in the app uses it: once bodyweight is known, height says nothing about how much you can lift.</string>
