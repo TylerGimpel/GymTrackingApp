@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -29,6 +30,8 @@ internal fun WeightUnitChips(
     selected: WeightUnit,
     onReadIn: (WeightUnit) -> Unit,
     modifier: Modifier = Modifier,
+    /** A test tag for each chip, where a screen holds more than one row of these. */
+    chipTag: (WeightUnit) -> String? = { null },
     trailing: @Composable () -> Unit = {},
 ) {
     Row(
@@ -43,6 +46,7 @@ internal fun WeightUnitChips(
                 selected = candidate == selected,
                 onClick = { onReadIn(candidate) },
                 label = { Text(stringResource(candidate.label)) },
+                modifier = chipTag(candidate)?.let { Modifier.testTag(it) } ?: Modifier,
             )
         }
         trailing()

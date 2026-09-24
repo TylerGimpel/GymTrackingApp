@@ -142,6 +142,14 @@ data class ExerciseDetails(
      */
     val repRangeBottom: String = "",
     val repRangeTop: String = "",
+    /**
+     * The unit this exercise is read in: the same setting the logging screen's unit chip settles.
+     *
+     * Here as well as there because the chip is deliberately undecorated and taught once, by a tip
+     * the lifter can dismiss unread. **A tip that is the only route to a feature is a broken
+     * feature** (#29), so this is the route that does not depend on it.
+     */
+    val displayUnit: WeightUnit = WeightUnit.KILOGRAMS,
 ) {
 
     /**
@@ -841,6 +849,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                         .orEmpty(),
                     repRangeBottom = exercise.chosenRepRange?.bottom?.toString().orEmpty(),
                     repRangeTop = exercise.chosenRepRange?.top?.toString().orEmpty(),
+                    displayUnit = exercise.displayUnit,
                 ),
             )
         }
@@ -881,6 +890,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     ?.takeIf { it > 0 }
                     ?.let { state.value.lifterUnit.toKilograms(it) },
             )
+            // The same write the unit chip makes, so the two can never disagree about what this
+            // exercise is read in. Made only when it changed: saving the dialog for a note is not
+            // a statement about units.
+            val unitChanged = open.displayUnit != exercise.displayUnit
+            if (unitChanged) exercises.setDisplayUnit(open.exerciseId, open.displayUnit)
             // Both ends or neither, and a mistyped pair leaves what was there alone.
             when (val edit = open.repRangeEdit()) {
                 RepRangeEdit.Clear -> exercises.setRepRange(open.exerciseId, null)
@@ -904,7 +918,20 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                             is RepRangeEdit.Set -> edit.range
                             RepRangeEdit.Unusable -> it.selected?.chosenRepRange
                         },
+                        displayUnit = open.displayUnit,
                     ),
+                    // The controls re-read in the new unit, as they do when the chip is tapped —
+                    // unless this one set is overriding it, which a setting cannot reach.
+                    draft = if (unitChanged && !it.overridingDisplayUnit) {
+                        it.draft.readIn(open.displayUnit)
+                    } else {
+                        it.draft
+                    },
+                    rightDraft = if (unitChanged && !it.overridingDisplayUnit) {
+                        it.rightDraft.readIn(open.displayUnit)
+                    } else {
+                        it.rightDraft
+                    },
                 )
             }
         }

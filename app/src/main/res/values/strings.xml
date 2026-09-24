@@ -81,6 +81,7 @@
     <string name="session_open_plates">Plates</string>
     <string name="exercise_increment">Smallest step (blank = whatever the equipment does)</string>
     <string name="exercise_disliked">Never suggest this</string>
+    <string name="exercise_unit">Read this exercise in</string>
     <string name="exercise_rep_range">Reps (blank = whatever you are training for)</string>
     <string name="exercise_rep_range_bottom">From</string>
     <string name="exercise_rep_range_top">To</string>

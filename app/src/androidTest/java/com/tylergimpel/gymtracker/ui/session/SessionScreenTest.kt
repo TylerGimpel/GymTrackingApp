@@ -125,6 +125,31 @@ class SessionScreenTest {
     }
 
     @Test
+    fun anExercisesUnitCanBeSetFromItsOwnScreen() {
+        var changed: ExerciseDetails? = null
+        val details = ExerciseDetails(
+            exerciseId = bench.id,
+            name = bench.name,
+            note = "",
+            progressionModel = bench.progressionModel,
+            displayUnit = WeightUnit.KILOGRAMS,
+        )
+        compose.setContent {
+            SessionScreen(
+                state = state().copy(editingExercise = details),
+                exercises = ExerciseActions(onExerciseDetailsChange = { changed = it }),
+            )
+        }
+
+        // The undecorated unit on the logging screen is taught once, by a tip a lifter can dismiss
+        // unread. This is the route that does not depend on the tip: the exercise's own screen,
+        // where anybody looks for anything else about it (#89).
+        compose.onNodeWithTag(EXERCISE_UNIT_POUNDS).performClick()
+
+        assertEquals(WeightUnit.POUNDS, changed?.displayUnit)
+    }
+
+    @Test
     fun theScreenSaysNothingAboutItselfWhileItIsPrescribing() {
         compose.setContent { SessionScreen(state = state()) }
 

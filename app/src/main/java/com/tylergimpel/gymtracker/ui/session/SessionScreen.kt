@@ -684,6 +684,10 @@ private fun NextUp(
     }
 }
 
+/** The unit chips on an exercise's own screen, apart from the ones beside a set. */
+const val EXERCISE_UNIT_KILOGRAMS = "exercise-unit-kg"
+const val EXERCISE_UNIT_POUNDS = "exercise-unit-lb"
+
 /**
  * What the lifter calls this exercise, what they need to remember about it, and whether they want
  * it coached at all.
@@ -753,6 +757,21 @@ private fun ExerciseDetailsDialog(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                // The settled unit for this exercise, and the same setting the logging screen's
+                // chip changes. That chip is undecorated and taught once; this is where anybody who
+                // missed the tip finds it, beside everything else about the exercise.
+                Text(
+                    text = stringResource(R.string.exercise_unit),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                WeightUnitChips(
+                    selected = details.displayUnit,
+                    onReadIn = { onChange(details.copy(displayUnit = it)) },
+                    chipTag = { unit ->
+                        if (unit == WeightUnit.POUNDS) EXERCISE_UNIT_POUNDS else EXERCISE_UNIT_KILOGRAMS
+                    },
+                )
                 ProgressionModelChooser(details.progressionModel) {
                     onChange(details.copy(progressionModel = it))
                 }
