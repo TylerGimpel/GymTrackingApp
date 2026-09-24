@@ -67,6 +67,41 @@ class ImportTest {
         assertNull(matchExactly(setOf("Barbell Squat"), listOf(dropped))["Barbell Squat"])
     }
 
+    @Test
+    fun `the names needing a decision are listed once each, with how much history hangs on them`() {
+        val records = NeutralImport(
+            source = FITNOTES,
+            fingerprint = "f",
+            sets = listOf(
+                importedSet("Hammer Strength Row"),
+                importedSet("Barbell Squat"),
+                importedSet("Hip Thrust Machine"),
+                importedSet("Hammer Strength Row"),
+            ),
+        )
+
+        // Once per name, never per set, and the ones with the most history first: that is where a
+        // wrong decision would cost the most (#99).
+        assertEquals(
+            listOf(Unmatched("Hammer Strength Row", sets = 2), Unmatched("Hip Thrust Machine", sets = 1)),
+            unmatchedIn(records, listOf(squat, bench)),
+        )
+    }
+
+    @Test
+    fun `an exercise of the lifter's own is created to log what its sets were`() {
+        // A plank that arrives as a hold is a timed exercise, not a weight x reps one with no
+        // weight: the created exercise is whatever the history says it was.
+        assertEquals(LoggingType.TIME, loggingTypeOf(Performance.Timed(java.time.Duration.ofSeconds(40))))
+        assertEquals(LoggingType.BODYWEIGHT_REPS, loggingTypeOf(Performance.BodyweightReps(null, 12)))
+        assertEquals(LoggingType.WEIGHT_REPS, loggingTypeOf(Performance.WeightAndReps(Kilograms(60.0), 8)))
+        assertEquals(
+            LoggingType.DISTANCE_TIME,
+            loggingTypeOf(Performance.DistanceAndTime(Metres(5000.0), java.time.Duration.ofMinutes(28))),
+        )
+        assertEquals(LoggingType.ASSISTED, loggingTypeOf(Performance.Assisted(Kilograms(20.0), 8)))
+    }
+
     private val squat = exercise("Barbell Squat")
     private val bench = exercise("Bench Press")
 

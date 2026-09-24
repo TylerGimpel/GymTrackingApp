@@ -144,7 +144,10 @@ class ExerciseRepository(
      * Its id is a UUID, in an id space of its own: a bank update matches on the upstream string ids
      * it ships, so it can never find this row to correct or drop it.
      */
-    suspend fun createExercise(draft: NewExerciseDraft): String {
+    suspend fun createExercise(draft: NewExerciseDraft): String = createOwn(draft).id
+
+    /** The same, answering with the exercise itself, for a caller that goes on to use it. */
+    suspend fun createOwn(draft: NewExerciseDraft): Exercise {
         val own = Exercise(
             id = UUID.randomUUID().toString(),
             bankName = draft.name.trim(),
@@ -160,7 +163,7 @@ class ExerciseRepository(
             source = ExerciseSource.USER,
         )
         exercises.insert(own.toEntity())
-        return own.id
+        return own
     }
 
     /**

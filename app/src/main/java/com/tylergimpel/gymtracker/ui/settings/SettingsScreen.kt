@@ -39,6 +39,7 @@ import com.tylergimpel.gymtracker.ui.settingsFor
 import com.tylergimpel.gymtracker.data.ImportResult
 import com.tylergimpel.gymtracker.data.RefusedBecause
 import com.tylergimpel.gymtracker.data.ListedImport
+import com.tylergimpel.gymtracker.domain.NameDecision
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import java.time.ZoneId
@@ -125,6 +126,10 @@ fun SettingsScreen(
         onAskToUndo = viewModel::askToUndo,
         onUndoImport = viewModel::undoImport,
         onKeepImport = viewModel::keepImport,
+        onDecide = viewModel::decide,
+        onChooseSameAs = viewModel::chooseSameAs,
+        onImportWithDecisions = viewModel::importWithDecisions,
+        onCancelMapping = viewModel::cancelMapping,
     )
 }
 
@@ -149,6 +154,10 @@ fun SettingsScreen(
     onAskToUndo: (ListedImport) -> Unit = {},
     onUndoImport: () -> Unit = {},
     onKeepImport: () -> Unit = {},
+    onDecide: (String, NameDecision) -> Unit = { _, _ -> },
+    onChooseSameAs: (String?) -> Unit = {},
+    onImportWithDecisions: () -> Unit = {},
+    onCancelMapping: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -160,6 +169,18 @@ fun SettingsScreen(
             )
         },
     ) { insets ->
+        // Deciding what an import's names mean takes the whole screen while it lasts (#99).
+        state.mapping?.let { mapping ->
+            MappingScreen(
+                mapping = mapping,
+                insets = insets,
+                onDecide = onDecide,
+                onChooseSameAs = onChooseSameAs,
+                onImport = onImportWithDecisions,
+                onCancel = onCancelMapping,
+            )
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -386,6 +407,15 @@ private fun ConfirmRestoreDialog(confirm: ConfirmRestore, onConfirm: () -> Unit,
 @Composable
 private fun importedText(result: ImportResult): String = buildList {
     add(stringResource(R.string.import_done, result.sessions, result.sets))
+    if (result.created.isNotEmpty()) add(stringResource(R.string.import_created, result.created.size))
+    if (result.createdWithoutMuscles.isNotEmpty()) {
+        add(
+            stringResource(
+                R.string.import_created_without_muscles,
+                result.createdWithoutMuscles.sorted().joinToString(", "),
+            ),
+        )
+    }
     if (result.unmatched.isNotEmpty()) {
         add(
             stringResource(

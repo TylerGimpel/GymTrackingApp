@@ -232,6 +232,17 @@
     <string name="import_undo_keep">Keep them</string>
     <string name="import_undone">Removed the %1$d sessions that import brought in.</string>
     <string name="import_already">Nothing was added: that file was already imported on %1$s. Undo that import first to bring it in again.</string>
+    <string name="mapping_count">%1$d exercise names from FitNotes need a decision</string>
+    <string name="mapping_why">They do not exactly match any exercise here. Each becomes an exercise of your own unless you say it is the same as one already here. Decided once for each name, not for each set.</string>
+    <string name="mapping_name">%1$s · %2$d sets</string>
+    <string name="mapping_own">My own</string>
+    <string name="mapping_same_as">Same as…</string>
+    <string name="mapping_same_as_chosen">Same as %1$s</string>
+    <string name="mapping_pick_title">%1$s is the same as</string>
+    <string name="mapping_import">Import</string>
+    <string name="mapping_cancel">Cancel</string>
+    <string name="import_created">%1$d exercises of your own were created for names FitNotes used.</string>
+    <string name="import_created_without_muscles">These count toward their own progress but toward no muscle, because FitNotes filed them under a category that names several: %1$s.</string>
     <string name="import_done">Brought in %1$d sessions, %2$d sets.</string>
     <string name="import_unmatched">%1$d sets were left out because their exercise names have no exact match here: %2$s.</string>
     <string name="import_not_yet">%1$d sets could not be read as any kind of set and were left out.</string>

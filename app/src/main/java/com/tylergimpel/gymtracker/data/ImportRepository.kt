@@ -6,6 +6,10 @@ import com.tylergimpel.gymtracker.domain.ImportedSet
 import com.tylergimpel.gymtracker.domain.NeutralImport
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.matchExactly
+import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.NameDecision
+import com.tylergimpel.gymtracker.domain.NewExerciseDraft
+import com.tylergimpel.gymtracker.domain.loggingTypeOf
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import java.time.Instant
@@ -29,6 +33,13 @@ data class ImportResult(
     val unmatched: Map<String, Int>,
     /** Sets read but not yet brought across, by why. */
     val notYetSupported: Map<String, Int>,
+    /** Exercises of the lifter's own created for unmatched names (#99). */
+    val created: List<String> = emptyList(),
+    /**
+     * Of those, the ones the source could not say the muscles of. Their sets count toward the
+     * exercise's own progression and history, and toward no muscle's volume.
+     */
+    val createdWithoutMuscles: List<String> = emptyList(),
 )
 
 /**
@@ -58,11 +69,19 @@ class ImportRepository(
      * up among the imports still standing, so importing the same backup twice does not double a
      * training history. An import that was undone is gone, so its file can come in again.
      */
-    suspend fun import(records: NeutralImport, bank: List<Exercise>): ImportOutcome = database.withTransaction {
+    suspend fun import(
+        records: NeutralImport,
+        bank: List<Exercise>,
+        /**
+         * What the lifter decided each unmatched name means, once per name (#99). A name with no
+         * decision is left out and counted, as it always was; nothing is ever guessed.
+         */
+        decisions: Map<String, NameDecision> = emptyMap(),
+    ): ImportOutcome = database.withTransaction {
         database.importBatchDao().withFingerprint(records.fingerprint)?.let {
             return@withTransaction ImportOutcome.AlreadyImported(it.importedAt)
         }
-        ImportOutcome.Imported(write(records, bank))
+        ImportOutcome.Imported(write(records, bank, decisions))
     }
 
     /**
@@ -83,7 +102,11 @@ class ImportRepository(
 
     suspend fun listed(): List<ListedImport> = database.importBatchDao().listed()
 
-    private suspend fun write(records: NeutralImport, bank: List<Exercise>): ImportResult {
+    private suspend fun write(
+        records: NeutralImport,
+        bank: List<Exercise>,
+        decisions: Map<String, NameDecision>,
+    ): ImportResult {
         val batchId = database.importBatchDao().insert(
             ImportBatchEntity(
                 source = records.source.id,
@@ -93,9 +116,16 @@ class ImportRepository(
             ),
         )
 
-        // Exactly or not at all: an unmatched name's sets are left out and counted, never put
-        // under an exercise that merely looks close (#99 gives them somewhere to go).
-        val matches = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank)
+        // Exactly or not at all, and then what the lifter decided for the rest: never a guess.
+        val exact = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank)
+        val created = mutableListOf<Exercise>()
+        val matches: Map<String, Exercise?> = exact.mapValues { (name, found) ->
+            found ?: when (val decision = decisions[name]) {
+                NameDecision.CreateOwn -> createFor(name, records).also { created += it }
+                is NameDecision.SameAs -> bank.firstOrNull { it.id == decision.exerciseId }
+                null -> null
+            }
+        }
         val matched = records.sets.mapNotNull { set -> matches[set.exerciseName]?.let { set to it.id } }
         val unmatched = records.sets.filter { matches[it.exerciseName] == null }
 
@@ -142,6 +172,25 @@ class ImportRepository(
             sets = matched.size,
             unmatched = unmatched.groupingBy(ImportedSet::exerciseName).eachCount(),
             notYetSupported = records.notYetSupported,
+            created = created.map(Exercise::name),
+            createdWithoutMuscles = created.filter { it.primaryMuscles.isEmpty() }.map(Exercise::name),
+        )
+    }
+
+    /**
+     * An exercise of the lifter's own for an unmatched [name], logging what its sets were and
+     * training what the source says it trains, where the source could say.
+     */
+    private suspend fun createFor(name: String, records: NeutralImport): Exercise {
+        val first = records.sets.first { it.exerciseName == name }
+        val loggingType = loggingTypeOf(first.performance)
+        return exercises.createOwn(
+            NewExerciseDraft(
+                name = name,
+                primaryMuscles = records.exercises[name]?.primaryMuscles.orEmpty(),
+                loggingType = loggingType,
+                category = if (loggingType == LoggingType.DISTANCE_TIME) CARDIO else STRENGTH,
+            ),
         )
     }
 
@@ -166,6 +215,12 @@ class ImportRepository(
             if (kept.increment != null && exercise.chosenIncrement == null) exercises.setIncrement(exercise.id, kept.increment)
             if (kept.rest != null && exercise.chosenRest == null) exercises.setRest(exercise.id, kept.rest)
         }
+    }
+
+    private companion object {
+        /** The bank's category values for a created exercise: cardio for a run, otherwise strength. */
+        const val CARDIO = "cardio"
+        const val STRENGTH = "strength"
     }
 }
 

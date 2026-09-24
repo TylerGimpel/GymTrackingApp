@@ -30,6 +30,9 @@ import com.tylergimpel.gymtracker.data.ImportRepository
 import com.tylergimpel.gymtracker.data.ImportResult
 import com.tylergimpel.gymtracker.data.ImportOutcome
 import com.tylergimpel.gymtracker.data.ListedImport
+import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.NameDecision
+import com.tylergimpel.gymtracker.domain.unmatchedIn
 import java.time.Instant
 import java.io.File
 import com.tylergimpel.gymtracker.domain.spreadsheetExport
@@ -58,6 +61,8 @@ data class SettingsUiState(
     val imports: List<ListedImport> = emptyList(),
     /** An import the lifter asked to undo, waiting on them to confirm: it removes history. */
     val confirmingUndo: ListedImport? = null,
+    /** An import waiting on the lifter to decide what its unmatched names mean (#99). */
+    val mapping: Mapping? = null,
 )
 
 /** A backup ready to restore, and what restoring it would replace. */
@@ -132,6 +137,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val importer = ImportRepository(database, profile = profile)
     private val confirmingUndo = MutableStateFlow<ListedImport?>(null)
+    private val mapping = MutableStateFlow<Mapping?>(null)
 
     val state: StateFlow<SettingsUiState> = combine(
         combine(
@@ -145,7 +151,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         },
         importer.observeListed(),
         confirmingUndo,
-    ) { settings, imports, undoing -> settings.copy(imports = imports, confirmingUndo = undoing) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState())
+        mapping,
+    ) { settings, imports, undoing, deciding ->
+        settings.copy(imports = imports, confirmingUndo = undoing, mapping = deciding)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState())
 
     fun setDisplayUnit(unit: WeightUnit) {
         viewModelScope.launch { profile.setDisplayUnit(unit) }
@@ -266,10 +275,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val records = withContext(Dispatchers.IO) { FitNotesParser.parse(copy) }
                 val bank = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
                     .observeBank().first()
-                when (val outcome = importer.import(records, bank)) {
-                    is ImportOutcome.Imported -> DataMessage.Imported(outcome.result)
-                    is ImportOutcome.AlreadyImported -> DataMessage.AlreadyImported(outcome.importedAt)
+                val unmatched = unmatchedIn(records, bank)
+                if (unmatched.isNotEmpty()) {
+                    // Decided by the lifter before anything is written, once per name (#99).
+                    mapping.value = Mapping(
+                        records = records,
+                        unmatched = unmatched,
+                        decisions = unmatched.associate { it.name to NameDecision.CreateOwn },
+                        bank = bank.filterNot(Exercise::isTombstoned),
+                    )
+                    return@launch
                 }
+                outcomeMessage(importer.import(records, bank))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failed: Exception) {
@@ -279,6 +296,43 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 copy.delete()
             }
         }
+    }
+
+    /** Records what one unmatched name means, closing the picker if it was open for it. */
+    fun decide(name: String, decision: NameDecision) {
+        mapping.value = mapping.value?.let {
+            it.copy(decisions = it.decisions + (name to decision), choosingFor = null)
+        }
+    }
+
+    /** Opens the picker to say what [name] is the same as, or closes it with null. */
+    fun chooseSameAs(name: String?) {
+        mapping.value = mapping.value?.copy(choosingFor = name)
+    }
+
+    /** Imports with every name decided. */
+    fun importWithDecisions() {
+        val decided = mapping.value ?: return
+        mapping.value = null
+        viewModelScope.launch {
+            dataMessage.value = try {
+                outcomeMessage(importer.import(decided.records, decided.bank, decided.decisions))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failed: Exception) {
+                DataMessage.NotImportable
+            }
+        }
+    }
+
+    /** Leaves the mapping with nothing imported. */
+    fun cancelMapping() {
+        mapping.value = null
+    }
+
+    private fun outcomeMessage(outcome: ImportOutcome): DataMessage = when (outcome) {
+        is ImportOutcome.Imported -> DataMessage.Imported(outcome.result)
+        is ImportOutcome.AlreadyImported -> DataMessage.AlreadyImported(outcome.importedAt)
     }
 
     /** Asks before undoing an import, because undoing removes the history it brought. */

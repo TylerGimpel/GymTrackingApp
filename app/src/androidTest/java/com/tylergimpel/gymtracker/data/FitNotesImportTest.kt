@@ -22,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import com.tylergimpel.gymtracker.domain.Metres
+import com.tylergimpel.gymtracker.domain.NameDecision
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -126,7 +127,7 @@ class FitNotesImportTest {
         val read = FitNotesParser.parse(fixture)
 
         assertTrue(read.notYetSupported.isEmpty())
-        assertEquals(9, read.sets.size)
+        assertEquals(11, read.sets.size)
     }
 
     @Test
@@ -137,7 +138,7 @@ class FitNotesImportTest {
         assertEquals(listOf(LocalDate.parse("2026-03-02"), LocalDate.parse("2026-03-05")), imported.map { it.session.date }.sorted())
         assertTrue(imported.all { it.session.importBatchId == result.batchId })
         assertTrue(imported.flatMap { it.exercises }.flatMap { it.sets }.all { it.type == SetType.WORKING })
-        // Everything but the one row whose name has no exact match.
+        // Everything but the three sets under names with no exact match, until they are decided.
         assertEquals(8, result.sets)
     }
 
@@ -146,7 +147,7 @@ class FitNotesImportTest {
         val result = importFixture()
 
         // "Hammer Strength Row" is near several bank rows and exactly none of them.
-        assertEquals(mapOf("Hammer Strength Row" to 1), result.unmatched)
+        assertEquals(mapOf("Hammer Strength Row" to 2, "Pec Deck Machine" to 1), result.unmatched)
         val imported = sessions().observeRecent(limit = 100).first().filter { it.session.isImported }
         assertFalse(imported.flatMap { it.exercises }.any { it.exercise.name.contains("Row") })
     }
@@ -219,6 +220,44 @@ class FitNotesImportTest {
         assertEquals(Duration.ofSeconds(90), curl.chosenRest)
         // A choice already made here is the lifter's, and an import does not overwrite it.
         assertEquals("My note", bank().single { it.id == BENCH }.note)
+    }
+
+    @Test
+    fun anUnmatchedNameBecomesAnExerciseOfTheLiftersOwnByDefault() = runBlocking {
+        val result = (
+            imports().import(
+                FitNotesParser.parse(fixture),
+                bank(),
+                decisions = mapOf("Hammer Strength Row" to NameDecision.CreateOwn, "Pec Deck Machine" to NameDecision.CreateOwn),
+            ) as ImportOutcome.Imported
+            ).result
+
+        // For a gym full of machines the bank has never heard of, this is the right outcome (#99).
+        assertTrue(result.unmatched.isEmpty())
+        assertEquals(setOf("Hammer Strength Row", "Pec Deck Machine"), result.created.toSet())
+        val pecDeck = bank().single { it.name == "Pec Deck Machine" }
+        assertEquals(listOf("chest"), pecDeck.primaryMuscles)
+        // FitNotes filed the row under Back, which names no single muscle, so none is guessed —
+        // and the summary says which exercises came across that way.
+        assertTrue(bank().single { it.name == "Hammer Strength Row" }.primaryMuscles.isEmpty())
+        assertEquals(listOf("Hammer Strength Row"), result.createdWithoutMuscles)
+        // Once per name: both of the row's sets came in under the one exercise.
+        val rows = importedSessions().flatMap { it.exercises }.filter { it.exercise.name == "Hammer Strength Row" }
+        assertEquals(2, rows.sumOf { it.sets.size })
+    }
+
+    @Test
+    fun anUnmatchedNameCanBeTheSameAsAnExerciseTheLifterChooses() = runBlocking {
+        imports().import(
+            FitNotesParser.parse(fixture),
+            bank(),
+            decisions = mapOf("Hammer Strength Row" to NameDecision.SameAs(BENT_OVER_ROW)),
+        )
+
+        // The lifter's decision, and never a guess: both sets under the row they chose.
+        val chosen = importedSessions().flatMap { it.exercises }.filter { it.exercise.id == BENT_OVER_ROW }
+        assertEquals(2, chosen.sumOf { it.sets.size })
+        assertTrue(bank().none { it.name == "Hammer Strength Row" })
     }
 
     @Test
@@ -379,6 +418,11 @@ class FitNotesImportTest {
             ).forEach {
                 db.execSQL("INSERT INTO exercise (_id, name, exercise_type_id, weight_unit_id) VALUES (?, ?, ?, ?)", it)
             }
+            // FitNotes' categories: Chest names one muscle, Back names several.
+            db.execSQL("CREATE TABLE Category (_id INTEGER PRIMARY KEY, name TEXT, colour INTEGER, sort_order INTEGER)")
+            db.execSQL("INSERT INTO Category (_id, name) VALUES (1, 'Chest'), (2, 'Back')")
+            db.execSQL("INSERT INTO exercise (_id, name, exercise_type_id, weight_unit_id, category_id) VALUES (8, 'Pec Deck Machine', 0, 1, 1)")
+            db.execSQL("UPDATE exercise SET category_id = 2 WHERE _id = 3")
             // Everything FitNotes keeps about an exercise, on one of them, and a note on another.
             db.execSQL(
                 "UPDATE exercise SET notes = 'Supinate at the top', weight_increment = 1.13, default_rest_time = 90 WHERE _id = 7",
@@ -400,6 +444,9 @@ class FitNotesImportTest {
                 arrayOf<Any?>(8, 5, "2026-03-05", 0.0, null, 1200, 5000),
                 // 25 lb, as FitNotes stores it: already kilograms.
                 arrayOf<Any?>(9, 7, "2026-03-05", 11.34, 10, null, null),
+                // More under names the bank does not have: a machine, and a second row set.
+                arrayOf<Any?>(10, 8, "2026-03-05", 45, 12, null, null),
+                arrayOf<Any?>(11, 3, "2026-03-05", 55, 8, null, null),
             ).forEach {
                 db.execSQL(
                     "INSERT INTO training_log (_id, exercise_id, date, metric_weight, reps, unit, duration_seconds, distance) " +
@@ -415,5 +462,6 @@ class FitNotesImportTest {
         const val TEST_DATABASE = "fitnotes-import-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val SQUAT_ID = "Barbell_Squat"
+        const val BENT_OVER_ROW = "Bent_Over_Barbell_Row"
     }
 }

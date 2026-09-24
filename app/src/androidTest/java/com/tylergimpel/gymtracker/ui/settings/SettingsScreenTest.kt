@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.ui.settings
 
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -7,6 +9,12 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tylergimpel.gymtracker.data.Backup
 import com.tylergimpel.gymtracker.data.WouldReplace
+import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.FITNOTES
+import com.tylergimpel.gymtracker.domain.LoggingType
+import com.tylergimpel.gymtracker.domain.NameDecision
+import com.tylergimpel.gymtracker.domain.NeutralImport
+import com.tylergimpel.gymtracker.domain.Unmatched
 import com.tylergimpel.gymtracker.ui.RestFix
 import com.tylergimpel.gymtracker.ui.session.RestAlerts
 import org.junit.Assert.assertEquals
@@ -87,6 +95,83 @@ class SettingsScreenTest {
         compose.onAllNodesWithText("Allow alarms")[0].performClick()
 
         assertEquals(RestFix.EXACT_ALARMS, fixed)
+    }
+
+    @Test
+    fun unmatchedNamesAreCountedUpFrontAndEachIsTheLiftersOwnUntilSaidOtherwise() {
+        var imported = 0
+        var choosing: String? = null
+        compose.setContent {
+            SettingsScreen(
+                state = SettingsUiState(mapping = mapping()),
+                onChooseSameAs = { choosing = it },
+                onImportWithDecisions = { imported++ },
+            )
+        }
+
+        // The size of the chore before any of it (#99), and the default for every name.
+        compose.onNodeWithText("2 exercise names from FitNotes need a decision").assertExists()
+        compose.onNodeWithText("Hammer Strength Row · 14 sets").assertExists()
+        compose.onAllNodesWithText("My own").assertCountEquals(2)
+        compose.onAllNodesWithText("My own")[0].assertIsSelected()
+
+        compose.onAllNodesWithText("Same as…")[0].performClick()
+        assertEquals("Hammer Strength Row", choosing)
+
+        compose.onNodeWithText("Import").performClick()
+        assertEquals(1, imported)
+    }
+
+    @Test
+    fun aNameIsSaidToBeTheSameAsAnExerciseChosenFromTheBank() {
+        var decided: Pair<String, NameDecision>? = null
+        compose.setContent {
+            SettingsScreen(
+                state = SettingsUiState(mapping = mapping().copy(choosingFor = "Hammer Strength Row")),
+                onDecide = { name, decision -> decided = name to decision },
+            )
+        }
+
+        // Only what is here to choose from: a mapped name never makes a new exercise.
+        compose.onNodeWithText("Hammer Strength Row is the same as").assertExists()
+        compose.onNodeWithText("Add new", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Bent Over Barbell Row").performClick()
+
+        assertEquals("Hammer Strength Row" to NameDecision.SameAs("Bent_Over_Barbell_Row"), decided)
+    }
+
+    @Test
+    fun aDecidedNameSaysWhatItIsTheSameAs() {
+        val decided = mapping().let {
+            it.copy(decisions = it.decisions + ("Pec Deck Machine" to NameDecision.SameAs("Bent_Over_Barbell_Row")))
+        }
+        compose.setContent { SettingsScreen(state = SettingsUiState(mapping = decided)) }
+
+        compose.onNodeWithText("Same as Bent Over Barbell Row").assertIsSelected()
+    }
+
+    private fun mapping(): Mapping {
+        val unmatched = listOf(Unmatched("Hammer Strength Row", sets = 14), Unmatched("Pec Deck Machine", sets = 3))
+        return Mapping(
+            records = NeutralImport(source = FITNOTES, fingerprint = "f", sets = emptyList()),
+            unmatched = unmatched,
+            decisions = unmatched.associate { it.name to NameDecision.CreateOwn },
+            bank = listOf(
+                Exercise(
+                    id = "Bent_Over_Barbell_Row",
+                    bankName = "Bent Over Barbell Row",
+                    primaryMuscles = listOf("middle back"),
+                    secondaryMuscles = emptyList(),
+                    equipment = "barbell",
+                    mechanic = "compound",
+                    force = "pull",
+                    category = "strength",
+                    level = "beginner",
+                    loggingType = LoggingType.WEIGHT_REPS,
+                    unilateral = false,
+                ),
+            ),
+        )
     }
 
     @Test

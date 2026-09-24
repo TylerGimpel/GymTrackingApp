@@ -58,7 +58,8 @@ fun ExercisePicker(
     bank: List<Exercise>,
     equipment: Set<String>,
     onPick: (Exercise) -> Unit,
-    onAddNew: () -> Unit,
+    /** Where adding an exercise the bank lacks makes sense; null hides it, as mapping a name does. */
+    onAddNew: (() -> Unit)?,
     onCancel: () -> Unit,
     suggested: List<Exercise> = emptyList(),
     note: String? = null,
@@ -141,7 +142,7 @@ fun ExercisePicker(
         // The way out of the bank entirely, for a machine the app has never heard of. Given the
         // same room as the list, because nobody is ever stuck with what is offered.
         confirmButton = {
-            TextButton(onClick = onAddNew) { Text(stringResource(R.string.picker_add_new)) }
+            onAddNew?.let { TextButton(onClick = it) { Text(stringResource(R.string.picker_add_new)) } }
         },
         dismissButton = {
             TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }

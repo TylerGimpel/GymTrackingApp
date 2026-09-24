@@ -40,6 +40,13 @@ val FITNOTES = ImportSource(id = "fitnotes", declaresSetTypes = false, declaresS
  * a choice this app has not already been given (see `ImportRepository`).
  */
 data class ImportedExercise(
+    /**
+     * What the source says it trains, where that is plain from what it kept.
+     *
+     * Only ever used for an exercise created from an unmatched name (#99), so that its sets count
+     * toward the right muscle's volume. Empty where the source could not say.
+     */
+    val primaryMuscles: List<String> = emptyList(),
     val note: String? = null,
     /** The unit the lifter read it in there, where that was an explicit choice. */
     val displayUnit: WeightUnit? = null,
@@ -113,3 +120,43 @@ fun matchExactly(names: Set<String>, bank: List<Exercise>): Map<String, Exercise
 private fun normalised(name: String): String = name.trim().lowercase().replace(WHITESPACE, " ")
 
 private val WHITESPACE = Regex("\\s+")
+
+/** A name from the source with no exact match here, and how many sets hang on it. */
+data class Unmatched(val name: String, val sets: Int)
+
+/**
+ * What the lifter decided an unmatched name means, once for every set under it (#99).
+ *
+ * **Creating an exercise of their own is the default**, and for a gym full of machines the bank
+ * has never heard of it is the correct outcome rather than a failure.
+ */
+sealed interface NameDecision {
+    /** A new exercise of the lifter's own, under the name they gave it there. */
+    data object CreateOwn : NameDecision
+
+    /** The same exercise as one already here, which the lifter chose themselves. */
+    data class SameAs(val exerciseId: String) : NameDecision
+}
+
+/**
+ * Every name in [records] with no exact match in [bank], once each, most history first.
+ *
+ * Most first because that is where a wrong decision would cost the most; and once each, because
+ * the mapping is a single chore against years of history rather than a question per set.
+ */
+fun unmatchedIn(records: NeutralImport, bank: List<Exercise>): List<Unmatched> {
+    val matched = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank)
+    return records.sets.filter { matched[it.exerciseName] == null }
+        .groupingBy(ImportedSet::exerciseName).eachCount()
+        .map { (name, sets) -> Unmatched(name, sets) }
+        .sortedWith(compareByDescending<Unmatched> { it.sets }.thenBy { it.name })
+}
+
+/** The **Logging type** a set like this one is recorded in, for an exercise created to hold it. */
+fun loggingTypeOf(performance: Performance): LoggingType = when (performance) {
+    is Performance.WeightAndReps -> LoggingType.WEIGHT_REPS
+    is Performance.BodyweightReps -> LoggingType.BODYWEIGHT_REPS
+    is Performance.Assisted -> LoggingType.ASSISTED
+    is Performance.Timed -> LoggingType.TIME
+    is Performance.DistanceAndTime -> LoggingType.DISTANCE_TIME
+}

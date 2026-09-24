@@ -44,6 +44,10 @@ import java.time.LocalDate
  *   on the day it was done.
  * - **A set's note is a `Comment`** of owner type 1 pointing at the set. Some point at sets that
  *   were since deleted — 13 in the author's file — which is expected, and they are skipped.
+ * - **A FitNotes category** says what an exercise trains where it names one muscle — Chest,
+ *   Shoulders, Biceps, Triceps, Abs, Wrist — and is left unsaid where it covers several: Back and
+ *   Legs name no single muscle, and guessing one would put a hamstring curl's volume on the
+ *   quadriceps. Read only for an exercise the lifter chooses to create (#99).
  * - **Per-exercise settings** are read defensively: the author's file never set one, so the unit
  *   ids and the rest-time unit are unverified. Unit 1 is read as kilograms and 2 as pounds, with 0
  *   as "no choice"; rest as seconds, as FitNotes' own rest timer counts; increment as kilograms.
@@ -138,9 +142,15 @@ object FitNotesParser {
 
     /** What FitNotes kept about each exercise the lifter set anything on, by its name there. */
     private fun exercisesIn(db: SQLiteDatabase): Map<String, ImportedExercise> = buildMap {
-        db.rawQuery("SELECT name, notes, weight_unit_id, weight_increment, default_rest_time FROM exercise", null).use { rows ->
+        val categories = categoriesIn(db)
+        db.rawQuery(
+            "SELECT name, notes, weight_unit_id, weight_increment, default_rest_time, category_id FROM exercise",
+            null,
+        ).use { rows ->
             while (rows.moveToNext()) {
                 val kept = ImportedExercise(
+                    primaryMuscles = rows.intOrNull(5)?.let(categories::get)?.let(MUSCLE_OF_CATEGORY::get)
+                        ?.let(::listOf).orEmpty(),
                     note = rows.getString(1)?.takeIf(String::isNotBlank),
                     displayUnit = when (rows.intOrNull(2)) {
                         KILOGRAMS_UNIT -> WeightUnit.KILOGRAMS
@@ -152,6 +162,14 @@ object FitNotesParser {
                 )
                 if (kept != ImportedExercise()) put(rows.getString(0), kept)
             }
+        }
+    }
+
+    /** FitNotes' categories, id to name. */
+    private fun categoriesIn(db: SQLiteDatabase): Map<Int, String> = buildMap {
+        if (!db.hasTable("Category")) return@buildMap
+        db.rawQuery("SELECT _id, name FROM Category", null).use { rows ->
+            while (rows.moveToNext()) put(rows.getInt(0), rows.getString(1))
         }
     }
 
@@ -180,6 +198,19 @@ object FitNotesParser {
 
     /** FitNotes' `exercise_type_id` for a hold, verified against a real file. */
     private const val TIMED = 3
+
+    /**
+     * FitNotes' default categories that name a single muscle, as the bank names it. Back and Legs
+     * are left out on purpose: each covers several muscles, and Cardio covers none.
+     */
+    private val MUSCLE_OF_CATEGORY = mapOf(
+        "Chest" to "chest",
+        "Shoulders" to "shoulders",
+        "Biceps" to "biceps",
+        "Triceps" to "triceps",
+        "Abs" to "abdominals",
+        "Wrist" to "forearms",
+    )
 
     /** The `Comment.owner_type_id` of a note on a set; every comment in the author's file. */
     private const val SET_COMMENT = 1
