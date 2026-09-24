@@ -36,6 +36,14 @@ data class RestState(
     val forThisSet: Duration? = null,
     /** What the rest timer is currently able to do, as last read from the platform. */
     val alerts: RestAlerts = RestAlerts(),
+    /**
+     * Whether the screen should ask to show the countdown now.
+     *
+     * Raised by the first rest that has nowhere to show its countdown, and by nothing else: the
+     * reason for the permission is obvious at that moment and at no earlier one (#88). The screen
+     * asks, because only it has an activity to ask with, and says so with [SessionRest.asked].
+     */
+    val askToShowCountdown: Boolean = false,
 )
 
 /**
@@ -55,6 +63,9 @@ class SessionRest(
     private val clock: Clock,
 ) {
     private val held = MutableStateFlow(RestState())
+
+    /** Whether this session has already asked; the lifter's answer is theirs to change, not ours. */
+    private var askedToShowCountdown = false
 
     val state: StateFlow<RestState> = held.asStateFlow()
 
@@ -84,9 +95,17 @@ class SessionRest(
      */
     fun start(length: Duration) {
         val resting = Resting(clock.instant(), length)
-        held.update { it.copy(running = resting) }
+        val ask = !askedToShowCountdown && !notifications.canBeSeen()
+        held.update { it.copy(running = resting, askToShowCountdown = ask) }
         alarms.schedule(restEnding(resting.startedAt, length))
         notifications.countDownTo(resting.endsAt)
+    }
+
+    /** The screen has asked to show the countdown; whatever the answer, it is not asked again. */
+    fun asked() {
+        askedToShowCountdown = true
+        held.update { it.copy(askToShowCountdown = false) }
+        recheckAlerts()
     }
 
     /**

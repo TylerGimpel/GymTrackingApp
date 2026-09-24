@@ -133,6 +133,41 @@ class SessionRestTest {
         assertTrue(rest.state.value.alerts.countdownVisible)
     }
 
+    @Test
+    fun `nothing is asked for before a rest has started`() {
+        val rest = SessionRest(FakeAlarms(), FakeCountdown(visible = false), fixed)
+
+        // An app whose first act is a permission prompt has spent its credibility before showing
+        // anything (#88). Opening the screen is not a reason; resting is.
+        assertFalse(rest.state.value.askToShowCountdown)
+    }
+
+    @Test
+    fun `the first rest asks to show its countdown, and only the first`() {
+        val rest = SessionRest(FakeAlarms(), FakeCountdown(visible = false), fixed)
+
+        rest.start(Duration.ofMinutes(2))
+        // The moment the reason is obvious: there is a countdown, and nowhere yet to show it.
+        assertTrue(rest.state.value.askToShowCountdown)
+
+        rest.asked()
+        rest.end()
+        rest.start(Duration.ofMinutes(2))
+
+        // Once. A lifter who said no has answered, and the standing line is what says how to
+        // change their mind — not a prompt at the start of every rest.
+        assertFalse(rest.state.value.askToShowCountdown)
+    }
+
+    @Test
+    fun `a countdown already allowed is not asked about`() {
+        val rest = SessionRest(FakeAlarms(), FakeCountdown(visible = true), fixed)
+
+        rest.start(Duration.ofMinutes(2))
+
+        assertFalse(rest.state.value.askToShowCountdown)
+    }
+
     private class FakeAlarms(var reliable: Boolean = true) : RestAlarms {
         var scheduled: ScheduledRest? = null
         var cancelled = false

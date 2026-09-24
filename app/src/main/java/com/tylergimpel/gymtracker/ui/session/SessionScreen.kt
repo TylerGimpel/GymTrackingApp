@@ -134,15 +134,19 @@ fun SessionScreen(
 
     val askAboutNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { viewModel.recheckRestAlerts() }
+    ) { viewModel.askedToShowRestCountdown() }
 
-    // Asked once, on the way in. On Android 13 and later an app that never asks simply never
-    // appears, and the countdown is the whole of the rest timer to a lifter with a phone in a
-    // pocket. The system shows this at most once; the standing line below is what catches the
-    // lifter who said no, or who turned notifications off later.
-    LaunchedEffect(Unit) {
+    // Asked when the first rest starts, and not before (#88). That is the moment the reason is
+    // obvious — there is a countdown and nowhere to show it — where asking on the way in would be
+    // the app's first act being a demand. On Android 13 and later an app that never asks never
+    // appears; the standing line below is what catches a lifter who said no, or turned
+    // notifications off later.
+    LaunchedEffect(state.askToShowRestCountdown) {
+        if (!state.askToShowRestCountdown) return@LaunchedEffect
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             askAboutNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.askedToShowRestCountdown()
         }
     }
 

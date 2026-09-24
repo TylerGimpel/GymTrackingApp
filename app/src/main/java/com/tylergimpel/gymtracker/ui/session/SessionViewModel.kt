@@ -324,6 +324,8 @@ data class SessionUiState(
      * by missing a set rather than by seeing an error.
      */
     val restAlarmsAreReliable: Boolean = true,
+    /** Whether to ask, now, to show the rest countdown: true once, on the first rest that needs it. */
+    val askToShowRestCountdown: Boolean = false,
     /**
      * Whether the countdown will actually appear.
      *
@@ -528,6 +530,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 resting = rest.running,
                 restAlarmsAreReliable = rest.alerts.alarmsAreReliable,
                 restCountdownVisible = rest.alerts.countdownVisible,
+                askToShowRestCountdown = rest.askToShowCountdown,
                 plateLine = forThisExercise?.plateLine,
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(
@@ -724,6 +727,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun recheckRestAlerts() = restTimer.recheckAlerts()
+
+    /** The screen has asked to show the rest countdown, whatever the lifter answered. */
+    fun askedToShowRestCountdown() = restTimer.asked()
 
     fun addTimeToRest() = restTimer.addTime()
 
