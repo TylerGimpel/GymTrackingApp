@@ -232,6 +232,11 @@
     <string name="import_undo_keep">Keep them</string>
     <string name="import_undone">Removed the %1$d sessions that import brought in.</string>
     <string name="import_already">Nothing was added: that file was already imported on %1$s. Undo that import first to bring it in again.</string>
+    <string name="preview_what">%1$d sessions and %2$d sets, from %3$s to %4$s, will be brought in.</string>
+    <string name="preview_nothing">Nothing in this file can be brought in.</string>
+    <string name="preview_unreadable">%1$d sets cannot be read as any kind of set and will be left out.</string>
+    <string name="import_volume_approximate">FitNotes never recorded which sets were warm-ups, so volume from before the import is approximate. Your strength history is reliable all the way back.</string>
+    <string name="import_how_to_undo">To take it all back out, use Undo next to it under Your data.</string>
     <string name="mapping_count">%1$d exercise names from FitNotes need a decision</string>
     <string name="mapping_why">They do not exactly match any exercise here. Each becomes an exercise of your own unless you say it is the same as one already here. Decided once for each name, not for each set.</string>
     <string name="mapping_name">%1$s · %2$d sets</string>

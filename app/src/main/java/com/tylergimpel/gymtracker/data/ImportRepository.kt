@@ -33,6 +33,11 @@ data class ImportResult(
     val unmatched: Map<String, Int>,
     /** Sets read but not yet brought across, by why. */
     val notYetSupported: Map<String, Int>,
+    /**
+     * Whether the source said what each set was. Where it did not, volume from before the import
+     * is approximate, while strength history is as reliable as the log (#96, #103).
+     */
+    val volumeReliable: Boolean = true,
     /** Exercises of the lifter's own created for unmatched names (#99). */
     val created: List<String> = emptyList(),
     /**
@@ -96,6 +101,10 @@ class ImportRepository(
         database.importBatchDao().deleteSessionsOf(batchId)
         database.importBatchDao().delete(batchId)
     }
+
+    /** When a file with this fingerprint was imported, or null if it never was (or was undone). */
+    suspend fun importedAt(fingerprint: String): Instant? =
+        database.importBatchDao().withFingerprint(fingerprint)?.importedAt
 
     /** Every import still standing, newest first, with how many sessions each brought in. */
     fun observeListed(): Flow<List<ListedImport>> = database.importBatchDao().observeListed()
@@ -172,6 +181,7 @@ class ImportRepository(
             sets = matched.size,
             unmatched = unmatched.groupingBy(ImportedSet::exerciseName).eachCount(),
             notYetSupported = records.notYetSupported,
+            volumeReliable = records.source.volumeIsReliable,
             created = created.map(Exercise::name),
             createdWithoutMuscles = created.filter { it.primaryMuscles.isEmpty() }.map(Exercise::name),
         )

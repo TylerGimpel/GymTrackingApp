@@ -102,6 +102,42 @@ class ImportTest {
         assertEquals(LoggingType.ASSISTED, loggingTypeOf(Performance.Assisted(Kilograms(20.0), 8)))
     }
 
+    @Test
+    fun `a preview says what an import is about to bring in before anything is written`() {
+        val records = NeutralImport(
+            source = FITNOTES,
+            fingerprint = "f",
+            sets = listOf(
+                importedSet("Barbell Squat").copy(date = LocalDate.parse("2024-01-08")),
+                importedSet("Barbell Squat").copy(date = LocalDate.parse("2024-01-08")),
+                importedSet("Hammer Strength Row").copy(date = LocalDate.parse("2026-03-02")),
+                importedSet("Bench Press").copy(date = LocalDate.parse("2025-06-10")),
+            ),
+            notYetSupported = mapOf("unreadable" to 3),
+        )
+
+        // One session a date, as the import files them (#103): what it says is what it will do.
+        assertEquals(
+            ImportPreview(
+                from = LocalDate.parse("2024-01-08"),
+                to = LocalDate.parse("2026-03-02"),
+                sessions = 3,
+                sets = 4,
+                unreadable = 3,
+                unmatched = listOf(Unmatched("Hammer Strength Row", sets = 1)),
+            ),
+            previewOf(records, listOf(squat, bench)),
+        )
+    }
+
+    @Test
+    fun `a file with nothing readable in it previews as empty rather than failing`() {
+        val preview = previewOf(NeutralImport(source = FITNOTES, fingerprint = "f", sets = emptyList()), listOf(squat))
+
+        assertNull(preview.from)
+        assertEquals(0, preview.sessions)
+    }
+
     private val squat = exercise("Barbell Squat")
     private val bench = exercise("Bench Press")
 

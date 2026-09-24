@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.ui.settings
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -10,7 +11,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tylergimpel.gymtracker.data.Backup
 import com.tylergimpel.gymtracker.data.WouldReplace
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.data.ImportResult
 import com.tylergimpel.gymtracker.domain.FITNOTES
+import com.tylergimpel.gymtracker.domain.ImportPreview
 import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.NameDecision
 import com.tylergimpel.gymtracker.domain.NeutralImport
@@ -21,6 +24,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.LocalDate
 
 /**
  * Settings says whether a rest can reach the lifter before they find out by missing one (#91).
@@ -103,7 +107,7 @@ class SettingsScreenTest {
         var choosing: String? = null
         compose.setContent {
             SettingsScreen(
-                state = SettingsUiState(mapping = mapping()),
+                state = SettingsUiState(previewing = previewing()),
                 onChooseSameAs = { choosing = it },
                 onImportWithDecisions = { imported++ },
             )
@@ -127,7 +131,7 @@ class SettingsScreenTest {
         var decided: Pair<String, NameDecision>? = null
         compose.setContent {
             SettingsScreen(
-                state = SettingsUiState(mapping = mapping().copy(choosingFor = "Hammer Strength Row")),
+                state = SettingsUiState(previewing = previewing().copy(choosingFor = "Hammer Strength Row")),
                 onDecide = { name, decision -> decided = name to decision },
             )
         }
@@ -142,19 +146,80 @@ class SettingsScreenTest {
 
     @Test
     fun aDecidedNameSaysWhatItIsTheSameAs() {
-        val decided = mapping().let {
+        val decided = previewing().let {
             it.copy(decisions = it.decisions + ("Pec Deck Machine" to NameDecision.SameAs("Bent_Over_Barbell_Row")))
         }
-        compose.setContent { SettingsScreen(state = SettingsUiState(mapping = decided)) }
+        compose.setContent { SettingsScreen(state = SettingsUiState(previewing = decided)) }
 
         compose.onNodeWithText("Same as Bent Over Barbell Row").assertIsSelected()
     }
 
-    private fun mapping(): Mapping {
+    @Test
+    fun aPickedFileSaysWhatItWillBringInAndBackingOutWritesNothing() {
+        var cancelled = 0
+        var imported = 0
+        compose.setContent {
+            SettingsScreen(
+                state = SettingsUiState(previewing = previewing()),
+                onCancelPreview = { cancelled++ },
+                onImportWithDecisions = { imported++ },
+            )
+        }
+
+        // Before anything is written (#103): how much, over when, what is left out, and the
+        // honest word on volume.
+        compose.onNodeWithText("212 sessions and 2234 sets", substring = true).assertExists()
+        compose.onNodeWithText("from Jan 8, 2024 to Mar 2, 2026", substring = true).assertExists()
+        compose.onNodeWithText("5 sets cannot be read", substring = true).assertExists()
+        compose.onNodeWithText("volume from before the import is approximate", substring = true).assertExists()
+
+        compose.onNodeWithText("Cancel").performClick()
+        assertEquals(1, cancelled)
+        assertEquals(0, imported)
+    }
+
+    @Test
+    fun aFileWithNothingReadableCannotBeImported() {
+        val empty = previewing().copy(
+            preview = ImportPreview(from = null, to = null, sessions = 0, sets = 0, unreadable = 4, unmatched = emptyList()),
+            decisions = emptyMap(),
+        )
+        compose.setContent { SettingsScreen(state = SettingsUiState(previewing = empty)) }
+
+        compose.onNodeWithText("Nothing in this file can be brought in.").assertExists()
+        compose.onNodeWithText("Import").assertIsNotEnabled()
+    }
+
+    @Test
+    fun theSummarySaysWhatWasLeftBehindThatVolumeIsApproximateAndHowToUndo() {
+        val result = ImportResult(
+            batchId = 1,
+            sessions = 212,
+            sets = 2229,
+            unmatched = emptyMap(),
+            notYetSupported = mapOf("unreadable" to 5),
+            volumeReliable = false,
+        )
+        compose.setContent { SettingsScreen(state = SettingsUiState(dataMessage = DataMessage.Imported(result))) }
+
+        compose.onNodeWithText("Brought in 212 sessions, 2229 sets.", substring = true).assertExists()
+        compose.onNodeWithText("5 sets could not be read", substring = true).assertExists()
+        compose.onNodeWithText("strength history is reliable all the way back", substring = true).assertExists()
+        compose.onNodeWithText("use Undo next to it", substring = true).assertExists()
+    }
+
+    private fun previewing(): Previewing {
         val unmatched = listOf(Unmatched("Hammer Strength Row", sets = 14), Unmatched("Pec Deck Machine", sets = 3))
-        return Mapping(
+        return Previewing(
             records = NeutralImport(source = FITNOTES, fingerprint = "f", sets = emptyList()),
-            unmatched = unmatched,
+            preview = ImportPreview(
+                from = LocalDate.parse("2024-01-08"),
+                to = LocalDate.parse("2026-03-02"),
+                sessions = 212,
+                sets = 2234,
+                unreadable = 5,
+                unmatched = unmatched,
+            ),
             decisions = unmatched.associate { it.name to NameDecision.CreateOwn },
             bank = listOf(
                 Exercise(

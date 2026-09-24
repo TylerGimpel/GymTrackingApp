@@ -129,7 +129,7 @@ fun SettingsScreen(
         onDecide = viewModel::decide,
         onChooseSameAs = viewModel::chooseSameAs,
         onImportWithDecisions = viewModel::importWithDecisions,
-        onCancelMapping = viewModel::cancelMapping,
+        onCancelPreview = viewModel::cancelPreview,
     )
 }
 
@@ -157,7 +157,7 @@ fun SettingsScreen(
     onDecide: (String, NameDecision) -> Unit = { _, _ -> },
     onChooseSameAs: (String?) -> Unit = {},
     onImportWithDecisions: () -> Unit = {},
-    onCancelMapping: () -> Unit = {},
+    onCancelPreview: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -169,15 +169,15 @@ fun SettingsScreen(
             )
         },
     ) { insets ->
-        // Deciding what an import's names mean takes the whole screen while it lasts (#99).
-        state.mapping?.let { mapping ->
-            MappingScreen(
-                mapping = mapping,
+        // A previewed import takes the whole screen until the lifter goes ahead or backs out.
+        state.previewing?.let { previewing ->
+            ImportPreviewScreen(
+                previewing = previewing,
                 insets = insets,
                 onDecide = onDecide,
                 onChooseSameAs = onChooseSameAs,
                 onImport = onImportWithDecisions,
-                onCancel = onCancelMapping,
+                onCancel = onCancelPreview,
             )
             return@Scaffold
         }
@@ -427,6 +427,8 @@ private fun importedText(result: ImportResult): String = buildList {
     }
     val later = result.notYetSupported.values.sum()
     if (later > 0) add(stringResource(R.string.import_not_yet, later))
+    if (!result.volumeReliable) add(stringResource(R.string.import_volume_approximate))
+    add(stringResource(R.string.import_how_to_undo))
 }.joinToString(" ")
 
 @Composable

@@ -152,6 +152,36 @@ fun unmatchedIn(records: NeutralImport, bank: List<Exercise>): List<Unmatched> {
         .sortedWith(compareByDescending<Unmatched> { it.sets }.thenBy { it.name })
 }
 
+/**
+ * What an import is about to bring in, shown before anything is written (#103).
+ *
+ * Counted as the import will do it — one session a date, every readable set — on the understanding
+ * that every unmatched name is decided before it goes ahead, as the preview requires. [from] and
+ * [to] are null for a file with nothing readable in it.
+ */
+data class ImportPreview(
+    val from: LocalDate?,
+    val to: LocalDate?,
+    val sessions: Int,
+    val sets: Int,
+    /** Sets that will be left out because they could not be read as any kind of set. */
+    val unreadable: Int,
+    /** The names needing a decision, as [unmatchedIn] lists them. */
+    val unmatched: List<Unmatched>,
+)
+
+fun previewOf(records: NeutralImport, bank: List<Exercise>): ImportPreview {
+    val dates = records.sets.map(ImportedSet::date)
+    return ImportPreview(
+        from = dates.minOrNull(),
+        to = dates.maxOrNull(),
+        sessions = dates.toSet().size,
+        sets = records.sets.size,
+        unreadable = records.notYetSupported.values.sum(),
+        unmatched = unmatchedIn(records, bank),
+    )
+}
+
 /** The **Logging type** a set like this one is recorded in, for an exercise created to hold it. */
 fun loggingTypeOf(performance: Performance): LoggingType = when (performance) {
     is Performance.WeightAndReps -> LoggingType.WEIGHT_REPS
