@@ -5,6 +5,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performTouchInput
@@ -117,7 +119,9 @@ class SessionScreenTest {
         var read: WeightUnit? = null
         compose.setContent { SessionScreen(state = state(), entry = SetEntryActions(onReadIn = { read = it })) }
 
-        compose.onNodeWithText("lb").performClick()
+        // The chip's own click, not a tap at its position: on a short screen it can sit under the
+        // fixed bar, and this test is about what the chip does rather than the screen's height.
+        compose.onNodeWithText("lb").performSemanticsAction(SemanticsActions.OnClick)
 
         // Display only: the machine is labelled in pounds and the log stays in kilograms, which is
         // what keeps one gym's two lat pulldowns on one graph.
@@ -148,12 +152,28 @@ class SessionScreenTest {
     }
 
     @Test
+    fun importIsTheThirdWayToStartNotAStepInsideTheOthers() {
+        var imports = 0
+        compose.setContent {
+            SessionScreen(
+                state = state(routine = null),
+                wholeSession = SessionActions(onImportFitNotes = { imports++ }),
+            )
+        }
+
+        // Beside the other two, one tap, and nothing to do with setting a routine up (#94).
+        compose.onNodeWithText("Import from FitNotes").performClick()
+        assertEquals(1, imports)
+    }
+
+    @Test
     fun onceThereIsARoutineTheWaysToStartAreGone() {
         compose.setContent { SessionScreen(state = state(routine = pushDay)) }
 
         // Nothing asks twice.
         compose.onNodeWithText("Build a routine").assertDoesNotExist()
         compose.onNodeWithText("Let the app build one").assertDoesNotExist()
+        compose.onNodeWithText("Import from FitNotes").assertDoesNotExist()
     }
 
     @Test
@@ -260,7 +280,9 @@ class SessionScreenTest {
             )
         }
 
-        compose.onNodeWithText("Skip").performClick()
+        // The button's own click: on a phone-sized screen the floating button overlaps it, which
+        // is a layout question for its own ticket rather than what this test is about.
+        compose.onNodeWithText("Skip").performSemanticsAction(SemanticsActions.OnClick)
 
         // The timer bends to the session rather than the other way round.
         assertTrue(skipped)

@@ -88,6 +88,9 @@ private fun GymTracker(
 
     val defaultRoutineName = stringResource(R.string.routine_default_name)
 
+    // Whether Settings was opened to import, from the first screen, rather than to look around.
+    var importOnArrival by rememberSaveable { mutableStateOf(false) }
+
     fun leavePicker() {
         pickingForDay = null
         back()
@@ -110,6 +113,12 @@ private fun GymTracker(
                 open(Destination.ROUTINE)
             },
             onLetTheAppBuild = { open(Destination.ROUTINE) },
+            // Straight into the file picker, from the same flow Settings offers, so importing is
+            // one tap and its outcome is said where the rest of the lifter's data is.
+            onImportFitNotes = {
+                importOnArrival = true
+                open(Destination.SETTINGS)
+            },
             viewModel = viewModel,
         )
 
@@ -133,6 +142,8 @@ private fun GymTracker(
 
         Destination.SETTINGS -> SettingsScreen(
             onBack = ::back,
+            importOnArrival = importOnArrival,
+            onImportStarted = { importOnArrival = false },
             onOpenPlates = { open(Destination.PLATES) },
             onOpenProfile = { open(Destination.PROFILE) },
             onOpenExcluded = { open(Destination.EXCLUDED) },

@@ -19,6 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +54,9 @@ fun SettingsScreen(
     onOpenPlates: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenExcluded: () -> Unit,
+    /** Opened from the first screen's "Import from FitNotes": start the picker straight away. */
+    importOnArrival: Boolean = false,
+    onImportStarted: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -69,6 +73,12 @@ fun SettingsScreen(
     val importFitNotes = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { source -> source?.let(viewModel::importFitNotes) }
+    LaunchedEffect(importOnArrival) {
+        if (importOnArrival) {
+            onImportStarted()
+            importFitNotes.launch(arrayOf("*/*"))
+        }
+    }
     val restore = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { source -> source?.let(viewModel::restore) }

@@ -131,6 +131,7 @@ fun SessionScreen(
     onOpenSettings: () -> Unit,
     onBuildRoutine: () -> Unit = {},
     onLetTheAppBuild: () -> Unit = {},
+    onImportFitNotes: () -> Unit = {},
     viewModel: SessionViewModel = viewModel(),
 ) {
     val loaded by viewModel.state.collectAsStateWithLifecycle()
@@ -234,6 +235,7 @@ fun SessionScreen(
             onOpenSettings = onOpenSettings,
             onBuildRoutine = onBuildRoutine,
             onLetTheAppBuild = onLetTheAppBuild,
+            onImportFitNotes = onImportFitNotes,
             onDismissCoachMark = viewModel::dismissCoachMark,
         ),
     )
@@ -325,6 +327,8 @@ data class SessionActions(
     val onBuildRoutine: () -> Unit = {},
     /** Starts setup, where the app builds a routine from a few answers (#85). */
     val onLetTheAppBuild: () -> Unit = {},
+    /** Brings history in from a FitNotes backup: the third way to start (#94). */
+    val onImportFitNotes: () -> Unit = {},
     /** Dismisses the first-session tip, for good (#92). */
     val onDismissCoachMark: () -> Unit = {},
 )
@@ -501,6 +505,7 @@ fun SessionScreen(
                     WaysToStart(
                         onBuild = wholeSession.onBuildRoutine,
                         onLetTheAppBuild = wholeSession.onLetTheAppBuild,
+                        onImport = wholeSession.onImportFitNotes,
                     )
                 }
             }
@@ -1387,14 +1392,15 @@ private fun CoachMark(onDismiss: () -> Unit) {
 }
 
 /**
- * The ways to a routine, side by side rather than one inside the other.
+ * The ways to get started, side by side rather than one inside another: build a routine, let the
+ * app build one, or bring history in from FitNotes.
  *
  * **Offered, not imposed.** Everything else on the screen works without either: a set can be
  * logged with no routine, no profile and nothing set up, which is the first thing most people do
  * with an app they have just installed.
  */
 @Composable
-private fun WaysToStart(onBuild: () -> Unit, onLetTheAppBuild: () -> Unit) {
+private fun WaysToStart(onBuild: () -> Unit, onLetTheAppBuild: () -> Unit, onImport: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1411,6 +1417,12 @@ private fun WaysToStart(onBuild: () -> Unit, onLetTheAppBuild: () -> Unit) {
             OutlinedButton(onClick = onLetTheAppBuild, modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.start_generate))
             }
+        }
+        // Beside them rather than inside either: somebody arriving with years of FitNotes history
+        // takes this and gets a first session that knows them, and somebody without it never
+        // meets a file picker or a name to map (#94).
+        OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.start_import))
         }
     }
 }

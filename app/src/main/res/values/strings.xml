@@ -198,9 +198,10 @@
     <string name="coach_unit">To switch a weight between kg and lb, tap the unit beside it. The exercise remembers it.</string>
     <string name="coach_drawer">Your routine for today is behind Routine at the top, or swipe right anywhere on the screen.</string>
     <string name="coach_dismiss">Got it</string>
-    <string name="start_ways">No routine yet. You can log a set right now without one, or get a routine one of two ways.</string>
+    <string name="start_ways">No routine yet. You can log a set right now without one, or get started one of these ways.</string>
     <string name="start_build">Build a routine</string>
     <string name="start_generate">Let the app build one</string>
+    <string name="start_import">Import from FitNotes</string>
     <string name="settings_title">Settings</string>
     <string name="settings_done">Done</string>
     <string name="settings_unit">Default unit</string>
