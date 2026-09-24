@@ -97,6 +97,17 @@ class ProfilePersistenceTest {
     }
 
     @Test
+    fun theTipIsShownUntilItIsDismissedAndNeverAfter() = runBlocking {
+        assertEquals(false, profile(seededWith = WeightUnit.KILOGRAMS).observeCoachMarkSeen().first())
+
+        profile(seededWith = WeightUnit.KILOGRAMS).dismissCoachMark()
+
+        // A repository built fresh over the same database is the app opened again: the tip does
+        // not come back after a restart, which is the whole of "taught once" (#92).
+        assertEquals(true, profile(seededWith = WeightUnit.KILOGRAMS).observeCoachMarkSeen().first())
+    }
+
+    @Test
     fun anythingSaidCanBeTakenBack() = runBlocking {
         val profile = profile(seededWith = WeightUnit.KILOGRAMS)
         profile.setSex(Sex.MALE)

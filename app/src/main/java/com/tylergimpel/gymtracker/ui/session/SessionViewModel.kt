@@ -327,6 +327,12 @@ data class SessionUiState(
     /** Whether to ask, now, to show the rest countdown: true once, on the first rest that needs it. */
     val askToShowRestCountdown: Boolean = false,
     /**
+     * Whether to point out the unit and the routine drawer, which the screen leaves undecorated.
+     *
+     * Only with an exercise on screen, since that is where both are, and only until dismissed.
+     */
+    val showCoachMark: Boolean = false,
+    /**
      * Whether the countdown will actually appear.
      *
      * False when notifications are off or were never granted, which on Android 13 and later is
@@ -727,6 +733,20 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun recheckRestAlerts() = restTimer.recheckAlerts()
+
+    /**
+     * Whether the first-session tip has been dismissed.
+     *
+     * Starts as dismissed, so the tip never flashes up for somebody who dismissed it long ago in the
+     * moment before the stored answer has been read.
+     */
+    val coachMarkSeen: StateFlow<Boolean> = profile.observeCoachMarkSeen()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), true)
+
+    /** Dismisses the first-session tip, for good. */
+    fun dismissCoachMark() {
+        viewModelScope.launch { profile.dismissCoachMark() }
+    }
 
     /** The screen has asked to show the rest countdown, whatever the lifter answered. */
     fun askedToShowRestCountdown() = restTimer.asked()

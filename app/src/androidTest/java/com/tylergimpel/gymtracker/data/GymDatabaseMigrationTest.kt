@@ -944,6 +944,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_SIXTH_DATABASE = "migration-twenty-sixth.db"
         const val TWENTY_SEVENTH_DATABASE = "migration-twenty-seventh.db"
         const val TWENTY_EIGHTH_DATABASE = "migration-twenty-eighth.db"
+        const val TWENTY_NINTH_DATABASE = "migration-twenty-ninth.db"
     }
 
     /**
@@ -1258,6 +1259,24 @@ class GymDatabaseMigrationTest {
                 it.moveToFirst()
                 assertEquals("kg", it.getString(0))
                 assertTrue("a theme was chosen for somebody on upgrade", it.isNull(1))
+            }
+        }
+    }
+
+    /**
+     * Version 30 remembers whether the first-session tip was dismissed. Not dismissed for everybody
+     * upgrading — they have never been shown it, and it is worth showing once (#92).
+     */
+    @Test
+    fun migratesToATipNobodyHasDismissedYet() {
+        helper.createDatabase(TWENTY_NINTH_DATABASE, 29).use { version29 ->
+            version29.execSQL("INSERT INTO profile (id, experience) VALUES (1, 'TRAINED')")
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_NINTH_DATABASE, 30, true, MIGRATION_29_30).use { db ->
+            db.query("SELECT coach_mark_seen FROM profile WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
             }
         }
     }

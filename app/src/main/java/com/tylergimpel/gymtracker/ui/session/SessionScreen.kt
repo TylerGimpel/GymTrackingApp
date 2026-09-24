@@ -133,7 +133,11 @@ fun SessionScreen(
     onLetTheAppBuild: () -> Unit = {},
     viewModel: SessionViewModel = viewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val loaded by viewModel.state.collectAsStateWithLifecycle()
+    val coachMarkSeen by viewModel.coachMarkSeen.collectAsStateWithLifecycle()
+    // The tip belongs beside an exercise, since that is where the unit and the drawer are, and
+    // only until it has been dismissed once (#92).
+    val state = loaded.copy(showCoachMark = !coachMarkSeen && loaded.selected != null)
     val context = LocalContext.current
 
     val askAboutNotifications = rememberLauncherForActivityResult(
@@ -230,6 +234,7 @@ fun SessionScreen(
             onOpenSettings = onOpenSettings,
             onBuildRoutine = onBuildRoutine,
             onLetTheAppBuild = onLetTheAppBuild,
+            onDismissCoachMark = viewModel::dismissCoachMark,
         ),
     )
 }
@@ -320,6 +325,8 @@ data class SessionActions(
     val onBuildRoutine: () -> Unit = {},
     /** Starts setup, where the app builds a routine from a few answers (#85). */
     val onLetTheAppBuild: () -> Unit = {},
+    /** Dismisses the first-session tip, for good (#92). */
+    val onDismissCoachMark: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -496,6 +503,12 @@ fun SessionScreen(
                         onLetTheAppBuild = wholeSession.onLetTheAppBuild,
                     )
                 }
+            }
+
+            // Taught once, above what it points at, and never in the way of logging (#92). Both
+            // things it teaches have another route, so dismissing it unread costs nothing.
+            if (state.showCoachMark) {
+                item { CoachMark(onDismiss = wholeSession.onDismissCoachMark) }
             }
 
             item {
@@ -1363,6 +1376,29 @@ private fun RestDialog(
  * Both are permissions the app is allowed to ask for and neither is one it can grant itself, so
  * what the screen offers is the trip to the place that can.
  */
+/**
+ * One tip on the first session, covering the two things the screen leaves undecorated.
+ *
+ * The unit carries no underline and the routine drawer's handle no label, on the understanding
+ * that both are taught here. Two things at once is fine; ten would not be. Neither depends on it:
+ * the unit is also set from the exercise's own screen (#89), and the drawer opens by a tap on its
+ * handle as well as a swipe.
+ */
+@Composable
+private fun CoachMark(onDismiss: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.coach_unit), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.coach_drawer), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.coach_dismiss)) }
+        }
+    }
+}
+
 /**
  * The ways to a routine, side by side rather than one inside the other.
  *

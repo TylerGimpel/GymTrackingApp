@@ -694,6 +694,13 @@ internal val MIGRATION_28_29 = object : Migration(28, 29) {
     }
 }
 
+/** Remembers whether the first-session tip was dismissed; nobody upgrading has seen it (#92). */
+internal val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `profile` ADD COLUMN `coach_mark_seen` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -723,6 +730,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_26_27,
     MIGRATION_27_28,
     MIGRATION_28_29,
+    MIGRATION_29_30,
 )
 
 /**

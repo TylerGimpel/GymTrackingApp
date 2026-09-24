@@ -157,6 +157,37 @@ class SessionScreenTest {
     }
 
     @Test
+    fun theFirstSessionPointsOutTheUnitAndTheRoutineOnce() {
+        var dismissed = 0
+        var logged = 0
+        compose.setContent {
+            SessionScreen(
+                state = state().copy(showCoachMark = true),
+                entry = SetEntryActions(onLogSet = { logged++ }),
+                wholeSession = SessionActions(onDismissCoachMark = { dismissed++ }),
+            )
+        }
+
+        // The two things the screen leaves undecorated on purpose, taught in one place (#92).
+        compose.onNodeWithText("tap the unit", substring = true).assertExists()
+        compose.onNodeWithText("Routine", substring = true).assertExists()
+
+        // And never in the way: a set logs with the tip still up.
+        compose.onNodeWithTag(LOG_SET).performClick()
+        assertEquals(1, logged)
+
+        compose.onNodeWithText("Got it").performClick()
+        assertEquals(1, dismissed)
+    }
+
+    @Test
+    fun aDismissedTipIsNotShownAgain() {
+        compose.setContent { SessionScreen(state = state().copy(showCoachMark = false)) }
+
+        compose.onNodeWithText("Got it").assertDoesNotExist()
+    }
+
+    @Test
     fun anExercisesUnitCanBeSetFromItsOwnScreen() {
         var changed: ExerciseDetails? = null
         val details = ExerciseDetails(

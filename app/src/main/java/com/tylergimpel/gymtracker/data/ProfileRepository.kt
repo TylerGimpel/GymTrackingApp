@@ -68,6 +68,12 @@ class ProfileRepository(
     suspend fun setTheme(theme: Theme) =
         update { it.copy(theme = theme.takeIf { chosen -> chosen != Theme.SYSTEM }?.name) }
 
+    /** Whether the first-session tip has been dismissed, which it is only ever once. */
+    fun observeCoachMarkSeen(): Flow<Boolean> = profiles.observe().map { it?.coachMarkSeen ?: false }
+
+    /** Dismisses the first-session tip for good. */
+    suspend fun dismissCoachMark() = update { it.copy(coachMarkSeen = true) }
+
     /** Records the lifter's sex, or withdraws it with null. */
     suspend fun setSex(sex: Sex?) = update { it.copy(sex = sex?.name) }
 

@@ -76,6 +76,15 @@ data class ProfileEntity(
      */
     @ColumnInfo(name = "theme")
     val theme: String? = null,
+
+    /**
+     * Whether the first-session tip has been dismissed.
+     *
+     * Once, then never again — including after a restart, which is why it is stored rather than
+     * held on screen. The tip is a nicety: both things it teaches have other routes (#92).
+     */
+    @ColumnInfo(name = "coach_mark_seen", defaultValue = "0")
+    val coachMarkSeen: Boolean = false,
 ) {
     companion object {
         /** There is one lifter, so there is one row, and it has a known id to be written over. */
