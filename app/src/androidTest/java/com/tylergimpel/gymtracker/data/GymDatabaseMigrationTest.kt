@@ -945,6 +945,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_SEVENTH_DATABASE = "migration-twenty-seventh.db"
         const val TWENTY_EIGHTH_DATABASE = "migration-twenty-eighth.db"
         const val TWENTY_NINTH_DATABASE = "migration-twenty-ninth.db"
+        const val THIRTIETH_DATABASE = "migration-thirtieth.db"
     }
 
     /**
@@ -1275,6 +1276,30 @@ class GymDatabaseMigrationTest {
 
         helper.runMigrationsAndValidate(TWENTY_NINTH_DATABASE, 30, true, MIGRATION_29_30).use { db ->
             db.query("SELECT coach_mark_seen FROM profile WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+        }
+    }
+
+    /**
+     * Version 31 records imports, and which import each session came from (#96). Nothing has been
+     * imported by anybody upgrading, so every session they have is one they logged: no batch.
+     */
+    @Test
+    fun migratesToSessionsThatAllCameFromTheLifter() {
+        helper.createDatabase(THIRTIETH_DATABASE, 30).use { version30 ->
+            version30.execSQL(
+                "INSERT INTO session (id, started_at, finished_at, date, note) VALUES (1, 0, 0, '2026-03-02', NULL)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(THIRTIETH_DATABASE, 31, true, MIGRATION_30_31).use { db ->
+            db.query("SELECT import_batch_id FROM session WHERE id = 1").use {
+                it.moveToFirst()
+                assertTrue("a session nobody imported was given a batch", it.isNull(0))
+            }
+            db.query("SELECT COUNT(*) FROM import_batch").use {
                 it.moveToFirst()
                 assertEquals(0, it.getInt(0))
             }

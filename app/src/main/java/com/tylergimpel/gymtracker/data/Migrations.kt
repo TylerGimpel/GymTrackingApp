@@ -701,6 +701,23 @@ internal val MIGRATION_29_30 = object : Migration(29, 30) {
     }
 }
 
+/**
+ * Somewhere to record an import, and every session pointing at the one that brought it (#96).
+ *
+ * Nothing imported yet, so every session upgrading is one the lifter logged: no batch.
+ */
+internal val MIGRATION_30_31 = object : Migration(30, 31) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `import_batch` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`source` TEXT NOT NULL, `fingerprint` TEXT NOT NULL, `imported_at` INTEGER NOT NULL, " +
+                "`volume_reliable` INTEGER NOT NULL)",
+        )
+        db.execSQL("ALTER TABLE `session` ADD COLUMN `import_batch_id` INTEGER")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_session_import_batch_id` ON `session` (`import_batch_id`)")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -731,6 +748,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_27_28,
     MIGRATION_28_29,
     MIGRATION_29_30,
+    MIGRATION_30_31,
 )
 
 /**

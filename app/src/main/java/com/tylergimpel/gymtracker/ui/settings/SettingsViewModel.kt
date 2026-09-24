@@ -22,6 +22,11 @@ import com.tylergimpel.gymtracker.data.BackupRepository
 import com.tylergimpel.gymtracker.data.NotABackup
 import com.tylergimpel.gymtracker.data.Backup
 import com.tylergimpel.gymtracker.data.WouldReplace
+import com.tylergimpel.gymtracker.data.ExerciseRepository
+import com.tylergimpel.gymtracker.data.FitNotesParser
+import com.tylergimpel.gymtracker.data.ImportRepository
+import com.tylergimpel.gymtracker.data.ImportResult
+import java.io.File
 import com.tylergimpel.gymtracker.domain.spreadsheetExport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -59,6 +64,12 @@ sealed interface DataMessage {
 
     /** The file picked to restore from was not a backup this app can read, and why. */
     data class NotRestorable(val reason: String) : DataMessage
+
+    /** The file picked to import was not a FitNotes backup this app can read, and why. */
+    data class NotImportable(val reason: String) : DataMessage
+
+    /** What a FitNotes import brought in, and what it left behind and why. */
+    data class Imported(val result: ImportResult) : DataMessage
 
     data object Failed : DataMessage
 }
@@ -182,6 +193,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 DataMessage.NotRestorable(refused.message.orEmpty())
             } catch (failed: Exception) {
                 DataMessage.NotRestorable(failed.message.orEmpty())
+            }
+        }
+    }
+
+    /**
+     * Brings a FitNotes backup in, merging with whatever is already here (#96).
+     *
+     * Copied to a private file first, because the parser reads SQLite and a document from the
+     * picker is a stream, not a file. Nothing logged here is touched.
+     */
+    fun importFitNotes(source: Uri) {
+        viewModelScope.launch {
+            dataMessage.value = try {
+                val app = getApplication<Application>()
+                val copy = File(app.cacheDir, "import.fitnotes")
+                withContext(Dispatchers.IO) {
+                    app.contentResolver.openInputStream(source)?.use { input ->
+                        copy.outputStream().use { input.copyTo(it) }
+                    } ?: error("the file could not be opened")
+                }
+                val records = withContext(Dispatchers.IO) { FitNotesParser.parse(copy) }
+                copy.delete()
+                val bank = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
+                    .observeBank().first()
+                DataMessage.Imported(ImportRepository(database).import(records, bank))
+            } catch (failed: Exception) {
+                DataMessage.NotImportable(failed.message.orEmpty())
             }
         }
     }

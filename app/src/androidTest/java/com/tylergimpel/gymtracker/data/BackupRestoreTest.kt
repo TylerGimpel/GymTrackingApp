@@ -5,6 +5,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.Experience
+import com.tylergimpel.gymtracker.domain.FITNOTES
+import com.tylergimpel.gymtracker.domain.ImportedSet
+import com.tylergimpel.gymtracker.domain.NeutralImport
+import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.NewExerciseDraft
 import com.tylergimpel.gymtracker.domain.RepPreference
@@ -249,6 +253,23 @@ class BackupRestoreTest {
         // The cycle: a day completed and a day skipped.
         routines.recordCompletion(routine.id, push, sessionId)
         routines.recordSkip(routine.id, routine.rotation[1])
+
+        // An import, which every session it brought in points at.
+        ImportRepository(database, clock, zone).import(
+            NeutralImport(
+                source = FITNOTES,
+                fingerprint = "backup-test",
+                sets = listOf(
+                    ImportedSet(
+                        date = LocalDate.parse("2026-03-02"),
+                        exerciseName = "Barbell Squat",
+                        order = 1,
+                        performance = Performance.WeightAndReps(Kilograms(100.0), 5),
+                    ),
+                ),
+            ),
+            exercises.observeBank().first(),
+        )
 
         // A regeneration's step back, taken last: logging a session spends it (ADR 0006), so it
         // only exists to be backed up after the training above.

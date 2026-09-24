@@ -30,8 +30,17 @@ data class Session(
      */
     val routineName: String? = null,
     val routineDayName: String? = null,
+    /**
+     * The import this session came from, or null for one logged in the app (ADR 0007).
+     *
+     * Every set in it is an imported set: provenance, not a set type.
+     */
+    val importBatchId: Long? = null,
 ) {
     val isActive: Boolean get() = finishedAt == null
+
+    /** Whether this session was brought in from another app rather than logged in this one. */
+    val isImported: Boolean get() = importBatchId != null
 
     /**
      * Whether a set logged at [now] belongs to this session.

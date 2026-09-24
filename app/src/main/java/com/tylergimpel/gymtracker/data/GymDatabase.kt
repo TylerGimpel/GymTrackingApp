@@ -35,6 +35,7 @@ import androidx.room.TypeConverters
         BodyweightEntryEntity::class,
         ProfileEntity::class,
         PlateInventoryEntity::class,
+        ImportBatchEntity::class,
     ],
     version = GymDatabase.VERSION,
     exportSchema = true,
@@ -54,8 +55,10 @@ abstract class GymDatabase : RoomDatabase() {
 
     abstract fun plateDao(): PlateDao
 
+    abstract fun importBatchDao(): ImportBatchDao
+
     companion object {
-        const val VERSION = 30
+        const val VERSION = 31
 
         /** Path inside assets, written there at build time by `generate<Variant>ExerciseBank`. */
         const val ASSET_PATH = "databases/gym-bank.db"

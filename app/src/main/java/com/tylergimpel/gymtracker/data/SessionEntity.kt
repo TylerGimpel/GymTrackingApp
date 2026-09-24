@@ -2,6 +2,7 @@ package com.tylergimpel.gymtracker.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.tylergimpel.gymtracker.domain.Session
 import java.time.Instant
@@ -14,7 +15,10 @@ import java.time.LocalDate
  * happened; the routine it realised will later be copied onto it as a snapshot, so that revising a
  * routine can never reach logged history.
  */
-@Entity(tableName = "session")
+@Entity(
+    tableName = "session",
+    indices = [Index(value = ["import_batch_id"])],
+)
 data class SessionEntity(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
@@ -46,6 +50,16 @@ data class SessionEntity(
 
     @ColumnInfo(name = "routine_day_name")
     val routineDayName: String?,
+
+    /**
+     * The import that brought this session in, or null for one logged in the app.
+     *
+     * Provenance lives here, on the session every one of its sets belongs to: an imported set is
+     * an ordinary **Working set** whose session came from an import, not a sixth set type
+     * (ADR 0007). No foreign key, because undoing an import deletes its sessions by this id.
+     */
+    @ColumnInfo(name = "import_batch_id")
+    val importBatchId: Long? = null,
 )
 
 fun SessionEntity.toDomain() = Session(
@@ -56,6 +70,7 @@ fun SessionEntity.toDomain() = Session(
     note = note,
     routineName = routineName,
     routineDayName = routineDayName,
+    importBatchId = importBatchId,
 )
 
 fun Session.toEntity() = SessionEntity(
@@ -66,4 +81,5 @@ fun Session.toEntity() = SessionEntity(
     note = note,
     routineName = routineName,
     routineDayName = routineDayName,
+    importBatchId = importBatchId,
 )

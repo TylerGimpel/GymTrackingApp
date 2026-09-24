@@ -35,6 +35,7 @@ import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.ui.RestFix
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
 import com.tylergimpel.gymtracker.ui.settingsFor
+import com.tylergimpel.gymtracker.data.ImportResult
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import java.time.LocalDate
@@ -65,6 +66,9 @@ fun SettingsScreen(
     val backUp = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
     ) { destination -> destination?.let(viewModel::backUp) }
+    val importFitNotes = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { source -> source?.let(viewModel::importFitNotes) }
     val restore = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { source -> source?.let(viewModel::restore) }
@@ -93,6 +97,8 @@ fun SettingsScreen(
             exportForSpreadsheets.launch("gym-tracker-export-${LocalDate.now()}.csv")
         },
         onBackUp = { backUp.launch("gym-tracker-backup-${LocalDate.now()}.json") },
+        // Any file: FitNotes' backup has its own extension, which no system knows the type of.
+        onImportFitNotes = { importFitNotes.launch(arrayOf("*/*")) },
         // Any file, because some file managers label JSON as plain text or nothing at all; the
         // backup itself says whether it is one.
         onRestore = { restore.launch(arrayOf("application/json", "text/plain", "*/*")) },
@@ -115,6 +121,7 @@ fun SettingsScreen(
     onFixRestAlerts: (RestFix) -> Unit = {},
     onExportForSpreadsheets: () -> Unit = {},
     onBackUp: () -> Unit = {},
+    onImportFitNotes: () -> Unit = {},
     onRestore: () -> Unit = {},
     onDismissDataMessage: () -> Unit = {},
     onConfirmRestore: () -> Unit = {},
@@ -197,6 +204,16 @@ fun SettingsScreen(
                 // The backup first: it is the one that restores, and the one worth keeping.
                 TextButton(onClick = onBackUp) { Text(stringResource(R.string.settings_backup)) }
                 TextButton(onClick = onRestore) { Text(stringResource(R.string.settings_restore)) }
+                // Bringing history in from FitNotes, said plainly so the lossy CSV is not picked by
+                // mistake: the backup is richer, and it is the only one this reads.
+                Text(
+                    text = stringResource(R.string.settings_import_why),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onImportFitNotes) {
+                    Text(stringResource(R.string.settings_import))
+                }
                 Text(
                     text = stringResource(R.string.settings_export_why),
                     style = MaterialTheme.typography.bodySmall,
@@ -216,10 +233,15 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_restored, message.sessions)
                             is DataMessage.NotRestorable ->
                                 stringResource(R.string.settings_not_restorable, message.reason)
+                            is DataMessage.NotImportable ->
+                                stringResource(R.string.settings_not_importable, message.reason)
+                            is DataMessage.Imported -> importedText(message.result)
                             DataMessage.Failed -> stringResource(R.string.settings_export_failed)
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (message == DataMessage.Failed || message is DataMessage.NotRestorable) {
+                        color = if (message == DataMessage.Failed || message is DataMessage.NotRestorable ||
+                            message is DataMessage.NotImportable
+                        ) {
                             MaterialTheme.colorScheme.error
                         } else {
                             MaterialTheme.colorScheme.onSurface
@@ -288,6 +310,26 @@ private fun ConfirmRestoreDialog(confirm: ConfirmRestore, onConfirm: () -> Unit,
         },
     )
 }
+
+/**
+ * What an import did, and what it did not: nothing left behind goes unsaid, because a gap found
+ * later is a gap the lifter stops trusting the whole import over.
+ */
+@Composable
+private fun importedText(result: ImportResult): String = buildList {
+    add(stringResource(R.string.import_done, result.sessions, result.sets))
+    if (result.unmatched.isNotEmpty()) {
+        add(
+            stringResource(
+                R.string.import_unmatched,
+                result.unmatched.values.sum(),
+                result.unmatched.keys.sorted().joinToString(", "),
+            ),
+        )
+    }
+    val later = result.notYetSupported.values.sum()
+    if (later > 0) add(stringResource(R.string.import_not_yet, later))
+}.joinToString(" ")
 
 @Composable
 private fun Setting(label: String, why: String? = null, content: @Composable () -> Unit) {
