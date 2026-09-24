@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.Duration
 import java.time.LocalDate
 
 /**
@@ -27,17 +28,32 @@ data class ImportSource(
 }
 
 /**
- * FitNotes' `.fitnotes` backup: no set types, and supersets it does keep but the tracer does not
- * yet read (#101 fills the slot; the declaration changes with it).
+ * FitNotes' `.fitnotes` backup: no set types, which is why its volume is approximate, and
+ * supersets, which the backup keeps and its CSV silently drops.
  */
-val FITNOTES = ImportSource(id = "fitnotes", declaresSetTypes = false, declaresSupersets = false)
+val FITNOTES = ImportSource(id = "fitnotes", declaresSetTypes = false, declaresSupersets = true)
+
+/**
+ * What a source kept about an exercise, beyond the sets done on it (#101).
+ *
+ * Every field is what the lifter set there, or null where they set nothing; an import only fills
+ * a choice this app has not already been given (see `ImportRepository`).
+ */
+data class ImportedExercise(
+    val note: String? = null,
+    /** The unit the lifter read it in there, where that was an explicit choice. */
+    val displayUnit: WeightUnit? = null,
+    val increment: Kilograms? = null,
+    val rest: Duration? = null,
+)
 
 /**
  * One set as any source hands it over, before anything about this app is applied to it.
  *
- * **The fields a source may never fill are not dead code** (ADR 0007). [setType] and
- * [supersetGroup] are empty for everything FitNotes exports, and exist so a source that does
- * supply them is a new parser rather than a rework of the pipeline.
+ * **The fields a source may never fill are not dead code** (ADR 0007). [setType] is empty for
+ * everything FitNotes exports, and exists so a source that does supply it is a new parser rather
+ * than a rework of the pipeline — which is exactly what [supersetGroup] turned out to be when
+ * FitNotes' supersets were read (#101).
  */
 data class ImportedSet(
     /** The day it was trained, exactly as the source recorded it. */
@@ -66,6 +82,8 @@ data class NeutralImport(
     val source: ImportSource,
     val fingerprint: String,
     val sets: List<ImportedSet>,
+    /** What the source kept about each exercise, by the source's own name for it. */
+    val exercises: Map<String, ImportedExercise> = emptyMap(),
     /** Sets the parser read but cannot yet bring across, counted by the reason why. */
     val notYetSupported: Map<String, Int> = emptyMap(),
 )

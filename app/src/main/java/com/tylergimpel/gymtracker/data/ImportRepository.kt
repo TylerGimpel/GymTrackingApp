@@ -35,8 +35,11 @@ class ImportRepository(
     private val database: GymDatabase,
     private val clock: Clock = Clock.systemDefaultZone(),
     private val zone: ZoneId = ZoneId.systemDefault(),
+    /** What the lifter reads in, which decides whether an imported unit is a choice at all. */
+    private val profile: ProfileRepository = database.profileRepository(),
 ) {
     private val sessions = database.sessionDao()
+    private val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
 
     suspend fun import(records: NeutralImport, bank: List<Exercise>): ImportResult = database.withTransaction {
         val batchId = database.importBatchDao().insert(
@@ -71,15 +74,25 @@ class ImportRepository(
                 ),
             )
             sessionCount++
-            // In the order they were first done, each with its own sets numbered from one.
-            sets.groupBy({ (_, exerciseId) -> exerciseId }, { (set, _) -> set })
-                .entries.forEachIndexed { index, (exerciseId, itsSets) ->
-                    val performedId = sessions.insert(
-                        SessionExerciseEntity(sessionId = sessionId, exerciseId = exerciseId, orderIndex = index + 1),
-                    )
-                    itsSets.forEachIndexed { setIndex, set -> sessions.insert(set.toEntity(performedId, setIndex + 1)) }
-                }
+            val byExercise = sets.groupBy({ (_, exerciseId) -> exerciseId }, { (set, _) -> set })
+            val supersetIds = supersetsFor(sessionId, byExercise)
+            // In the order they were first done, each with its own sets numbered from one — and
+            // a superset's members together, since a superset here is neighbouring exercises.
+            inOrderWithSupersetsTogether(byExercise).forEachIndexed { index, exerciseId ->
+                val itsSets = byExercise.getValue(exerciseId)
+                val performedId = sessions.insert(
+                    SessionExerciseEntity(
+                        sessionId = sessionId,
+                        exerciseId = exerciseId,
+                        orderIndex = index + 1,
+                        supersetGroupId = itsSets.firstNotNullOfOrNull { it.supersetGroup }?.let(supersetIds::get),
+                    ),
+                )
+                itsSets.forEachIndexed { setIndex, set -> sessions.insert(set.toEntity(performedId, setIndex + 1)) }
+            }
         }
+
+        applyExerciseSettings(records, matches)
 
         ImportResult(
             batchId = batchId,
@@ -89,6 +102,66 @@ class ImportRepository(
             notYetSupported = records.notYetSupported,
         )
     }
+
+    internal suspend fun insertSuperset(sessionId: Long, orderIndex: Int): Long = sessions.insert(
+        SupersetGroupEntity(sessionId = sessionId, orderIndex = orderIndex, autoJump = true, restSeconds = null),
+    )
+
+    /**
+     * What the source kept about each exercise, applied only where this app has no choice yet.
+     *
+     * A note, a unit, an increment or a rest the lifter already chose here is theirs, and an
+     * import does not overwrite it: the source is filling gaps, not having the last word.
+     */
+    private suspend fun applyExerciseSettings(records: NeutralImport, matches: Map<String, Exercise?>) {
+        val lifterUnit = profile.displayUnit()
+        records.exercises.forEach { (name, kept) ->
+            val exercise = matches[name] ?: return@forEach
+            if (kept.note != null && exercise.note.isNullOrBlank()) exercises.note(exercise.id, kept.note)
+            if (kept.displayUnit != null && exercise.displayUnit == lifterUnit) {
+                exercises.setDisplayUnit(exercise.id, kept.displayUnit)
+            }
+            if (kept.increment != null && exercise.chosenIncrement == null) exercises.setIncrement(exercise.id, kept.increment)
+            if (kept.rest != null && exercise.chosenRest == null) exercises.setRest(exercise.id, kept.rest)
+        }
+    }
+}
+
+/**
+ * The source's supersets in one session, as the app's own: one for every group with at least two
+ * of this session's exercises in it, source group id to the new group's id. A "superset" of one
+ * exercise is not one.
+ */
+private suspend fun ImportRepository.supersetsFor(
+    sessionId: Long,
+    byExercise: Map<String, List<ImportedSet>>,
+): Map<Long, Long> = buildMap {
+    val members = byExercise.entries
+        .mapNotNull { (exerciseId, sets) -> sets.firstNotNullOfOrNull { it.supersetGroup }?.let { it to exerciseId } }
+        .groupBy({ it.first }, { it.second })
+        .filterValues { it.size >= 2 }
+    members.keys.forEachIndexed { index, sourceGroup ->
+        put(sourceGroup, insertSuperset(sessionId, index + 1))
+    }
+}
+
+/**
+ * The exercises in the order they were first done, with each superset's members pulled together
+ * at the place its first member was done.
+ */
+private fun inOrderWithSupersetsTogether(byExercise: Map<String, List<ImportedSet>>): List<String> {
+    val groupOf = byExercise.mapValues { (_, sets) -> sets.firstNotNullOfOrNull { it.supersetGroup } }
+    val placed = LinkedHashSet<String>()
+    byExercise.keys.forEach { exerciseId ->
+        if (exerciseId in placed) return@forEach
+        val group = groupOf[exerciseId]
+        if (group == null) {
+            placed += exerciseId
+        } else {
+            byExercise.keys.filter { groupOf[it] == group }.forEach { placed += it }
+        }
+    }
+    return placed.toList()
 }
 
 /**

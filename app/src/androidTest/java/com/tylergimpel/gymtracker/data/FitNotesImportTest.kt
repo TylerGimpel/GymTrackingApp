@@ -154,7 +154,7 @@ class FitNotesImportTest {
     @Test
     fun theBatchRecordsFitNotesVolumeAsApproximateBecauseOfTheSourceNotTheImport() = runBlocking {
         val fitNotes = importFixture()
-        val declaring = ImportRepository(database, clock, zone).import(
+        val declaring = ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)).import(
             FitNotesParser.parse(fixture).copy(
                 source = ImportSource(id = "declares-types", declaresSetTypes = true, declaresSupersets = false),
                 fingerprint = "another",
@@ -168,6 +168,58 @@ class FitNotesImportTest {
     }
 
     @Test
+    fun supersetsComeAcrossAsSupersetsInOrder() = runBlocking {
+        importFixture()
+        val byDate = sessions().observeRecent(limit = 100).first()
+            .filter { it.session.isImported }.associateBy { it.session.date.toString() }
+
+        // The pair on the first day, and the triple on the second, each as one superset whose
+        // members sit together — which is what the app's supersets are made of.
+        val pair = byDate.getValue("2026-03-02")
+        assertEquals(1, pair.supersets.size)
+        assertEquals(setOf("Barbell_Squat", BENCH), pair.exercises.filter { it.supersetId != null }.map { it.exercise.id }.toSet())
+
+        val triple = byDate.getValue("2026-03-05")
+        val grouped = triple.exercises.sortedBy { it.orderIndex }.filter { it.supersetId != null }
+        assertEquals(setOf(BENCH, "Dumbbell_Bicep_Curl", "Crunches"), grouped.map { it.exercise.id }.toSet())
+        val positions = grouped.map { it.orderIndex }
+        assertEquals("the triple's members are not together", positions.max() - positions.min(), positions.size - 1)
+    }
+
+    @Test
+    fun aSetsNoteComesAcrossAndAnOrphanedOneIsSkipped() = runBlocking {
+        val result = importFixture()
+
+        val bench = sessions().observeRecent(limit = 100).first()
+            .single { it.session.date.toString() == "2026-03-02" && it.session.isImported }
+            .exercises.single { it.exercise.id == BENCH }
+        assertEquals("Pause at the chest", bench.sets.single().efforts.single().note)
+        // The comment on a deleted set is not a sign of a corrupt file: the import went through.
+        assertTrue(result.sets > 0)
+    }
+
+    @Test
+    fun whatFitNotesKeptAboutAnExerciseComesAcrossWhereTheAppHasNoChoiceYet() = runBlocking {
+        val exercises = ExerciseRepository(
+            database,
+            database.exerciseDao(),
+            database.sessionDao(),
+            ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS),
+        )
+        exercises.note(BENCH, "My note")
+
+        importFixture()
+
+        val curl = bank().single { it.id == "Dumbbell_Bicep_Curl" }
+        assertEquals("Supinate at the top", curl.note)
+        assertEquals(WeightUnit.POUNDS, curl.displayUnit)
+        assertEquals(Kilograms(1.13), curl.chosenIncrement)
+        assertEquals(Duration.ofSeconds(90), curl.chosenRest)
+        // A choice already made here is the lifter's, and an import does not overwrite it.
+        assertEquals("My note", bank().single { it.id == BENCH }.note)
+    }
+
+    @Test
     fun importingTouchesNothingAlreadyLogged() = runBlocking {
         sessions().logSet(BENCH, SetDraft("60", "8"))
         sessions().finishSession(sessions().observeActiveSession().first()!!.id)
@@ -176,7 +228,13 @@ class FitNotesImportTest {
         importFixture()
 
         val mine = sessions().observeRecent(limit = 100).first().single { !it.session.isImported }
-        assertEquals(before, mine)
+        // What was logged: the session and every set in it. What an import may add to the
+        // exercise itself — a note FitNotes kept, where there was none — is not the log (#101).
+        assertEquals(before.session, mine.session)
+        assertEquals(
+            before.exercises.map { it.id to it.sets },
+            mine.exercises.map { it.id to it.sets },
+        )
     }
 
     @Test
@@ -198,7 +256,7 @@ class FitNotesImportTest {
     }
 
     private suspend fun importFixture(): ImportResult =
-        ImportRepository(database, clock, zone).import(FitNotesParser.parse(fixture), bank())
+        ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)).import(FitNotesParser.parse(fixture), bank())
 
     private suspend fun bank() = ExerciseRepository(
         database,
@@ -234,6 +292,30 @@ class FitNotesImportTest {
                     "timer_auto_start INTEGER, is_personal_record INTEGER, is_personal_record_first INTEGER, " +
                     "is_complete INTEGER, is_pending_update INTEGER, distance INTEGER, duration_seconds INTEGER)",
             )
+            db.execSQL(
+                "CREATE TABLE WorkoutGroup (_id INTEGER PRIMARY KEY, name TEXT, date TEXT, colour INTEGER, " +
+                    "routine_section_id INTEGER, auto_jump_enabled INTEGER, rest_timer_auto_start_enabled INTEGER)",
+            )
+            db.execSQL(
+                "CREATE TABLE WorkoutGroupExercise (_id INTEGER PRIMARY KEY, exercise_id INTEGER, date TEXT, " +
+                    "routine_section_id INTEGER, workout_group_id INTEGER)",
+            )
+            db.execSQL(
+                "CREATE TABLE Comment (_id INTEGER PRIMARY KEY, date DATE, owner_type_id INTEGER, owner_id INTEGER, comment TEXT)",
+            )
+            // A pair on the first day, and a triple on the second.
+            db.execSQL("INSERT INTO WorkoutGroup (_id, name, date) VALUES (1, 'A', '2026-03-02'), (2, 'B', '2026-03-05')")
+            db.execSQL(
+                "INSERT INTO WorkoutGroupExercise (_id, exercise_id, date, workout_group_id) VALUES " +
+                    "(1, 1, '2026-03-02', 1), (2, 2, '2026-03-02', 1), " +
+                    "(3, 2, '2026-03-05', 2), (4, 7, '2026-03-05', 2), (5, 6, '2026-03-05', 2)",
+            )
+            // A note on a set, and an orphan pointing at a set that was deleted: expected, and skipped.
+            db.execSQL(
+                "INSERT INTO Comment (_id, date, owner_type_id, owner_id, comment) VALUES " +
+                    "(1, '2026-03-02 18:00:00', 1, 3, 'Pause at the chest'), " +
+                    "(2, '2026-03-02 18:05:00', 1, 999, 'A set that no longer exists')",
+            )
             listOf(
                 arrayOf<Any?>(1, "Barbell Squat", 0, 1),
                 arrayOf<Any?>(2, "Barbell Bench Press - Medium Grip", 0, 1),
@@ -246,6 +328,11 @@ class FitNotesImportTest {
             ).forEach {
                 db.execSQL("INSERT INTO exercise (_id, name, exercise_type_id, weight_unit_id) VALUES (?, ?, ?, ?)", it)
             }
+            // Everything FitNotes keeps about an exercise, on one of them, and a note on another.
+            db.execSQL(
+                "UPDATE exercise SET notes = 'Supinate at the top', weight_increment = 1.13, default_rest_time = 90 WHERE _id = 7",
+            )
+            db.execSQL("UPDATE exercise SET notes = 'Their note' WHERE _id = 2")
             // `unit` is 0 on every row, as in the real file; the weights are plain kilograms.
             // Columns: _id, exercise, date, metric_weight, reps, duration_seconds, distance.
             listOf(
