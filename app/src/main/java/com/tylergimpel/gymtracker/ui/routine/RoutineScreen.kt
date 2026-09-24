@@ -669,20 +669,6 @@ private fun RoutineProperties(
 
         // Whether they do any, and where it goes. A day of its own takes a position in the
         // rotation; after lifting takes none, because the lifting session still happened.
-        // Asked here because it is where they are already saying what they want from training,
-        // and read by exactly one rule: whether to steer somebody away from high-rep work whose
-        // value depends on judging how close to failure they are.
-        ChoiceRow(
-            label = stringResource(R.string.routine_experience),
-            options = listOf(
-                Experience.NOVICE to stringResource(R.string.experience_novice),
-                Experience.TRAINED to stringResource(R.string.experience_trained),
-                Experience.ADVANCED to stringResource(R.string.experience_advanced),
-            ),
-            selected = experience,
-            onSelect = viewModel::setExperience,
-        )
-
         ChoiceRow(
             label = stringResource(R.string.routine_cardio),
             options = listOf(

@@ -942,6 +942,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_FOURTH_DATABASE = "migration-twenty-fourth.db"
         const val TWENTY_FIFTH_DATABASE = "migration-twenty-fifth.db"
         const val TWENTY_SIXTH_DATABASE = "migration-twenty-sixth.db"
+        const val TWENTY_SEVENTH_DATABASE = "migration-twenty-seventh.db"
     }
 
     /**
@@ -1207,6 +1208,39 @@ class GymDatabaseMigrationTest {
                 db.query("SELECT seed FROM routine WHERE name = 'By hand'").use {
                     it.moveToFirst()
                     assertTrue("a routine nobody generated was given a seed", it.isNull(0))
+                }
+            }
+    }
+
+    /**
+     * Version 28 gives the profile somewhere to keep sex, year of birth and height.
+     *
+     * All three empty for everybody who upgrades, because nobody has been asked: an empty field is
+     * the truth about a question that was never put, and the profile gates nothing either way.
+     * What was already there — the unit, the bar, the experience — comes through untouched.
+     */
+    @Test
+    fun migratesToAProfileWithRoomForWhoTheLifterIs() {
+        helper.createDatabase(TWENTY_SEVENTH_DATABASE, 27).use { version27 ->
+            version27.execSQL(
+                "INSERT INTO profile (id, display_unit, bar_kg, experience) " +
+                    "VALUES (1, 'lb', 20.0, 'NOVICE')",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_SEVENTH_DATABASE, 28, true, MIGRATION_27_28)
+            .use { db ->
+                db.query(
+                    "SELECT display_unit, bar_kg, experience, sex, birth_year, height_cm " +
+                        "FROM profile WHERE id = 1",
+                ).use {
+                    it.moveToFirst()
+                    assertEquals("lb", it.getString(0))
+                    assertEquals(20.0, it.getDouble(1), 0.0)
+                    assertEquals("NOVICE", it.getString(2))
+                    assertTrue("sex was invented on upgrade", it.isNull(3))
+                    assertTrue("a year of birth was invented on upgrade", it.isNull(4))
+                    assertTrue("a height was invented on upgrade", it.isNull(5))
                 }
             }
     }

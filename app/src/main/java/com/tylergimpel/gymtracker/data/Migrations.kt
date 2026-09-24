@@ -670,6 +670,20 @@ internal val MIGRATION_26_27 = object : Migration(26, 27) {
     }
 }
 
+/**
+ * Somewhere to keep who the lifter is, if they choose to say: sex, year of birth and height.
+ *
+ * All three empty for everybody upgrading, because nobody has been asked — an empty field is the
+ * truth about a question never put, and the profile gates nothing either way (#87).
+ */
+internal val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `profile` ADD COLUMN `sex` TEXT")
+        db.execSQL("ALTER TABLE `profile` ADD COLUMN `birth_year` INTEGER")
+        db.execSQL("ALTER TABLE `profile` ADD COLUMN `height_cm` REAL")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -697,6 +711,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_24_25,
     MIGRATION_25_26,
     MIGRATION_26_27,
+    MIGRATION_27_28,
 )
 
 /**

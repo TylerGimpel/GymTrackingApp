@@ -14,6 +14,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.ui.bank.ExerciseBankScreen
 import com.tylergimpel.gymtracker.ui.bodyweight.BodyweightScreen
 import com.tylergimpel.gymtracker.ui.plates.PlatesScreen
+import com.tylergimpel.gymtracker.ui.profile.ProfileScreen
 import com.tylergimpel.gymtracker.ui.routine.RoutineScreen
 import com.tylergimpel.gymtracker.ui.routine.RoutineViewModel
 import com.tylergimpel.gymtracker.ui.session.SessionScreen
@@ -33,7 +34,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Destination { SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES }
+private enum class Destination { SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE }
 
 /**
  * Four destinations, switched by hand.
@@ -68,6 +69,7 @@ private fun GymTracker(
             onOpenRoutine = { destination = Destination.ROUTINE },
             onOpenBodyweight = { destination = Destination.BODYWEIGHT },
             onOpenPlates = { destination = Destination.PLATES },
+            onOpenProfile = { destination = Destination.PROFILE },
             viewModel = viewModel,
         )
 
@@ -86,6 +88,11 @@ private fun GymTracker(
 
         Destination.PLATES -> PlatesScreen(
             onBack = { destination = Destination.SESSION },
+        )
+
+        Destination.PROFILE -> ProfileScreen(
+            onBack = { destination = Destination.SESSION },
+            onOpenBodyweight = { destination = Destination.BODYWEIGHT },
         )
 
         Destination.ROUTINE -> RoutineScreen(

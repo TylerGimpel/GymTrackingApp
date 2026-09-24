@@ -127,6 +127,7 @@ fun SessionScreen(
     onOpenRoutine: () -> Unit,
     onOpenBodyweight: () -> Unit,
     onOpenPlates: () -> Unit,
+    onOpenProfile: () -> Unit = {},
     viewModel: SessionViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -224,6 +225,7 @@ fun SessionScreen(
             onOpenRoutine = onOpenRoutine,
             onOpenBodyweight = onOpenBodyweight,
             onOpenPlates = onOpenPlates,
+            onOpenProfile = onOpenProfile,
         ),
     )
 }
@@ -310,6 +312,7 @@ data class SessionActions(
     val onOpenRoutine: () -> Unit = {},
     val onOpenBodyweight: () -> Unit = {},
     val onOpenPlates: () -> Unit = {},
+    val onOpenProfile: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -412,6 +415,11 @@ fun SessionScreen(
                     // so it sits beside the routine and the weigh-ins rather than in a session.
                     TextButton(onClick = wholeSession.onOpenPlates) {
                         Text(stringResource(R.string.session_open_plates))
+                    }
+                    // Who the lifter is, if they choose to say. Beside the weigh-ins because it
+                    // is theirs rather than any session's, and gates nothing in one.
+                    TextButton(onClick = wholeSession.onOpenProfile) {
+                        Text(stringResource(R.string.session_open_profile))
                     }
                     if (state.session != null) {
                         TextButton(onClick = cycle.onFinish) {

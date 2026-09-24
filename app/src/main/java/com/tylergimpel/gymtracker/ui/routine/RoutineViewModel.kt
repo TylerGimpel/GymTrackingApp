@@ -318,17 +318,6 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     fun cancelPicking() = held.update { it.copy(picking = null, addingDisliked = null) }
 
-    /**
-     * Records how much training the lifter has behind them.
-     *
-     * Theirs rather than the routine's, so it goes to the profile — but it is asked here, beside
-     * the goal and the rep preference, because this is where they are already saying what they
-     * want out of their training.
-     */
-    fun setExperience(experience: Experience) {
-        viewModelScope.launch { database.profileRepository().setExperience(experience) }
-    }
-
     /** Keeps one of a day's exercises through the next regeneration, or stops keeping it. */
     fun setPinned(dayId: Long, exerciseId: String, pinned: Boolean) {
         viewModelScope.launch { repository.setPinned(dayId, exerciseId, pinned) }

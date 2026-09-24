@@ -55,6 +55,18 @@ data class ProfileEntity(
      */
     @ColumnInfo(name = "experience", defaultValue = "TRAINED")
     val experience: String = "TRAINED",
+
+    /** `FEMALE` or `MALE`, or null where the lifter has not said — which is most of them. */
+    @ColumnInfo(name = "sex")
+    val sex: String? = null,
+
+    /** The year they were born, which keeps an age without it going stale. */
+    @ColumnInfo(name = "birth_year")
+    val birthYear: Int? = null,
+
+    /** Kept if the lifter wants it kept, and never asked for: nothing reads it (#87). */
+    @ColumnInfo(name = "height_cm")
+    val heightCm: Double? = null,
 ) {
     companion object {
         /** There is one lifter, so there is one row, and it has a known id to be written over. */

@@ -4,11 +4,15 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.Experience
+import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.Sex
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,6 +46,56 @@ class ProfilePersistenceTest {
     fun tearDown() {
         database.close()
         context.deleteDatabase(TEST_DATABASE)
+    }
+
+    @Test
+    fun aProfileNobodyHasFilledInIsStillAProfile() = runBlocking {
+        val nothing = profile(seededWith = WeightUnit.KILOGRAMS).observeProfile().first()
+
+        // Every field optional and none of them gating anything (#87): a lifter who declines all
+        // of it is answered by defaults, never by a value somebody invented for them.
+        assertNull(nothing.sex)
+        assertNull(nothing.birthYear)
+        assertNull(nothing.heightCm)
+        assertEquals(Experience.TRAINED, nothing.experience)
+    }
+
+    @Test
+    fun eachThingALifterSaysAboutThemselvesIsKeptWithoutLosingTheOthers() = runBlocking {
+        val profile = profile(seededWith = WeightUnit.KILOGRAMS)
+        profile.setBar(Kilograms(20.0))
+        profile.setExperience(Experience.NOVICE)
+
+        profile.setSex(Sex.FEMALE)
+        profile.setBirthYear(1994)
+        profile.setHeightCm(168.0)
+
+        // The row is replaced whole on every write, so a field written without reading the rest
+        // first takes the others away with it — the lifter's bar included.
+        val kept = profile.observeProfile().first()
+        assertEquals(Sex.FEMALE, kept.sex)
+        assertEquals(1994, kept.birthYear)
+        assertEquals(168.0, kept.heightCm!!, 0.0)
+        assertEquals(Experience.NOVICE, kept.experience)
+        assertEquals(Kilograms(20.0), profile.bar())
+    }
+
+    @Test
+    fun anythingSaidCanBeTakenBack() = runBlocking {
+        val profile = profile(seededWith = WeightUnit.KILOGRAMS)
+        profile.setSex(Sex.MALE)
+        profile.setBirthYear(1980)
+        profile.setHeightCm(180.0)
+
+        profile.setSex(null)
+        profile.setBirthYear(null)
+        profile.setHeightCm(null)
+
+        // Optional means optional after the fact too: withdrawing an answer leaves no trace of it.
+        val withdrawn = profile.observeProfile().first()
+        assertNull(withdrawn.sex)
+        assertNull(withdrawn.birthYear)
+        assertNull(withdrawn.heightCm)
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.tylergimpel.gymtracker.data
 
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Experience
+import com.tylergimpel.gymtracker.domain.Profile
+import com.tylergimpel.gymtracker.domain.Sex
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -41,6 +43,38 @@ class ProfileRepository(
 
     private fun experienceOf(stored: String): Experience? =
         Experience.entries.firstOrNull { it.name == stored }
+
+    /**
+     * Everything the lifter has said about themselves, with defaults for everything they have not.
+     *
+     * An empty profile is a valid one: the app is built to work with nothing here at all.
+     */
+    fun observeProfile(): Flow<Profile> = profiles.observe().map { row ->
+        Profile(
+            sex = row?.sex?.let { stored -> Sex.entries.firstOrNull { it.name == stored } },
+            birthYear = row?.birthYear,
+            heightCm = row?.heightCm,
+            experience = row?.experience?.let(::experienceOf) ?: Experience.TRAINED,
+        )
+    }
+
+    /** Records the lifter's sex, or withdraws it with null. */
+    suspend fun setSex(sex: Sex?) = update { it.copy(sex = sex?.name) }
+
+    /** Records the year the lifter was born, or withdraws it with null. */
+    suspend fun setBirthYear(year: Int?) = update { it.copy(birthYear = year) }
+
+    /** Records the lifter's height, or withdraws it with null. Never asked for; see [Profile]. */
+    suspend fun setHeightCm(heightCm: Double?) = update { it.copy(heightCm = heightCm) }
+
+    /**
+     * Changes one thing about the row and keeps the rest.
+     *
+     * Read before written, because the upsert replaces the row whole: a field written from a fresh
+     * entity would take the lifter's bar and everything else they had said along with it.
+     */
+    private suspend fun update(change: (ProfileEntity) -> ProfileEntity) =
+        profiles.upsert(change(profiles.profile() ?: ProfileEntity()))
 
     /**
      * Records that this lifter reads weights in [displayUnit] from now on.
