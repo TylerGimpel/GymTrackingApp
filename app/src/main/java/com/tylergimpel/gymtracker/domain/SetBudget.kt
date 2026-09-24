@@ -66,26 +66,43 @@ fun List<Exercise>.orderedFor(goal: RoutineGoal): List<Exercise> = when (goal) {
 }
 
 /**
+ * How far above the bottom of the target band the set budget aims, in fractional sets a week.
+ *
+ * **Invented**, like the constants above. One set is enough headroom that whole-set rounding does
+ * not carry a muscle under the band in any routine measured, and no more, because every set above
+ * the floor is time in a session the ceiling has to find room for (#84). Where rounding does carry
+ * one under — a muscle trained on many days loses up to half a set each time — the band finding
+ * says so.
+ */
+const val AIM_ABOVE_FLOOR = 1.0
+
+/**
  * How many sets of [muscle] one session should hold, for a routine of this shape.
  *
  * The weekly target divided by how often the muscle is actually trained, then held under the
  * per-session cap — which is what turns "eighteen sets a week" into something a day can carry.
- * The middle of the target band is what is aimed at rather than either end, because the band is a
- * tier rather than a tolerance and its middle is the least arbitrary point in it.
  *
- * **This budgets direct work only, and is honest about being an approximation.** The targets it
- * reads are stated in fractional sets, which count secondary work at a half — so a muscle that
- * gets a lot of incidental work will land above the band once the routine exists. Closing that
- * loop properly means choosing exercises, measuring what they contribute and choosing again; what
- * happens instead is that the report says where every muscle actually landed (#70) and the
- * validation says when that is outside the band (#76). An honest loop with the lifter in it beats
- * a hidden one.
+ * **Aimed [AIM_ABOVE_FLOOR] above the bottom of the band, not at its middle.** The band is a tier
+ * and every point in it is a legitimate place to be, so where in it to aim is a question of what
+ * fits. Aimed at the middle, twelve muscles' worth made an ordinary four-day upper/lower week run
+ * past the session ceiling on every upper day (#84). Aimed at the floor itself, whole sets round
+ * some muscles just under it and the app flags its own routine as under-trained.
+ *
+ * This is the whole target, and all of it fractional. What the rest of the cycle already gives a
+ * muscle as secondary work is taken off it before any direct work is budgeted — see the
+ * generator's settling — so a muscle second in every press does not land above the band.
  */
 fun setsPerSessionFor(
     muscle: String,
     shape: SplitShape,
     goal: RoutineGoal,
     cadence: Int,
+    /**
+     * What a session of this muscle already gets from movements chosen for other muscles, in
+     * fractional sets. Taken off before the cap is applied, so a muscle the cap holds short is not
+     * then also docked its whole credit.
+     */
+    credited: Double = 0.0,
 ): Double {
     val lifting = shape.days.filter { it.kind == RoutineDayKind.LIFTING }
     val daysTrainingIt = lifting.count { muscle in it.muscles }
@@ -97,6 +114,6 @@ fun setsPerSessionFor(
     if (sessionsPerWeek <= 0.0) return 0.0
 
     val target = weeklyVolumeTargetFor(goal)
-    val aim = (target.start + target.endInclusive) / 2
-    return (aim / sessionsPerWeek).coerceAtMost(PER_SESSION_CAP)
+    val aim = target.start + AIM_ABOVE_FLOOR
+    return (aim / sessionsPerWeek - credited).coerceIn(0.0, PER_SESSION_CAP)
 }

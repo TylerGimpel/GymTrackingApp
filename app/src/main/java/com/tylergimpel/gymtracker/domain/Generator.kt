@@ -25,8 +25,9 @@ data class FilledDay(
  * **shape** naming what the day is *for*, not the generator counting incidental work as done.
  *
  * **How much of each, and in what order**, comes from the set budget: a muscle's weekly target
- * divided by how often this shape trains it, spread over as many movements as that many sets
- * should be spread over, and ordered compound-first where the goal is one the order matters to.
+ * divided by how often this shape trains it, less what the rest of the cycle already gives it as
+ * secondary work (see [settled]), spread over as many movements as what is left should be spread
+ * over, and ordered compound-first where the goal is one the order matters to.
  *
  * **Equipment filters the pool and limits nothing else.** Machines, free weights and bands are
  * equivalent for hypertrophy, so a sparse gym gets a routine that satisfies the same coverage
@@ -73,18 +74,143 @@ fun fillDays(
 ): List<FilledDay> {
     val pool = bank.availableFor(equipment)
 
-    return shape.days.map { day ->
+    val chosen = shape.days.map { day ->
         // Nothing here knows what belongs in a cardio position, and a resistance exercise in one
         // would put volume into a day that is meant to carry none.
-        if (day.kind == RoutineDayKind.CARDIO) return@map FilledDay(day, emptyList())
-
-        FilledDay(
-            day,
+        if (day.kind == RoutineDayKind.CARDIO) {
+            DayPlan(mutableListOf(), emptyList())
+        } else {
             pool.buildDay(day, shape, goal, cadence, pinned[day.name].orEmpty(), seed)
-                .orderedBy(goal),
-        )
+        }
+    }
+
+    return shape.days.zip(chosen.settled(shape, goal, cadence)) { day, plan ->
+        FilledDay(day, plan.exercises.orderedBy(goal))
     }
 }
+
+/**
+ * The movements a day chose for one muscle it names, and how many sets each has now.
+ *
+ * [candidates] is what was chosen against the muscle's whole target, which is the most it could
+ * ever want; settling only ever takes fewer of them, never more.
+ */
+private data class MuscleWork(
+    val muscle: String,
+    val candidates: List<Exercise>,
+    val pinned: Set<String>,
+    /** Every muscle the day names, which is what decides whether a movement's coverage matters. */
+    val named: Set<String>,
+    val planned: List<PlannedExercise>,
+)
+
+/** A day's work, one entry per muscle it budgets, plus pins for muscles it does not name. */
+private data class DayPlan(
+    val work: MutableList<MuscleWork>,
+    val unnamedPins: List<PlannedExercise>,
+) {
+    val exercises: List<PlannedExercise> get() = work.flatMap { it.planned } + unnamedPins
+}
+
+/**
+ * The set counts, settled against what the whole cycle already gives each muscle.
+ *
+ * **Fractional on both sides of the sum.** The targets are stated in fractional sets, so a press
+ * that works triceps at a half counts toward triceps' target (ADR 0005), and only what is left is
+ * budgeted as triceps' own direct work. Budgeting the whole target as direct work on top of every
+ * press and row overshot each muscle that sits second in a compound, and it was most of why an
+ * ordinary upper day ran past two hours.
+ *
+ * **Across the cycle, and in no particular order.** The credit is everything anywhere in the
+ * rotation, on any day and chosen before or after, because a lat pulldown's work does not care
+ * that the rows were picked second, and triceps trained on one day still had every press on the
+ * other. Spread over the days that train the muscle directly, as its own budget is. Counted by
+ * [creditFor], the same rule the reports count by, so what the budget assumed and what the routine
+ * is then said to train are one number.
+ *
+ * **Held under the per-session cap day by day**, not only on average: a day already carrying a lot
+ * of a muscle's secondary work gets less of its direct work, so no one session goes past the cap
+ * because the average session does not.
+ *
+ * Settled because the credits lean on each other — fewer triceps sets means less for chest from
+ * the dips — so the counts are revised one muscle at a time, in the order the days name them,
+ * until a round changes nothing. The lists are updated in place on purpose: each muscle is budgeted
+ * against the latest answer for every other, which settles sooner than revising them all at once.
+ * The order and the cap on rounds are fixed, so the same answers still give the same routine.
+ *
+ * **Credit changes how much and never whether.** A muscle a day names keeps a movement of its
+ * own, because secondary work is not coverage; with nothing left to budget, that movement gets the
+ * one set a prescription cannot go below. A muscle's own work on another day is never credited,
+ * because its per-session budget already accounts for it.
+ */
+private fun List<DayPlan>.settled(
+    shape: SplitShape,
+    goal: RoutineGoal,
+    cadence: Int,
+): List<DayPlan> {
+    val plans = map { it.copy(work = it.work.toMutableList()) }
+    val lifting = shape.days.filter { it.kind == RoutineDayKind.LIFTING }
+
+    repeat(MOST_SETTLING_ROUNDS) {
+        var changed = false
+        plans.forEach { today ->
+            val work = today.work
+            work.indices.forEach { index ->
+                val muscle = work[index].muscle
+                val fromOthers = { plan: DayPlan ->
+                    plan.work.filter { it.muscle != muscle }.flatMap { it.planned }
+                        .plus(plan.unnamedPins)
+                        .sumOf { (it.sets ?: 0) * it.exercise.creditFor(muscle) }
+                }
+                val days = lifting.count { muscle in it.muscles }.coerceAtLeast(1)
+                val onAverage = setsPerSessionFor(
+                    muscle, shape, goal, cadence, credited = plans.sumOf(fromOthers) / days,
+                )
+                val budget = onAverage.coerceAtMost(
+                    (PER_SESSION_CAP - fromOthers(today)).coerceAtLeast(0.0),
+                )
+                val next = work[index].budgetedAt(budget)
+                if (next != work[index]) {
+                    work[index] = next
+                    changed = true
+                }
+            }
+        }
+        if (!changed) return plans
+    }
+    return plans
+}
+
+/**
+ * This muscle's work at [budget] direct sets: as few of its movements as that many sets want.
+ *
+ * Pins stay whatever the budget, and so does any movement that is also the direct work for
+ * another muscle the day names — trimming that would take away coverage the credit never gave.
+ */
+private fun MuscleWork.budgetedAt(budget: Double): MuscleWork {
+    val essential = candidates.filter { candidate ->
+        candidate.id in pinned ||
+            candidate.primaryMuscles.any { it != muscle && it in named }
+    }
+    val optional = candidates.filterNot { it in essential }
+        .take((exercisesForSets(budget) - essential.size).coerceAtLeast(0))
+    // In the order they were chosen, which is the order the app would recommend them.
+    val keep = candidates.filter { it in essential || it in optional }
+    return copy(
+        planned = keep.zip(setsAcross(keep.size, budget)) { exercise, count ->
+            PlannedExercise(exercise, count, pinned = exercise.id in pinned)
+        },
+    )
+}
+
+/**
+ * How many rounds settling gets before it stops where it is.
+ *
+ * Invented, and generous: each credit is at most half of work that is itself being reduced, so
+ * the counts close in quickly. The cap exists so that whole-set rounding flickering between two
+ * answers cannot keep going, and so what comes back is still a function of the answers alone.
+ */
+private const val MOST_SETTLING_ROUNDS = 8
 
 /**
  * The same candidates, starting from a different one.
@@ -123,7 +249,10 @@ private fun List<Exercise>.availableFor(equipment: Set<String>): List<Exercise> 
         .sortedWith(compareByDescending<Exercise> { it.isCompound }.thenBy { it.id })
 
 /**
- * The day, built: an exercise for every muscle it names, as many as the budget wants of each.
+ * The day, chosen: an exercise for every muscle it names, as many as its whole target could want.
+ *
+ * Chosen against the whole target, before any credit, so that settling ([settled]) only ever
+ * takes movements away. The counts here are a first answer and are revised there.
  *
  * **Direct work on both sides of the question.** A muscle is answered by exercises that train it
  * primarily, and a muscle those exercises already train primarily is not answered again — so
@@ -148,8 +277,8 @@ private fun List<Exercise>.buildDay(
     cadence: Int,
     kept: List<PlannedExercise>,
     seed: Int,
-): List<PlannedExercise> {
-    val chosen = mutableListOf<PlannedExercise>()
+): DayPlan {
+    val chosen = mutableListOf<MuscleWork>()
     val answered = mutableSetOf<String>()
     val keptIds = kept.mapTo(mutableSetOf()) { it.exercise.id }
     val taken = keptIds.toMutableSet()
@@ -171,13 +300,21 @@ private fun List<Exercise>.buildDay(
         taken += forThisMuscle.map(Exercise::id)
         // Everything these train primarily now has direct work, so nothing else is chosen for it.
         answered += forThisMuscle.flatMap(Exercise::primaryMuscles)
-        chosen += forThisMuscle.zip(setsAcross(forThisMuscle.size, sets)) { exercise, count ->
-            PlannedExercise(exercise, count, pinned = exercise.id in keptIds)
-        }
+        val pinnedIds = forThisMuscle.map(Exercise::id).filterTo(mutableSetOf()) { it in keptIds }
+        chosen += MuscleWork(
+            muscle = muscle,
+            candidates = forThisMuscle,
+            pinned = pinnedIds,
+            named = day.muscles.toSet(),
+            planned = emptyList(),
+        ).budgetedAt(sets)
     }
 
     // A pin for something the day does not name is still the lifter's: they put it there, and a
     // regeneration that quietly dropped it would not be keeping what it promised to keep.
-    val placed = chosen.mapTo(mutableSetOf()) { it.exercise.id }
-    return chosen + kept.filterNot { it.exercise.id in placed }.map { it.copy(pinned = true) }
+    val placed = chosen.flatMapTo(mutableSetOf()) { work -> work.candidates.map(Exercise::id) }
+    return DayPlan(
+        work = chosen,
+        unnamedPins = kept.filterNot { it.exercise.id in placed }.map { it.copy(pinned = true) },
+    )
 }

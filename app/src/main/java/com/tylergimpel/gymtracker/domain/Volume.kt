@@ -47,6 +47,27 @@ fun plannedVolumeByMuscle(days: List<RoutineDay>): Map<String, Double> = volumeO
 )
 
 /**
+ * What one counted set of this exercise contributes to [muscle], in fractional sets.
+ *
+ * **The one statement of the counting rule**, read by the report of what was lifted, the report
+ * of what a routine plans, and the generator's budget alike — so none of them can drift into a
+ * different convention from the targets they are compared against (ADR 0005).
+ *
+ * Every primary muscle takes full credit. A handful of exercises name two, and a movement that
+ * genuinely targets two muscles primarily works both of them — splitting the credit would invent a
+ * rule, and taking only the first would lose one of them entirely.
+ *
+ * A muscle already counted in full is not also counted at half. Nine shipped bank rows list the
+ * same muscle in both places — Barbell Step Ups names quadriceps twice — and stacking the two would
+ * quietly credit 1.5 sets for one set of work.
+ */
+fun Exercise.creditFor(muscle: String): Double = when (muscle) {
+    in primaryMuscles -> DIRECT_CONTRIBUTION
+    in secondaryMuscles -> INDIRECT_CONTRIBUTION
+    else -> 0.0
+}
+
+/**
  * Sets per muscle, from exercises and how many of their sets counted.
  *
  * One function for the planned and the performed side, so the two can never drift into different
@@ -57,25 +78,9 @@ private fun volumeOf(counted: List<Pair<Exercise, Int>>): Map<String, Double> {
 
     counted.forEach { (exercise, sets) ->
         if (sets == 0) return@forEach
-
-        val primary = exercise.primaryMuscles.toSet()
-
-        // Every primary muscle takes full credit. A handful of exercises name two, and a movement
-        // that genuinely targets two muscles primarily works both of them — splitting the credit
-        // would invent a rule, and taking only the first would lose one of them entirely.
-        primary.forEach { muscle ->
-            volume.merge(muscle, sets * DIRECT_CONTRIBUTION, Double::plus)
+        (exercise.primaryMuscles + exercise.secondaryMuscles).toSet().forEach { muscle ->
+            volume.merge(muscle, sets * exercise.creditFor(muscle), Double::plus)
         }
-
-        // A muscle already counted in full is not also counted at half. Nine shipped bank rows list
-        // the same muscle in both places — Barbell Step Ups names quadriceps twice — and stacking
-        // the two would quietly credit 1.5 sets for one set of work.
-        exercise.secondaryMuscles
-            .filterNot { it in primary }
-            .toSet()
-            .forEach { muscle ->
-                volume.merge(muscle, sets * INDIRECT_CONTRIBUTION, Double::plus)
-            }
     }
 
     return volume

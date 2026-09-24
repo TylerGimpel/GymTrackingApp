@@ -10,6 +10,8 @@ import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.domain.liftingCadence
 import com.tylergimpel.gymtracker.domain.SPLIT_SHAPES
 import com.tylergimpel.gymtracker.domain.rebuildFrom
+import com.tylergimpel.gymtracker.domain.Binding
+import com.tylergimpel.gymtracker.domain.bindingOn
 import com.tylergimpel.gymtracker.domain.RecoveredDay
 import com.tylergimpel.gymtracker.domain.fillDays
 import com.tylergimpel.gymtracker.domain.Exercise
@@ -830,6 +832,45 @@ class RoutinePersistenceTest {
         // routines: the snapshots were taken for a different reason and happen to preserve every
         // routine day the lifter ever trained.
         assertEquals(was, everyExercise())
+    }
+
+    @Test
+    fun anOrdinaryUpperLowerWeekFromTheShippedBankFitsAndLandsInItsBand() = runBlocking {
+        // The generator's own tests run on a small fixture bank. This is the one that ships: every
+        // row, every secondary muscle it lists, and the rest the engine prescribes for each. Four
+        // sessions a week alternating upper and lower, for size, in an ordinary gym (#84).
+        val shape = SPLIT_SHAPES.single { it.id == "upper-lower-4" }
+        val bank = exercises.observeBank().first()
+        routines.createFromShape(
+            name = shape.description,
+            shape = shape,
+            goal = RoutineGoal.HYPERTROPHY,
+            cadence = 4,
+            equipment = setOf("barbell", "dumbbell", "cable", "machine", "body only"),
+            repPreference = RepPreference.MODERATE,
+            cardio = CardioPlacement.NONE,
+            bank = bank,
+        )
+        val routine = routines.observeProgress().first()!!.routine
+
+        val findings = bindingOn(routine, bank = bank)
+        val budgeted = shape.days.flatMap { it.muscles }.toSet()
+
+        assertEquals(
+            emptyList<String>(),
+            findings.filterIsInstance<Binding.SessionTooLong>()
+                .map { "${it.day} ${it.estimated.toMinutes()} min" },
+        )
+        assertEquals(
+            emptyList<String>(),
+            findings.filterIsInstance<Binding.VolumeOutsideBand>()
+                .filter { it.muscle in budgeted }
+                .map { "${it.muscle} ${it.weeklySets}" },
+        )
+        assertEquals(
+            emptyList<String>(),
+            findings.filterIsInstance<Binding.MuscleNotTrained>().map { it.muscle },
+        )
     }
 
     @Test

@@ -307,6 +307,79 @@ class GeneratorTest {
     }
 
     @Test
+    fun `work a day already gives a muscle is counted before its own is budgeted`() {
+        val pressing = SplitShape(
+            id = "pressing",
+            description = "Pressing",
+            rotation = 1,
+            days = listOf(SplitDay("Press", listOf("chest", "triceps"))),
+        )
+
+        val day = fillDays(pressing, bank, allEquipment, HYPERTROPHY, cadence = 3).single()
+        val triceps = plannedVolumeOf(day).getValue("triceps")
+        val aim = setsPerSessionFor("triceps", pressing, HYPERTROPHY, cadence = 3)
+
+        // Every press already works triceps at a half. Budgeting triceps' whole target as direct
+        // work on top of that lands it well above what it was aimed at — the targets are stated in
+        // fractional sets, so the pressing counts toward them (ADR 0005). A set of slack, because
+        // sets are whole and every movement gets at least one.
+        assertTrue("triceps planned at $triceps against an aim of $aim", triceps <= aim + 1.0)
+    }
+
+    @Test
+    fun `a muscle its neighbours already train fully still gets a movement of its own`() {
+        val pressing = SplitShape(
+            id = "heavy-pressing",
+            description = "Heavy pressing",
+            rotation = 1,
+            days = listOf(SplitDay("Press", listOf("chest", "shoulders", "triceps"))),
+        )
+
+        val day = fillDays(pressing, bank, allEquipment, HYPERTROPHY, cadence = 2).single()
+
+        // Credit reduces how much; it never answers coverage. Secondary work is not coverage, and
+        // a day naming triceps comes back with something that trains triceps.
+        val forTriceps = day.exercises.filter { "triceps" in it.exercise.primaryMuscles }
+        assertTrue(forTriceps.isNotEmpty())
+        assertTrue(forTriceps.all { (it.sets ?: 0) >= 1 })
+    }
+
+    @Test
+    fun `an ordinary upper lower week fits the session ceiling`() {
+        val upperLower = SPLIT_SHAPES.single { it.id == "upper-lower-4" }
+        val filled = fillDays(upperLower, bank, allEquipment, HYPERTROPHY, cadence = 4)
+
+        // Four sessions a week, alternating upper and lower, training for size with a full gym:
+        // about the most ordinary routine there is. A generator that hands it out and then calls
+        // it too long to train is not a generator anybody can use.
+        val tooLong = bindingOn(routineFrom(upperLower, filled, cadence = 4))
+            .filterIsInstance<Binding.SessionTooLong>()
+        assertTrue(tooLong.joinToString { "${it.day}: ${it.estimated.toMinutes()} min" }, tooLong.isEmpty())
+    }
+
+    @Test
+    fun `a generated routine lands every muscle it budgets inside the band`() {
+        // Aiming lower is what lets an ordinary week fit, and whole sets are what can push an aim
+        // at the very floor of the band just under it — at which point the app would be flagging
+        // its own routine as under-trained. Across the shapes, weeks and goals a lifter would pick.
+        listOf(HYPERTROPHY, RoutineGoal.STRENGTH).forEach { goal ->
+            val band = weeklyVolumeTargetFor(goal)
+            listOf("upper-lower-4", "push-pull-legs-3", "full-body-2").forEach { id ->
+                val shape = SPLIT_SHAPES.single { it.id == id }
+                listOf(3, 4, 5).forEach { cadence ->
+                    val filled = fillDays(shape, bank, allEquipment, goal, cadence)
+                    val routine = routineFrom(shape, filled, cadence).copy(goal = goal)
+                    val budgeted = shape.days.flatMap { it.muscles }.toSet()
+                    val outside = routine.whatItTrains()
+                        .filter { it.muscle in budgeted && it.weeklySets !in band }
+                        .map { "${it.muscle} ${it.weeklySets}" }
+                    assertTrue("$goal $id x$cadence: $outside", outside.isEmpty())
+                }
+            }
+        }
+    }
+
+    @Test
     fun `a generated full body routine that differs by day says nothing about coverage`() {
         val twoDifferent = SPLIT_SHAPES.single { it.id == "full-body-2" }
         val filled = fillDays(twoDifferent, bank, allEquipment, HYPERTROPHY, cadence = 3)
@@ -364,6 +437,24 @@ class GeneratorTest {
         // lifter (#76), not something to paper over by putting in a bench press.
         assertFalse(filled.single().chosen.any { "neck" in it.primaryMuscles })
     }
+
+    /** The fractional volume one filled day plans, counted the way the targets are stated. */
+    private fun plannedVolumeOf(day: FilledDay): Map<String, Double> =
+        plannedVolumeByMuscle(listOf(RoutineDay(1, 1, day.shape.name, exercises = day.exercises)))
+
+    /** A routine holding what [filled] came back with, as the repository would store it. */
+    private fun routineFrom(shape: SplitShape, filled: List<FilledDay>, cadence: Int) = Routine(
+        id = 1,
+        name = shape.description,
+        goal = HYPERTROPHY,
+        cadence = cadence,
+        equipment = allEquipment,
+        repPreference = RepPreference.MODERATE,
+        shape = shape,
+        days = filled.mapIndexed { index, day ->
+            RoutineDay(index + 1L, index + 1, day.shape.name, exercises = day.exercises)
+        },
+    )
 
     /** What a day holds, without its set counts, which is what most of these are about. */
     private val FilledDay.chosen: List<Exercise> get() = exercises.map(PlannedExercise::exercise)

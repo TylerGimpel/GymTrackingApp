@@ -40,9 +40,11 @@ sealed interface Binding {
      * A muscle landing outside the band the goal aims at.
      *
      * Reported as the numbers and the band, never as a grade — the same register the routine
-     * report keeps. It is also where the set budget's own approximation surfaces: the budget
-     * divides direct work against targets that count secondary work at half, so a muscle picking
-     * up a lot of incidental work lands high here rather than being silently corrected.
+     * report keeps. A generated routine ordinarily lands inside its band, because the budget
+     * counts the work the cycle already gives a muscle before adding its own, by the same rule
+     * this is measured by (#84). What reaches this is mostly a routine the lifter built or edited,
+     * a muscle the per-session cap holds short on too few days, one nothing in the gym can train,
+     * or whole-set rounding at the edge of the band.
      */
     data class VolumeOutsideBand(
         val muscle: String,
