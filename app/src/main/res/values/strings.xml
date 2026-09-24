@@ -226,7 +226,7 @@
     <string name="settings_not_importable">Nothing was imported: that file could not be read as a FitNotes backup. In FitNotes, make a Backup and pick the .fitnotes file.</string>
     <string name="import_done">Brought in %1$d sessions, %2$d sets.</string>
     <string name="import_unmatched">%1$d sets were left out because their exercise names have no exact match here: %2$s.</string>
-    <string name="import_not_yet">%1$d timed or cardio sets are not brought across yet.</string>
+    <string name="import_not_yet">%1$d sets could not be read as any kind of set and were left out.</string>
     <string name="settings_backup_why">The backup is the file to keep. It holds everything, and restoring it on a new phone brings the app back exactly as it was: your training, routine, exercises, exclusions, plates, weigh-ins and profile.</string>
     <string name="settings_backed_up">Backed up %1$d sessions. Keep the file somewhere other than this phone.</string>
     <string name="restore_confirm_title">Replace what is here?</string>

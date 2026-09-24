@@ -21,7 +21,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import com.tylergimpel.gymtracker.domain.Metres
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -71,7 +73,7 @@ class FitNotesImportTest {
         val sets = FitNotesParser.parse(fixture).sets
 
         // SQLite let 22.5 sit in a column declared INTEGER; a strictly typed reader breaks here.
-        assertTrue(sets.any { (it.performance as Performance.WeightAndReps).weight == Kilograms(22.5) })
+        assertTrue(sets.any { (it.performance as? Performance.WeightAndReps)?.weight == Kilograms(22.5) })
     }
 
     @Test
@@ -81,25 +83,50 @@ class FitNotesImportTest {
         val squats = FitNotesParser.parse(fixture).sets.filter { it.exerciseName == "Barbell Squat" }
 
         assertEquals(
-            listOf(Kilograms(100.0), Kilograms(105.0), Kilograms(0.0)),
+            listOf(Kilograms(100.0), Kilograms(105.0)),
             squats.map { (it.performance as Performance.WeightAndReps).weight },
         )
     }
 
     @Test
-    fun aBodyweightSetIsAtZeroAndNeverAPhantomKilo() {
-        val zero = FitNotesParser.parse(fixture).sets.single { it.order == 4L }
+    fun aBodyweightSetComesInAsBodyweightAndNeverAsAPhantomKilo() {
+        val crunches = FitNotesParser.parse(fixture).sets.single { it.order == 4L }
 
-        assertEquals(Kilograms(0.0), (zero.performance as Performance.WeightAndReps).weight)
+        // 0.0 is FitNotes' "no load", not a load of nothing: a bodyweight set, twelve reps, with
+        // nothing added. The older 1.0 sentinel would have been a one-kilogram lift (#100).
+        assertEquals(Performance.BodyweightReps(addedWeight = null, reps = 12), crunches.performance)
     }
 
     @Test
-    fun timedAndCardioRowsAreCountedRatherThanGuessedAt() {
+    fun aHoldComesInAsTimeWithNoReps() {
+        val plank = FitNotesParser.parse(fixture).sets.single { it.exerciseName == "Plank" }
+
+        assertEquals(Performance.Timed(Duration.ofSeconds(40)), plank.performance)
+    }
+
+    @Test
+    fun aRunComesInAsDistanceAndTimeInCanonicalUnits() {
+        val run = FitNotesParser.parse(fixture).sets.single { it.exerciseName == "Running, Treadmill" }
+
+        // FitNotes keeps distance, like weight, in its metric base unit: metres.
+        assertEquals(Performance.DistanceAndTime(Metres(5000.0), Duration.ofSeconds(1200)), run.performance)
+    }
+
+    @Test
+    fun aLiftReadInPoundsIsNotConvertedTwice() {
+        val curl = FitNotesParser.parse(fixture).sets.single { it.exerciseName == "Dumbbell Bicep Curl" }
+
+        // The exercise is read in pounds, and FitNotes stored the 25 lb as kilograms already.
+        // Converting it again would be the silent corruption of every pound lift in the file.
+        assertEquals(Performance.WeightAndReps(Kilograms(11.34), 10), curl.performance)
+    }
+
+    @Test
+    fun everyKindOfSetInTheFileIsBroughtAcross() {
         val read = FitNotesParser.parse(fixture)
 
-        // Until #100 brings them across as what they are, they are said, not dropped silently.
-        assertEquals(mapOf(FitNotesParser.TIMED_SETS to 1, FitNotesParser.CARDIO_SETS to 1), read.notYetSupported)
-        assertFalse(read.sets.any { it.exerciseName == "Plank" || it.exerciseName == "Running (Treadmill)" })
+        assertTrue(read.notYetSupported.isEmpty())
+        assertEquals(9, read.sets.size)
     }
 
     @Test
@@ -110,7 +137,8 @@ class FitNotesImportTest {
         assertEquals(listOf(LocalDate.parse("2026-03-02"), LocalDate.parse("2026-03-05")), imported.map { it.session.date }.sorted())
         assertTrue(imported.all { it.session.importBatchId == result.batchId })
         assertTrue(imported.flatMap { it.exercises }.flatMap { it.sets }.all { it.type == SetType.WORKING })
-        assertEquals(5, result.sets)
+        // Everything but the one row whose name has no exact match.
+        assertEquals(8, result.sets)
     }
 
     @Test
@@ -207,29 +235,38 @@ class FitNotesImportTest {
                     "is_complete INTEGER, is_pending_update INTEGER, distance INTEGER, duration_seconds INTEGER)",
             )
             listOf(
-                arrayOf<Any?>(1, "Barbell Squat", 0, 0),
-                arrayOf<Any?>(2, "Barbell Bench Press - Medium Grip", 0, 0),
-                arrayOf<Any?>(3, "Hammer Strength Row", 0, 0),
-                arrayOf<Any?>(4, "Plank", 3, 0),
-                arrayOf<Any?>(5, "Running (Treadmill)", 1, 0),
+                arrayOf<Any?>(1, "Barbell Squat", 0, 1),
+                arrayOf<Any?>(2, "Barbell Bench Press - Medium Grip", 0, 1),
+                arrayOf<Any?>(3, "Hammer Strength Row", 0, 1),
+                arrayOf<Any?>(4, "Plank", 3, 1),
+                arrayOf<Any?>(5, "Running, Treadmill", 1, 1),
+                arrayOf<Any?>(6, "Crunches", 0, 1),
+                // Read in pounds by this lifter; FitNotes still stores the weight in kilograms.
+                arrayOf<Any?>(7, "Dumbbell Bicep Curl", 0, 2),
             ).forEach {
                 db.execSQL("INSERT INTO exercise (_id, name, exercise_type_id, weight_unit_id) VALUES (?, ?, ?, ?)", it)
             }
             // `unit` is 0 on every row, as in the real file; the weights are plain kilograms.
+            // Columns: _id, exercise, date, metric_weight, reps, duration_seconds, distance.
             listOf(
-                arrayOf<Any?>(1, 1, "2026-03-02", 100, 5, null),
-                arrayOf<Any?>(2, 1, "2026-03-02", 105, 5, null),
-                arrayOf<Any?>(3, 2, "2026-03-02", 22.5, 10, null),
-                arrayOf<Any?>(4, 1, "2026-03-05", 0.0, 12, null),
-                arrayOf<Any?>(5, 2, "2026-03-05", 60, 8, null),
-                arrayOf<Any?>(6, 3, "2026-03-05", 50, 10, null),
-                arrayOf<Any?>(7, 4, "2026-03-05", 0.0, null, 40),
-                arrayOf<Any?>(8, 5, "2026-03-05", 0.0, null, 1200),
+                arrayOf<Any?>(1, 1, "2026-03-02", 100, 5, null, null),
+                arrayOf<Any?>(2, 1, "2026-03-02", 105, 5, null, null),
+                arrayOf<Any?>(3, 2, "2026-03-02", 22.5, 10, null, null),
+                // The bodyweight sentinel is 0.0, and the reps are real.
+                arrayOf<Any?>(4, 6, "2026-03-05", 0.0, 12, null, null),
+                arrayOf<Any?>(5, 2, "2026-03-05", 60, 8, null, null),
+                arrayOf<Any?>(6, 3, "2026-03-05", 50, 10, null, null),
+                // A hold: time, and no reps at all.
+                arrayOf<Any?>(7, 4, "2026-03-05", 0.0, null, 40, null),
+                // A run: time and distance.
+                arrayOf<Any?>(8, 5, "2026-03-05", 0.0, null, 1200, 5000),
+                // 25 lb, as FitNotes stores it: already kilograms.
+                arrayOf<Any?>(9, 7, "2026-03-05", 11.34, 10, null, null),
             ).forEach {
                 db.execSQL(
-                    "INSERT INTO training_log (_id, exercise_id, date, metric_weight, reps, unit, duration_seconds) " +
-                        "VALUES (?, ?, ?, ?, ?, 0, ?)",
-                    arrayOf(it[0], it[1], it[2], it[3], it[4], it[5]),
+                    "INSERT INTO training_log (_id, exercise_id, date, metric_weight, reps, unit, duration_seconds, distance) " +
+                        "VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+                    it,
                 )
             }
         }
