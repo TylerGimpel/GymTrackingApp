@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.ui.settings
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -64,6 +65,28 @@ class SettingsScreenTest {
         compose.onNodeWithText("Keep what is here").performClick()
         assertEquals(1, cancelled)
         assertEquals(0, confirmed)
+    }
+
+    @Test
+    fun aRestoreOntoAPhoneThatWillNotWakeTheLifterSaysSoThenAndThere() {
+        var fixed: RestFix? = null
+        compose.setContent {
+            SettingsScreen(
+                state = SettingsUiState(
+                    dataMessage = DataMessage.Restored(sessions = 112),
+                    restAlerts = RestAlerts(alarmsAreReliable = false),
+                ),
+                onFixRestAlerts = { fixed = it },
+            )
+        }
+
+        // A new phone, or a restore, starts with exact alarms denied (#95). Said with the restore,
+        // where the lifter is looking, rather than discovered by a rest that ends late.
+        compose.onNodeWithText("Restored 112 sessions", substring = true).assertExists()
+        compose.onNodeWithText("this phone does not yet let rests", substring = true).assertExists()
+        compose.onAllNodesWithText("Allow alarms")[0].performClick()
+
+        assertEquals(RestFix.EXACT_ALARMS, fixed)
     }
 
     @Test

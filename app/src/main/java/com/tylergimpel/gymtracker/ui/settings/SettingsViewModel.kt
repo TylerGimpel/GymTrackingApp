@@ -174,6 +174,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     return@launch
                 }
                 backups.restore(backup)
+                // Read again now: a restore is when a phone is new to the app, and the one moment
+                // the lifter is looking at whether it is set up right.
+                recheckRestAlerts()
                 DataMessage.Restored(backup.sessions)
             } catch (refused: NotABackup) {
                 DataMessage.NotRestorable(refused.message.orEmpty())
@@ -190,6 +193,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             dataMessage.value = try {
                 backups.restore(confirmed.backup)
+                recheckRestAlerts()
                 DataMessage.Restored(confirmed.backup.sessions)
             } catch (failed: Exception) {
                 DataMessage.NotRestorable(failed.message.orEmpty())

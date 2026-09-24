@@ -225,6 +225,19 @@ fun SettingsScreen(
                             MaterialTheme.colorScheme.onSurface
                         },
                     )
+                    // A restore is the moment a phone is new to the app, and Android starts it with
+                    // exact alarms denied — and denies them again after a system restore (#95). Said
+                    // here, with the way to fix it, rather than found by a rest that ends late.
+                    if (message is DataMessage.Restored && !state.restAlerts.alarmsAreReliable) {
+                        Text(
+                            text = stringResource(R.string.settings_restored_alarms),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(onClick = { onFixRestAlerts(RestFix.EXACT_ALARMS) }) {
+                            Text(stringResource(R.string.rest_allow_alarms))
+                        }
+                    }
                     TextButton(onClick = onDismissDataMessage) {
                         Text(stringResource(R.string.settings_ok))
                     }
