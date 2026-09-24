@@ -129,6 +129,8 @@ fun SessionScreen(
     onOpenRoutine: () -> Unit,
     onOpenBodyweight: () -> Unit,
     onOpenSettings: () -> Unit,
+    onBuildRoutine: () -> Unit = {},
+    onLetTheAppBuild: () -> Unit = {},
     viewModel: SessionViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -226,6 +228,8 @@ fun SessionScreen(
             onOpenRoutine = onOpenRoutine,
             onOpenBodyweight = onOpenBodyweight,
             onOpenSettings = onOpenSettings,
+            onBuildRoutine = onBuildRoutine,
+            onLetTheAppBuild = onLetTheAppBuild,
         ),
     )
 }
@@ -312,6 +316,10 @@ data class SessionActions(
     val onOpenRoutine: () -> Unit = {},
     val onOpenBodyweight: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
+    /** Starts a routine from nothing, built by hand (#85). */
+    val onBuildRoutine: () -> Unit = {},
+    /** Starts setup, where the app builds a routine from a few answers (#85). */
+    val onLetTheAppBuild: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -479,6 +487,17 @@ fun SessionScreen(
             modifier = Modifier.fillMaxSize().testTag(SESSION_LIST),
             contentPadding = insets,
         ) {
+            // With no routine yet, the ways to get one — offered above a session that works
+            // without either, never in front of it (#85). Once a routine exists, gone.
+            if (state.routine == null) {
+                item {
+                    WaysToStart(
+                        onBuild = wholeSession.onBuildRoutine,
+                        onLetTheAppBuild = wholeSession.onLetTheAppBuild,
+                    )
+                }
+            }
+
             item {
                 NextUp(
                     progress = state.routine,
@@ -1344,6 +1363,35 @@ private fun RestDialog(
  * Both are permissions the app is allowed to ask for and neither is one it can grant itself, so
  * what the screen offers is the trip to the place that can.
  */
+/**
+ * The ways to a routine, side by side rather than one inside the other.
+ *
+ * **Offered, not imposed.** Everything else on the screen works without either: a set can be
+ * logged with no routine, no profile and nothing set up, which is the first thing most people do
+ * with an app they have just installed.
+ */
+@Composable
+private fun WaysToStart(onBuild: () -> Unit, onLetTheAppBuild: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.start_ways),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onBuild, modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.start_build))
+            }
+            OutlinedButton(onClick = onLetTheAppBuild, modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.start_generate))
+            }
+        }
+    }
+}
+
 /** A silent failure said out loud, with the one tap that fixes it. */
 @Composable
 private fun RestAlertWarning(

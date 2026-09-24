@@ -125,6 +125,38 @@ class SessionScreenTest {
     }
 
     @Test
+    fun withNoRoutineTheWaysToStartAreOfferedBesideAWorkingSession() {
+        var built = 0
+        var generated = 0
+        compose.setContent {
+            SessionScreen(
+                state = state(routine = null),
+                wholeSession = SessionActions(
+                    onBuildRoutine = { built++ },
+                    onLetTheAppBuild = { generated++ },
+                ),
+            )
+        }
+
+        // Offered, not imposed (#85): both ways to a routine side by side, and the session under
+        // them still ready to log a set with nothing set up at all.
+        compose.onNodeWithText("Build a routine").performClick()
+        compose.onNodeWithText("Let the app build one").performClick()
+        assertEquals(1, built)
+        assertEquals(1, generated)
+        compose.onNodeWithText("Change exercise").assertExists()
+    }
+
+    @Test
+    fun onceThereIsARoutineTheWaysToStartAreGone() {
+        compose.setContent { SessionScreen(state = state(routine = pushDay)) }
+
+        // Nothing asks twice.
+        compose.onNodeWithText("Build a routine").assertDoesNotExist()
+        compose.onNodeWithText("Let the app build one").assertDoesNotExist()
+    }
+
+    @Test
     fun anExercisesUnitCanBeSetFromItsOwnScreen() {
         var changed: ExerciseDetails? = null
         val details = ExerciseDetails(

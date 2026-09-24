@@ -22,6 +22,7 @@ import com.tylergimpel.gymtracker.data.profileRepository
 import com.tylergimpel.gymtracker.domain.Theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
 import com.tylergimpel.gymtracker.ui.routine.RoutineScreen
 import com.tylergimpel.gymtracker.ui.routine.RoutineViewModel
 import com.tylergimpel.gymtracker.ui.session.SessionScreen
@@ -85,6 +86,8 @@ private fun GymTracker(
     // The bank screen is the same either way; only where the new exercise lands differs.
     var pickingForDay by rememberSaveable { mutableStateOf<Long?>(null) }
 
+    val defaultRoutineName = stringResource(R.string.routine_default_name)
+
     fun leavePicker() {
         pickingForDay = null
         back()
@@ -100,6 +103,13 @@ private fun GymTracker(
             onOpenRoutine = { open(Destination.ROUTINE) },
             onOpenBodyweight = { open(Destination.BODYWEIGHT) },
             onOpenSettings = { open(Destination.SETTINGS) },
+            // By hand is the same mechanism from an empty start: a named routine with no days,
+            // and the editor to grow it in.
+            onBuildRoutine = {
+                routineViewModel.createRoutine(defaultRoutineName)
+                open(Destination.ROUTINE)
+            },
+            onLetTheAppBuild = { open(Destination.ROUTINE) },
             viewModel = viewModel,
         )
 
