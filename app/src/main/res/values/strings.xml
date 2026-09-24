@@ -150,6 +150,15 @@
     <string name="routine_rebuild_choice">%1$s · last trained %2$s · %3$d days</string>
     <string name="routine_rebuild_cancel">Not now</string>
     <string name="routine_rebuild_limit">Only your most recent %1$d sessions are read, so the oldest routine here may be missing days you trained before that.</string>
+    <string name="setup_progress">Question %1$d of %2$d</string>
+    <string name="setup_back">Back</string>
+    <string name="setup_skip">Skip</string>
+    <string name="setup_next">Next</string>
+    <string name="setup_build">Build my routine</string>
+    <string name="setup_cadence_skipped">Leave it and the routine is planned for %1$d a week. You can change it later.</string>
+    <string name="setup_shape_skipped">Leave it and the app uses %1$s, the likeliest for your week.</string>
+    <string name="setup_cardio_skipped">Leave it and the routine has no cardio in it.</string>
+    <string name="setup_equipment_skipped">Leave it empty and anything in the exercise bank can be suggested.</string>
     <string name="routine_setup_goal">What are you training for?</string>
     <string name="routine_setup_goal_skipped">Leave it and the routine is built for %1$s. You can change it later.</string>
     <string name="routine_setup_rep_preference">Heavy low reps or lighter high reps?</string>
