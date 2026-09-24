@@ -61,6 +61,12 @@ fun SettingsScreen(
     val exportForSpreadsheets = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
     ) { destination -> destination?.let(viewModel::exportForSpreadsheets) }
+    val backUp = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { destination -> destination?.let(viewModel::backUp) }
+    val restore = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { source -> source?.let(viewModel::restore) }
 
     // Both permissions are granted in the system's own settings, so the answer is read again
     // every time the lifter comes back here — which is exactly when they have just fixed one.
@@ -85,6 +91,10 @@ fun SettingsScreen(
         onExportForSpreadsheets = {
             exportForSpreadsheets.launch("gym-tracker-export-${LocalDate.now()}.csv")
         },
+        onBackUp = { backUp.launch("gym-tracker-backup-${LocalDate.now()}.json") },
+        // Any file, because some file managers label JSON as plain text or nothing at all; the
+        // backup itself says whether it is one.
+        onRestore = { restore.launch(arrayOf("application/json", "text/plain", "*/*")) },
         onDismissDataMessage = viewModel::dismissDataMessage,
     )
 }
@@ -101,6 +111,8 @@ fun SettingsScreen(
     onTheme: (Theme) -> Unit = {},
     onFixRestAlerts: (RestFix) -> Unit = {},
     onExportForSpreadsheets: () -> Unit = {},
+    onBackUp: () -> Unit = {},
+    onRestore: () -> Unit = {},
     onDismissDataMessage: () -> Unit = {},
 ) {
     Scaffold(
@@ -175,8 +187,16 @@ fun SettingsScreen(
             // between a backup and an export is the thing nobody finds out until it matters.
             Setting(
                 label = stringResource(R.string.settings_data),
-                why = stringResource(R.string.settings_export_why),
+                why = stringResource(R.string.settings_backup_why),
             ) {
+                // The backup first: it is the one that restores, and the one worth keeping.
+                TextButton(onClick = onBackUp) { Text(stringResource(R.string.settings_backup)) }
+                TextButton(onClick = onRestore) { Text(stringResource(R.string.settings_restore)) }
+                Text(
+                    text = stringResource(R.string.settings_export_why),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 TextButton(onClick = onExportForSpreadsheets) {
                     Text(stringResource(R.string.settings_export))
                 }
@@ -185,10 +205,16 @@ fun SettingsScreen(
                         text = when (message) {
                             is DataMessage.Exported ->
                                 stringResource(R.string.settings_exported, message.sessions)
+                            is DataMessage.BackedUp ->
+                                stringResource(R.string.settings_backed_up, message.sessions)
+                            is DataMessage.Restored ->
+                                stringResource(R.string.settings_restored, message.sessions)
+                            is DataMessage.NotRestorable ->
+                                stringResource(R.string.settings_not_restorable, message.reason)
                             DataMessage.Failed -> stringResource(R.string.settings_export_failed)
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (message == DataMessage.Failed) {
+                        color = if (message == DataMessage.Failed || message is DataMessage.NotRestorable) {
                             MaterialTheme.colorScheme.error
                         } else {
                             MaterialTheme.colorScheme.onSurface

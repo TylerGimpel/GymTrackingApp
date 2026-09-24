@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import android.net.Uri
 import com.tylergimpel.gymtracker.data.SessionRepository
+import com.tylergimpel.gymtracker.data.BackupRepository
+import com.tylergimpel.gymtracker.data.NotABackup
 import com.tylergimpel.gymtracker.domain.spreadsheetExport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -38,6 +40,13 @@ data class SettingsUiState(
 /** The outcome of writing the lifter's data out, in their terms. */
 sealed interface DataMessage {
     data class Exported(val sessions: Int) : DataMessage
+
+    data class BackedUp(val sessions: Int) : DataMessage
+
+    data class Restored(val sessions: Int) : DataMessage
+
+    /** The file picked to restore from was not a backup this app can read, and why. */
+    data class NotRestorable(val reason: String) : DataMessage
 
     data object Failed : DataMessage
 }
@@ -61,6 +70,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
     private val alarms = RestAlarmScheduler(application)
     private val notifications = RestNotifications(application)
+
+    private val backups = BackupRepository(database)
 
     private val restAlerts = MutableStateFlow(readRestAlerts())
     private val dataMessage = MutableStateFlow<DataMessage?>(null)
@@ -110,6 +121,45 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 }
                 DataMessage.Exported(all.size)
             }.getOrElse { DataMessage.Failed }
+        }
+    }
+
+    /**
+     * Writes the complete backup to [destination] (#97).
+     *
+     * Everything that makes the app the lifter's, losslessly. Said when done, with how many
+     * sessions it holds, because that is how a lifter recognises the file they will need later.
+     */
+    fun backUp(destination: Uri) {
+        viewModelScope.launch {
+            dataMessage.value = runCatching {
+                getApplication<Application>().contentResolver.openOutputStream(destination)
+                    ?.use { backups.write(it) }
+                    ?: error("nowhere to write")
+                DataMessage.BackedUp(sessions.observeRecent(limit = Int.MAX_VALUE).first().size)
+            }.getOrElse { DataMessage.Failed }
+        }
+    }
+
+    /**
+     * Replaces everything with what the backup at [source] holds (#97).
+     *
+     * All or nothing: a file that is not a backup, or cannot be applied, changes nothing and says
+     * why rather than leaving the lifter to wonder what happened.
+     */
+    fun restore(source: Uri) {
+        viewModelScope.launch {
+            dataMessage.value = try {
+                val backup = getApplication<Application>().contentResolver.openInputStream(source)
+                    ?.use { backups.read(it) }
+                    ?: throw NotABackup("the file could not be opened")
+                backups.restore(backup)
+                DataMessage.Restored(backup.sessions)
+            } catch (refused: NotABackup) {
+                DataMessage.NotRestorable(refused.message.orEmpty())
+            } catch (failed: Exception) {
+                DataMessage.NotRestorable(failed.message.orEmpty())
+            }
         }
     }
 
