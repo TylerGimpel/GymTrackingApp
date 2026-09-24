@@ -34,6 +34,9 @@ import com.tylergimpel.gymtracker.domain.WeightUnit
 import com.tylergimpel.gymtracker.ui.RestFix
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
 import com.tylergimpel.gymtracker.ui.settingsFor
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import java.time.LocalDate
 
 /**
  * One place for everything that is the lifter's rather than a routine's (#91).
@@ -52,6 +55,12 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // The system's own save dialog: the lifter picks where it goes, and no account or network is
+    // involved anywhere, the same as the rest of the app.
+    val exportForSpreadsheets = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv"),
+    ) { destination -> destination?.let(viewModel::exportForSpreadsheets) }
 
     // Both permissions are granted in the system's own settings, so the answer is read again
     // every time the lifter comes back here — which is exactly when they have just fixed one.
@@ -73,6 +82,10 @@ fun SettingsScreen(
         onDisplayUnit = viewModel::setDisplayUnit,
         onTheme = viewModel::setTheme,
         onFixRestAlerts = { fix -> context.startActivity(settingsFor(fix, context)) },
+        onExportForSpreadsheets = {
+            exportForSpreadsheets.launch("gym-tracker-export-${LocalDate.now()}.csv")
+        },
+        onDismissDataMessage = viewModel::dismissDataMessage,
     )
 }
 
@@ -87,6 +100,8 @@ fun SettingsScreen(
     onDisplayUnit: (WeightUnit) -> Unit = {},
     onTheme: (Theme) -> Unit = {},
     onFixRestAlerts: (RestFix) -> Unit = {},
+    onExportForSpreadsheets: () -> Unit = {},
+    onDismissDataMessage: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -152,6 +167,37 @@ fun SettingsScreen(
                     fixText = R.string.rest_allow_notifications,
                     onFix = { onFixRestAlerts(RestFix.NOTIFICATIONS) },
                 )
+            }
+
+            HorizontalDivider()
+
+            // The lifter's data, going out. Named for what each file is, because the difference
+            // between a backup and an export is the thing nobody finds out until it matters.
+            Setting(
+                label = stringResource(R.string.settings_data),
+                why = stringResource(R.string.settings_export_why),
+            ) {
+                TextButton(onClick = onExportForSpreadsheets) {
+                    Text(stringResource(R.string.settings_export))
+                }
+                state.dataMessage?.let { message ->
+                    Text(
+                        text = when (message) {
+                            is DataMessage.Exported ->
+                                stringResource(R.string.settings_exported, message.sessions)
+                            DataMessage.Failed -> stringResource(R.string.settings_export_failed)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (message == DataMessage.Failed) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    TextButton(onClick = onDismissDataMessage) {
+                        Text(stringResource(R.string.settings_ok))
+                    }
+                }
             }
 
             HorizontalDivider()

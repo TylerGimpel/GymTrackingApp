@@ -216,6 +216,12 @@
     <string name="settings_profile">Profile</string>
     <string name="settings_plates">Plates and bar</string>
     <string name="settings_excluded">Excluded exercises</string>
+    <string name="settings_data">Your data</string>
+    <string name="settings_export">Export for spreadsheets (CSV)</string>
+    <string name="settings_export_why">Every set you have logged, one row each, for a spreadsheet. It is not a backup: supersets are not kept, drops and sides become rows of their own, and routines, exclusions, plates and your profile are left out. Nothing here needs an account or the internet.</string>
+    <string name="settings_exported">Exported %1$d sessions.</string>
+    <string name="settings_export_failed">That file could not be written, so nothing was exported. Try somewhere else.</string>
+    <string name="settings_ok">OK</string>
     <string name="excluded_title">Excluded exercises</string>
     <string name="excluded_why">The app never suggests these. Taking one back lets it be suggested again; no routine changes and nothing you have logged is touched.</string>
     <string name="excluded_none">Nothing is excluded. Anything you exclude from a swap or an exercise shows up here.</string>
