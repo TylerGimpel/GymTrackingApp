@@ -15,6 +15,7 @@ import com.tylergimpel.gymtracker.ui.bank.ExerciseBankScreen
 import com.tylergimpel.gymtracker.ui.bodyweight.BodyweightScreen
 import com.tylergimpel.gymtracker.ui.plates.PlatesScreen
 import com.tylergimpel.gymtracker.ui.profile.ProfileScreen
+import com.tylergimpel.gymtracker.ui.settings.ExcludedScreen
 import com.tylergimpel.gymtracker.ui.settings.SettingsScreen
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.data.profileRepository
@@ -51,7 +52,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Destination {
-    SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE, SETTINGS,
+    SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED,
 }
 
 /**
@@ -124,7 +125,10 @@ private fun GymTracker(
             onBack = ::back,
             onOpenPlates = { open(Destination.PLATES) },
             onOpenProfile = { open(Destination.PROFILE) },
+            onOpenExcluded = { open(Destination.EXCLUDED) },
         )
+
+        Destination.EXCLUDED -> ExcludedScreen(onBack = ::back)
 
         Destination.ROUTINE -> RoutineScreen(
             onBack = ::back,

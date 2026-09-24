@@ -1,6 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -144,6 +145,33 @@ class ExerciseSearchTest {
         "chest press" to listOf("Barbell Bench Press - Medium Grip", "Butterfly"),
         "squat" to listOf("Barbell Squat"),
     )
+
+    @Test
+    fun `everything the lifter excluded is listed, by name, and nothing else is`() {
+        val rows = listOf(
+            exercise("Zercher Squat", primary = "quadriceps").copy(isDisliked = true),
+            exercise("Barbell Squat", primary = "quadriceps"),
+            exercise("Arnold Press", primary = "shoulders").copy(isDisliked = true),
+            // Dropped from the bank: there for the history pointing at it, and not something
+            // anybody can be offered again, so not something to take back either.
+            exercise("Old Row", primary = "middle back").copy(isDisliked = true, isTombstoned = true),
+        )
+
+        assertEquals(listOf("Arnold Press", "Zercher Squat"), rows.excluded().map(Exercise::name))
+    }
+
+    @Test
+    fun `an exclusion taken back is offered again`() {
+        val banned = exercise("Arnold Press", primary = "shoulders").copy(isDisliked = true)
+        assertTrue(listOf(banned).worthOffering(equipment = setOf("barbell")).isEmpty())
+
+        // Undoing it from the list is the flag coming off, and the one rule the picker, the swap
+        // and the generator all offer by is what then puts it back in front of the lifter (#93).
+        val takenBack = banned.copy(isDisliked = false)
+
+        assertEquals(listOf(takenBack), listOf(takenBack).worthOffering(equipment = setOf("barbell")))
+        assertTrue(listOf(takenBack).excluded().isEmpty())
+    }
 
     private fun List<Exercise>.found(query: String, aliases: ExerciseAliases = emptyMap()) =
         search(query, aliases).map(Exercise::name)

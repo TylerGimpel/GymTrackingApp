@@ -200,6 +200,11 @@
     <string name="settings_rest_countdown_fine">The countdown shows while you rest.</string>
     <string name="settings_profile">Profile</string>
     <string name="settings_plates">Plates and bar</string>
+    <string name="settings_excluded">Excluded exercises</string>
+    <string name="excluded_title">Excluded exercises</string>
+    <string name="excluded_why">The app never suggests these. Taking one back lets it be suggested again; no routine changes and nothing you have logged is touched.</string>
+    <string name="excluded_none">Nothing is excluded. Anything you exclude from a swap or an exercise shows up here.</string>
+    <string name="excluded_take_back">Allow again</string>
     <string name="routine_experience">Training behind you</string>
     <string name="experience_novice">New to this</string>
     <string name="experience_trained">A while now</string>

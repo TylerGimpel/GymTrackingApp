@@ -46,6 +46,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenPlates: () -> Unit,
     onOpenProfile: () -> Unit,
+    onOpenExcluded: () -> Unit,
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -67,6 +68,7 @@ fun SettingsScreen(
         onBack = onBack,
         onOpenPlates = onOpenPlates,
         onOpenProfile = onOpenProfile,
+        onOpenExcluded = onOpenExcluded,
         onDisplayUnit = viewModel::setDisplayUnit,
         onTheme = viewModel::setTheme,
         onFixRestAlerts = { fix -> context.startActivity(settingsFor(fix, context)) },
@@ -80,6 +82,7 @@ fun SettingsScreen(
     onBack: () -> Unit = {},
     onOpenPlates: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
+    onOpenExcluded: () -> Unit = {},
     onDisplayUnit: (WeightUnit) -> Unit = {},
     onTheme: (Theme) -> Unit = {},
     onFixRestAlerts: (RestFix) -> Unit = {},
@@ -154,6 +157,8 @@ fun SettingsScreen(
 
             TextButton(onClick = onOpenProfile) { Text(stringResource(R.string.settings_profile)) }
             TextButton(onClick = onOpenPlates) { Text(stringResource(R.string.settings_plates)) }
+            // Everything excluded from swap and dislike, where each can be taken back (#93).
+            TextButton(onClick = onOpenExcluded) { Text(stringResource(R.string.settings_excluded)) }
         }
     }
 }

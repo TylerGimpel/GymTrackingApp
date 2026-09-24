@@ -131,3 +131,12 @@ fun List<Exercise>.worthOffering(
         // A **User-authored exercise** passes this exactly as a shipped row does.
         (equipment.isEmpty() || it.equipment == null || it.equipment in equipment)
 }
+
+/**
+ * Every exercise the lifter has excluded, by name, so each can be looked at and taken back (#93).
+ *
+ * A dropped row is left out even if it was excluded: it is there for the history pointing at it
+ * and can never be offered again, so there is nothing to take back.
+ */
+fun List<Exercise>.excluded(): List<Exercise> =
+    filter { it.isDisliked && !it.isTombstoned }.sortedBy { it.name.lowercase() }
