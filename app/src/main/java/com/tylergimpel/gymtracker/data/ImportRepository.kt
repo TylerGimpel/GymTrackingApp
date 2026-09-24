@@ -31,7 +31,7 @@ data class ImportResult(
     val sets: Int,
     /** Names with no exact match, and how many sets each held, left out rather than guessed at. */
     val unmatched: Map<String, Int>,
-    /** Sets read but not yet brought across, by why. */
+    /** Sets left out because they could not be read as any kind of set, by why. */
     val notYetSupported: Map<String, Int>,
     /**
      * Whether the source said what each set was. Where it did not, volume from before the import
@@ -90,15 +90,21 @@ class ImportRepository(
     }
 
     /**
-     * Removes exactly what the import [batchId] brought in, and nothing else (#102).
+     * Removes what the import [batchId] brought in, and nothing the lifter logged (#102).
      *
      * Its sessions go, and with them every exercise, set, drop and superset that hangs off one,
-     * by cascade. Nothing the lifter logged — before the import or since — points at the batch,
-     * so nothing of theirs is touched. What an import filled in about an exercise where there was
-     * a gap (#101) stays: it is a setting now, and the lifter may have come to rely on it.
+     * by cascade. So does every **User-authored exercise** it created for a name (#99) — unless the
+     * lifter has since put it in a session, a plan or a routine, in which case it is theirs now and
+     * stays. Nothing the lifter logged, before the import or since, points at the batch, so nothing
+     * of theirs is touched. What an import filled in about an exercise where there was a gap (#101)
+     * stays: it is a setting now, and the lifter may have come to rely on it.
      */
     suspend fun undo(batchId: Long): Unit = database.withTransaction {
         database.importBatchDao().deleteSessionsOf(batchId)
+        val bank = database.exerciseDao()
+        val inUse = bank.referencedExerciseIds().toSet()
+        bank.createdBy(batchId).filterNot(inUse::contains).forEach { bank.deleteById(it) }
+        bank.forgetImport(batchId)
         database.importBatchDao().delete(batchId)
     }
 
@@ -108,8 +114,6 @@ class ImportRepository(
 
     /** Every import still standing, newest first, with how many sessions each brought in. */
     fun observeListed(): Flow<List<ListedImport>> = database.importBatchDao().observeListed()
-
-    suspend fun listed(): List<ListedImport> = database.importBatchDao().listed()
 
     private suspend fun write(
         records: NeutralImport,
@@ -130,12 +134,17 @@ class ImportRepository(
         val created = mutableListOf<Exercise>()
         val matches: Map<String, Exercise?> = exact.mapValues { (name, found) ->
             found ?: when (val decision = decisions[name]) {
-                NameDecision.CreateOwn -> createFor(name, records).also { created += it }
+                NameDecision.CreateOwn -> createFor(name, records).also {
+                    created += it
+                    database.exerciseDao().markCreatedBy(it.id, batchId)
+                }
                 is NameDecision.SameAs -> bank.firstOrNull { it.id == decision.exerciseId }
                 null -> null
             }
         }
-        val matched = records.sets.mapNotNull { set -> matches[set.exerciseName]?.let { set to it.id } }
+        val matched = records.sets.mapNotNull { set ->
+            matches[set.exerciseName]?.let { exercise -> set.asLoggedFor(exercise) to exercise.id }
+        }
         val unmatched = records.sets.filter { matches[it.exerciseName] == null }
 
         var sessionCount = 0
@@ -192,14 +201,20 @@ class ImportRepository(
      * training what the source says it trains, where the source could say.
      */
     private suspend fun createFor(name: String, records: NeutralImport): Exercise {
-        val first = records.sets.first { it.exerciseName == name }
-        val loggingType = loggingTypeOf(first.performance)
+        val performances = records.sets.filter { it.exerciseName == name }.map(ImportedSet::performance)
+        // Whatever its most telling set says: one run with a distance makes it a run, and one set at
+        // bodyweight makes it a bodyweight exercise, whose loaded sets then come in as added load.
+        val loggingType = when {
+            performances.any { it is Performance.DistanceAndTime } -> LoggingType.DISTANCE_TIME
+            performances.any { it is Performance.BodyweightReps } -> LoggingType.BODYWEIGHT_REPS
+            else -> loggingTypeOf(performances.first())
+        }
         return exercises.createOwn(
             NewExerciseDraft(
                 name = name,
                 primaryMuscles = records.exercises[name]?.primaryMuscles.orEmpty(),
                 loggingType = loggingType,
-                category = if (loggingType == LoggingType.DISTANCE_TIME) CARDIO else STRENGTH,
+                category = if (loggingType == LoggingType.DISTANCE_TIME) BANK_CARDIO else BANK_STRENGTH,
             ),
         )
     }
@@ -228,9 +243,12 @@ class ImportRepository(
     }
 
     private companion object {
-        /** The bank's category values for a created exercise: cardio for a run, otherwise strength. */
-        const val CARDIO = "cardio"
-        const val STRENGTH = "strength"
+        /**
+         * The bank's own `category` values, as the shipped rows spell them, for a created exercise:
+         * cardio for a run, otherwise strength.
+         */
+        const val BANK_CARDIO = "cardio"
+        const val BANK_STRENGTH = "strength"
     }
 }
 
@@ -275,6 +293,16 @@ private fun inOrderWithSupersetsTogether(byExercise: Map<String, List<ImportedSe
  * One imported set as a row, filling the columns [toPerformance] reads back, so a set comes back
  * out of the log exactly as it went in.
  */
+/**
+ * A set as the exercise it lands on logs it. FitNotes records a weighted pull-up as a weight like
+ * any other lift, so on a bodyweight exercise that weight is the load added to the lifter (#100).
+ */
+private fun ImportedSet.asLoggedFor(exercise: Exercise): ImportedSet {
+    val lifted = performance as? Performance.WeightAndReps ?: return this
+    if (exercise.loggingType != LoggingType.BODYWEIGHT_REPS) return this
+    return copy(performance = Performance.BodyweightReps(addedWeight = lifted.weight, reps = lifted.reps))
+}
+
 private fun ImportedSet.toEntity(sessionExerciseId: Long, setIndex: Int): SetEntryEntity {
     val base = SetEntryEntity(
         sessionExerciseId = sessionExerciseId,

@@ -89,7 +89,7 @@ class ImportTest {
     }
 
     @Test
-    fun `an exercise of the lifter's own is created to log what its sets were`() {
+    fun `each kind of set maps to the logging type that records it`() {
         // A plank that arrives as a hold is a timed exercise, not a weight x reps one with no
         // weight: the created exercise is whatever the history says it was.
         assertEquals(LoggingType.TIME, loggingTypeOf(Performance.Timed(java.time.Duration.ofSeconds(40))))
@@ -103,7 +103,7 @@ class ImportTest {
     }
 
     @Test
-    fun `a preview says what an import is about to bring in before anything is written`() {
+    fun `a preview counts what an import will bring in, one session a date`() {
         val records = NeutralImport(
             source = FITNOTES,
             fingerprint = "f",

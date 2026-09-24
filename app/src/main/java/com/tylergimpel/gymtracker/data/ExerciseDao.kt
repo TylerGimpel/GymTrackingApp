@@ -210,6 +210,18 @@ interface ExerciseDao {
     )
     suspend fun referencedExerciseIds(): List<String>
 
+    /** Records that import [batchId] created this exercise. */
+    @Query("UPDATE exercise SET import_batch_id = :batchId WHERE id = :exerciseId")
+    suspend fun markCreatedBy(exerciseId: String, batchId: Long)
+
+    /** Every exercise import [batchId] created. */
+    @Query("SELECT id FROM exercise WHERE import_batch_id = :batchId")
+    suspend fun createdBy(batchId: Long): List<String>
+
+    /** Lets go of an undone import: what it created and the lifter kept using is theirs now. */
+    @Query("UPDATE exercise SET import_batch_id = NULL WHERE import_batch_id = :batchId")
+    suspend fun forgetImport(batchId: Long)
+
     @Query("SELECT COUNT(*) FROM exercise")
     suspend fun count(): Int
 

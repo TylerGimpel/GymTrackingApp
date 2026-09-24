@@ -95,6 +95,8 @@ object ExerciseBankDatabaseWriter {
         // Nothing ships tombstoned: a tombstone is what happens to a row on a lifter's phone when
         // an update drops an exercise they have already trained.
         "tombstoned" -> 0
+        // Nothing ships from an import: only an exercise an import creates on the phone has one.
+        "import_batch_id" -> null
         else -> error(
             "The Room schema declares `$TABLE`.`$column`, which the bank generator does not know " +
                 "how to fill. Add it to ExerciseBankDatabaseWriter.valueFor."

@@ -50,7 +50,7 @@ data class Previewing(
  * left out and that volume from before the import is approximate, and then the size of the naming
  * chore, so the lifter knows what they are committing to before they commit.
  *
- * **Every name starts as an exercise of the lifter's own** — for a gym full of machines the bank has
+ * **Every name starts as a User-authored exercise** — for a gym full of machines the bank has
  * never heard of, that is the right answer, not a failure — and any can be said to be the same as
  * one already here instead. Decided once per name, never per set. **Nothing is guessed**: silently
  * mapping `Hammer Strength Row` onto `Barbell Row` would fuse two lifts' histories.

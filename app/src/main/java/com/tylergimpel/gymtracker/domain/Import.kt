@@ -91,7 +91,7 @@ data class NeutralImport(
     val sets: List<ImportedSet>,
     /** What the source kept about each exercise, by the source's own name for it. */
     val exercises: Map<String, ImportedExercise> = emptyMap(),
-    /** Sets the parser read but cannot yet bring across, counted by the reason why. */
+    /** Sets the parser could not read as any kind of set, left out and counted by the reason why. */
     val notYetSupported: Map<String, Int> = emptyMap(),
 )
 
@@ -131,7 +131,7 @@ data class Unmatched(val name: String, val sets: Int)
  * has never heard of it is the correct outcome rather than a failure.
  */
 sealed interface NameDecision {
-    /** A new exercise of the lifter's own, under the name they gave it there. */
+    /** A new **User-authored exercise**, under the name the lifter gave it there. */
     data object CreateOwn : NameDecision
 
     /** The same exercise as one already here, which the lifter chose themselves. */

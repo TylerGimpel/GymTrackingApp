@@ -946,6 +946,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_EIGHTH_DATABASE = "migration-twenty-eighth.db"
         const val TWENTY_NINTH_DATABASE = "migration-twenty-ninth.db"
         const val THIRTIETH_DATABASE = "migration-thirtieth.db"
+        const val THIRTY_FIRST_DATABASE = "migration-thirty-first.db"
     }
 
     /**
@@ -1302,6 +1303,30 @@ class GymDatabaseMigrationTest {
             db.query("SELECT COUNT(*) FROM import_batch").use {
                 it.moveToFirst()
                 assertEquals(0, it.getInt(0))
+            }
+        }
+    }
+
+    /**
+     * Version 32 records which import created an exercise (#99, #102). Nothing has been imported by
+     * anybody upgrading, so every exercise they have was shipped or added by hand: no batch.
+     */
+    @Test
+    fun migratesToExercisesNoImportCreated() {
+        helper.createDatabase(THIRTY_FIRST_DATABASE, 31).use { version31 ->
+            version31.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "logging_type, mechanic, force, category, level, unilateral, source, " +
+                    "tombstoned, progression_model) VALUES ('Barbell_Bench', 'Bench Press', " +
+                    "'chest', '', 'barbell', 'weight_reps', 'compound', 'push', 'strength', " +
+                    "'beginner', 0, 'upstream', 0, 'double_progression')",
+            )
+        }
+
+        helper.runMigrationsAndValidate(THIRTY_FIRST_DATABASE, 32, true, MIGRATION_31_32).use { db ->
+            db.query("SELECT import_batch_id FROM exercise WHERE id = 'Barbell_Bench'").use {
+                it.moveToFirst()
+                assertTrue("an exercise nobody imported was given a batch", it.isNull(0))
             }
         }
     }

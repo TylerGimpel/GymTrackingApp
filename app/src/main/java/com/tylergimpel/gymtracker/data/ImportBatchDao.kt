@@ -27,10 +27,6 @@ interface ImportBatchDao {
     )
     fun observeListed(): Flow<List<ListedImport>>
 
-    @Query("SELECT b.id, b.source, b.imported_at, COUNT(s.id) AS sessions FROM import_batch b " +
-        "LEFT JOIN session s ON s.import_batch_id = b.id GROUP BY b.id ORDER BY b.imported_at DESC")
-    suspend fun listed(): List<ListedImport>
-
     /** Everything the import brought in: its sessions, and all that hangs off them by cascade. */
     @Query("DELETE FROM session WHERE import_batch_id = :batchId")
     suspend fun deleteSessionsOf(batchId: Long)

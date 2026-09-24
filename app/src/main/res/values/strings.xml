@@ -247,10 +247,10 @@
     <string name="mapping_import">Import</string>
     <string name="mapping_cancel">Cancel</string>
     <string name="import_created">%1$d exercises of your own were created for names FitNotes used.</string>
-    <string name="import_created_without_muscles">These count toward their own progress but toward no muscle, because FitNotes filed them under a category that names several: %1$s.</string>
+    <string name="import_created_without_muscles">These count toward their own progress but toward no muscle, because FitNotes did not say which one muscle they train: %1$s.</string>
     <string name="import_done">Brought in %1$d sessions, %2$d sets.</string>
     <string name="import_unmatched">%1$d sets were left out because their exercise names have no exact match here: %2$s.</string>
-    <string name="import_not_yet">%1$d sets could not be read as any kind of set and were left out.</string>
+    <string name="import_unreadable">%1$d sets could not be read as any kind of set and were left out.</string>
     <string name="settings_backup_why">The backup is the file to keep. It holds everything, and restoring it on a new phone brings the app back exactly as it was: your training, routine, exercises, exclusions, plates, weigh-ins and profile.</string>
     <string name="settings_backed_up">Backed up %1$d sessions. Keep the file somewhere other than this phone.</string>
     <string name="restore_confirm_title">Replace what is here?</string>

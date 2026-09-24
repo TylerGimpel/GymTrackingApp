@@ -140,7 +140,8 @@ fun ExercisePicker(
             }
         },
         // The way out of the bank entirely, for a machine the app has never heard of. Given the
-        // same room as the list, because nobody is ever stuck with what is offered.
+        // same room as the list, because nobody is ever stuck with what is offered — except where
+        // a new exercise is not an answer, as when saying what an imported name is the same as.
         confirmButton = {
             onAddNew?.let { TextButton(onClick = it) { Text(stringResource(R.string.picker_add_new)) } }
         },

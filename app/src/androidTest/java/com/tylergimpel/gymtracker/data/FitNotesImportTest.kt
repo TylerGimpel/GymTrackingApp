@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tylergimpel.gymtracker.domain.ImportSource
 import com.tylergimpel.gymtracker.domain.Kilograms
+import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.SetDraft
@@ -288,16 +289,62 @@ class FitNotesImportTest {
         // one before the import and one after, exactly as they were.
         assertTrue(importedSessions().isEmpty())
         assertEquals(loggedBefore, sessions().observeRecent(limit = 100).first())
-        assertTrue(imports().listed().isEmpty())
+        assertTrue(imports().observeListed().first().isEmpty())
         // And the same file can be brought in again, since nothing of it is left.
         assertTrue(imports().import(FitNotesParser.parse(fixture), bank()) is ImportOutcome.Imported)
+    }
+
+    @Test
+    fun undoingAnImportTakesTheExercisesItCreatedUnlessTheLifterHasSinceUsedThem() = runBlocking {
+        val batch = (
+            imports().import(
+                FitNotesParser.parse(fixture),
+                bank(),
+                decisions = mapOf("Hammer Strength Row" to NameDecision.CreateOwn, "Pec Deck Machine" to NameDecision.CreateOwn),
+            ) as ImportOutcome.Imported
+            ).result.batchId
+        val pecDeck = bank().single { it.name == "Pec Deck Machine" }
+        sessions().logSet(pecDeck.id, SetDraft("45", "12"))
+        sessions().finishSession(sessions().observeActiveSession().first()!!.id)
+
+        imports().undo(batch)
+
+        // Every row the import added goes (#102) — but a machine the lifter has since trained on
+        // is theirs now, and their session still has it.
+        assertTrue(bank().none { it.name == "Hammer Strength Row" })
+        assertTrue(bank().any { it.id == pecDeck.id })
+        // And a later undo of something else never reaches it: it no longer belongs to an import.
+        assertTrue(database.exerciseDao().createdBy(batch).isEmpty())
+    }
+
+    @Test
+    fun aLoadedSetOnABodyweightExerciseComesInAsAddedLoad() = runBlocking {
+        // A weighted crunch, as FitNotes records it: a weight like any other lift.
+        SQLiteDatabase.openDatabase(fixture.path, null, SQLiteDatabase.OPEN_READWRITE).use {
+            it.execSQL(
+                "INSERT INTO training_log (_id, exercise_id, date, metric_weight, reps) VALUES (12, 6, '2026-03-05', 10, 15)",
+            )
+        }
+        assertEquals(LoggingType.BODYWEIGHT_REPS, bank().single { it.id == "Crunches" }.loggingType)
+
+        importFixture()
+
+        val crunches = importedSessions().flatMap { it.exercises }.single { it.exercise.id == "Crunches" }.sets
+        // Ten kilograms on top of the lifter, not a ten-kilogram lift (#100).
+        assertEquals(
+            setOf(
+                Performance.BodyweightReps(addedWeight = null, reps = 12),
+                Performance.BodyweightReps(addedWeight = Kilograms(10.0), reps = 15),
+            ),
+            crunches.map { it.efforts.single().performance }.toSet(),
+        )
     }
 
     @Test
     fun importsAreListedWithWhatEachBroughtIn() = runBlocking {
         importFixture()
 
-        val listed = imports().listed().single()
+        val listed = imports().observeListed().first().single()
 
         assertEquals("fitnotes", listed.source)
         assertEquals(importedSessions().size, listed.sessions)

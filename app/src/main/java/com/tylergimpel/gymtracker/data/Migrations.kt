@@ -718,6 +718,18 @@ internal val MIGRATION_30_31 = object : Migration(30, 31) {
     }
 }
 
+/**
+ * Which import created an exercise, for the ones an import made for a name the lifter kept as
+ * their own (#99), so that undoing the import takes them too (#102).
+ *
+ * Nothing imported yet, so every exercise upgrading was shipped or added by hand: no batch.
+ */
+internal val MIGRATION_31_32 = object : Migration(31, 32) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `exercise` ADD COLUMN `import_batch_id` INTEGER")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -749,6 +761,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_28_29,
     MIGRATION_29_30,
     MIGRATION_30_31,
+    MIGRATION_31_32,
 )
 
 /**

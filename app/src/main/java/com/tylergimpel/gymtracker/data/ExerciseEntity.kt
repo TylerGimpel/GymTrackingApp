@@ -85,6 +85,13 @@ data class ExerciseEntity(
      */
     @ColumnInfo(name = "tombstoned", defaultValue = "0")
     val tombstoned: Boolean = false,
+
+    /**
+     * The import that created this **User-authored exercise** for a name it could not match (#99),
+     * or null for every other. What lets undoing that import take the exercise with it (#102).
+     */
+    @ColumnInfo(name = "import_batch_id")
+    val importBatchId: Long? = null,
 ) {
     companion object {
         /**

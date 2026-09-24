@@ -42,6 +42,7 @@ import com.tylergimpel.gymtracker.data.ListedImport
 import com.tylergimpel.gymtracker.domain.NameDecision
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -268,8 +269,7 @@ fun SettingsScreen(
                         Text(
                             text = stringResource(
                                 R.string.import_listed,
-                                listed.importedAt.atZone(ZoneId.systemDefault()).toLocalDate()
-                                    .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                                listed.importedAt.asLocalDay(),
                                 listed.sessions,
                             ),
                             style = MaterialTheme.typography.bodyMedium,
@@ -308,8 +308,7 @@ fun SettingsScreen(
                             is DataMessage.Imported -> importedText(message.result)
                             is DataMessage.AlreadyImported -> stringResource(
                                 R.string.import_already,
-                                message.importedAt.atZone(ZoneId.systemDefault()).toLocalDate()
-                                    .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                                message.importedAt.asLocalDay(),
                             )
                             is DataMessage.Undone -> stringResource(R.string.import_undone, message.sessions)
                             DataMessage.BackupFailed -> stringResource(R.string.settings_backup_failed)
@@ -404,6 +403,10 @@ private fun ConfirmRestoreDialog(confirm: ConfirmRestore, onConfirm: () -> Unit,
  * What an import did, and what it did not: nothing left behind goes unsaid, because a gap found
  * later is a gap the lifter stops trusting the whole import over.
  */
+/** The day an import happened, as the lifter's phone writes a date. */
+private fun Instant.asLocalDay(): String =
+    atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+
 @Composable
 private fun importedText(result: ImportResult): String = buildList {
     add(stringResource(R.string.import_done, result.sessions, result.sets))
@@ -426,7 +429,7 @@ private fun importedText(result: ImportResult): String = buildList {
         )
     }
     val later = result.notYetSupported.values.sum()
-    if (later > 0) add(stringResource(R.string.import_not_yet, later))
+    if (later > 0) add(stringResource(R.string.import_unreadable, later))
     if (!result.volumeReliable) add(stringResource(R.string.import_volume_approximate))
     add(stringResource(R.string.import_how_to_undo))
 }.joinToString(" ")
