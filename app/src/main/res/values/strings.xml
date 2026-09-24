@@ -171,7 +171,7 @@
     <string name="profile_done">Done</string>
     <string name="profile_optional">All of this is optional, and nothing waits on it. Leave any of it blank and the app works exactly the same.</string>
     <string name="profile_bodyweight">Bodyweight</string>
-    <string name="profile_bodyweight_why">Lets the first session of a barbell lift start a little heavier instead of from the empty bar, and catches a weight typed with a slipped digit. It never decides your working weight.</string>
+    <string name="profile_bodyweight_why">Lets the first session of a barbell squat, deadlift, press or row start a little heavier instead of from the empty bar. It never decides your working weight: the first session still finds that.</string>
     <string name="profile_bodyweight_latest">Last weighed at %1$s %2$s</string>
     <string name="profile_bodyweight_none">Not recorded.</string>
     <string name="profile_bodyweight_open">Weigh-ins</string>

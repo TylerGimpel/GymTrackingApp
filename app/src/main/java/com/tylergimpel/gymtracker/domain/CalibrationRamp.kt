@@ -1,5 +1,15 @@
 package com.tylergimpel.gymtracker.domain
 
+import kotlin.math.sqrt
+
+/**
+ * What a lifter has said about their size, which may start a barbell ramp closer to them.
+ *
+ * Bodyweight is the latest weigh-in; [sex] is null where they have not said. Absent altogether
+ * where there is no weigh-in, which is the ordinary case and costs a few ramp sets.
+ */
+data class BodySize(val bodyweight: Kilograms, val sex: Sex?)
+
 /**
  * The short climb a first session makes to find a working weight, rather than predicting one.
  *
@@ -73,10 +83,16 @@ data class CalibrationRamp(
             exercise: Exercise,
             rounding: Increment = Increment.DEFAULT,
             bar: Kilograms? = null,
+            /**
+             * The lifter's size, where they have given it. **Optional in every sense**: it only
+             * ever starts a barbell compound's ramp closer, and without it every ramp is exactly
+             * what it always was (#90).
+             */
+            body: BodySize? = null,
         ): CalibrationRamp? =
             when (exercise.loggingType) {
                 LoggingType.WEIGHT_REPS ->
-                    climbing(seedFor(exercise, bar), LOADED_STEPS, rounding)
+                    climbing(seedFor(exercise, bar, body), LOADED_STEPS, rounding)
 
                 LoggingType.ASSISTED ->
                     climbing(Kilograms(-ASSISTED_SEED), ASSISTED_STEPS, rounding)
@@ -126,21 +142,71 @@ data class CalibrationRamp(
          * near the light end of the stack rather than a load: pulley ratios differ between
          * manufacturers and nothing can be inferred across machines.
          *
-         * Bodyweight and sex could raise a seed and shorten the ramp, and deliberately do not yet:
-         * the profile holds neither until onboarding does (#29), and the research is explicit that
-         * the raise is optional because the ramp corrects it either way.
+         * A barbell compound starts higher for a lifter who has given their bodyweight — see
+         * [raisedBy] — and never below the bar. Nothing else is raised.
          */
-        private fun seedFor(exercise: Exercise, bar: Kilograms?): Kilograms =
+        private fun seedFor(exercise: Exercise, bar: Kilograms?, body: BodySize?): Kilograms {
             // A barbell starts at the bar, and the bar is a thing in the room rather than a
             // constant: 20 kg and 45 lb are different bars, and seeding one for a lifter who owns
             // the other is how a first prescription ends up reading 44.09 (#64). Taken from the
             // inventory rather than from the rounding, so that a lifter who has overruled the
             // step on a barbell still starts at their own bar.
-            if (exercise.isBarbell && bar != null) {
+            val start = if (exercise.isBarbell && bar != null) {
                 bar
             } else {
                 Kilograms(SEEDS[exercise.equipment] ?: UNKNOWN_EQUIPMENT_SEED)
             }
+            val raised = body?.takeIf { exercise.isBarbell && exercise.isCompound }
+                ?.let { raisedBy(it, exercise) }
+            return if (raised != null && raised.value > start.value) raised else start
+        }
+
+        /**
+         * Where a barbell compound's ramp can start for a lifter of this size: skipping the rungs
+         * that are obviously trivial for them, and no more.
+         *
+         * **Anchored on the research's one worked figure** — a 95 kg man can start the squat ramp
+         * at about 40 kg — and scaled by the **square root** of bodyweight, not in proportion to
+         * it. Across 457,471 lifters strength scales with body mass to about the 0.50–0.55 power,
+         * so a straight ratio would start a heavy novice far too high, which is the one direction
+         * a seed must not err in (`docs/research/cold-start-weights.md`).
+         *
+         * Everything past the anchor is **invented**, and deliberately low: the research asks for
+         * about the 5th percentile of what somebody could lift, not the middle, because too light
+         * still trains a novice and too heavy is how one gets hurt. No licensed standards table
+         * could be used, and the only public-domain one is powerlifters.
+         */
+        private fun raisedBy(body: BodySize, exercise: Exercise): Kilograms {
+            val squatLike = SQUAT_AT_ANCHOR / sqrt(ANCHOR_BODYWEIGHT) * sqrt(body.bodyweight.value)
+            // Not saying is answered the way that starts lighter, rather than by a guess.
+            val sex = if (body.sex == Sex.MALE) 1.0 else WITHOUT_MALE
+            val lift = if (exercise.primaryMuscles.any { it in LOWER_BODY }) 1.0 else UPPER_BODY
+            return Kilograms(squatLike * sex * lift)
+        }
+
+        /** The research's worked example: a 95 kg man can start the squat ramp at 40 kg. */
+        private const val ANCHOR_BODYWEIGHT = 95.0
+        private const val SQUAT_AT_ANCHOR = 40.0
+
+        /**
+         * How much lower a lifter who is not a man starts, or who has not said.
+         *
+         * **Invented** and low on purpose: relative strength standards put women at roughly
+         * two-thirds of men's, and this takes a little under that, because not saying lands here
+         * too and the seed is meant to undershoot.
+         */
+        private const val WITHOUT_MALE = 0.6
+
+        /**
+         * How much lower a pressing or pulling compound starts than a squat or a hinge.
+         *
+         * **Invented**, and low: every novice programme starts the bench and the press at the bar
+         * whatever the squat does, and the upper body moves less weight than the legs.
+         */
+        private const val UPPER_BODY = 0.5
+
+        /** A barbell compound driven from these is a squat or a hinge; anything else presses or pulls. */
+        private val LOWER_BODY = setOf("quadriceps", "hamstrings", "glutes", "lower back")
 
         private val SEEDS = mapOf(
             "barbell" to 20.0,

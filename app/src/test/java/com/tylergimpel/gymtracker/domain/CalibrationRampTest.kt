@@ -175,8 +175,85 @@ class CalibrationRampTest {
         assertNull(ramp.nextSet(setsToday = 6))
     }
 
+    @Test
+    fun `a lifter who has said nothing about themselves still gets a ramp`() {
+        // The spec's most important line, as a test: nothing is required (#29). If this fails,
+        // somebody has made the profile load-bearing without noticing.
+        val ramp = CalibrationRamp.of(squat, body = null)!!
+
+        assertEquals(20.0, ramp.rung(0)!!.value, TOLERANCE)
+        assertTrue(ramp.rungs.isNotEmpty())
+    }
+
+    @Test
+    fun `a bodyweight starts a barbell squat closer, and never below the bar`() {
+        val plain = CalibrationRamp.of(squat)!!
+        val profiled = CalibrationRamp.of(squat, body = BodySize(Kilograms(95.0), Sex.MALE))!!
+
+        // The research's own example: a 95 kg man can start the squat ramp at about 40 kg rather
+        // than climbing to it from the empty bar. Both are valid ramps; one takes fewer sets.
+        assertTrue(profiled.rung(0)!!.value > plain.rung(0)!!.value)
+        assertTrue(profiled.rung(0)!!.value <= 40.0)
+        assertTrue(profiled.rungs.all { it.value >= 20.0 })
+    }
+
+    @Test
+    fun `a heavier lifter is not assumed to be proportionally stronger`() {
+        val lighter = CalibrationRamp.of(squat, body = BodySize(Kilograms(65.0), Sex.MALE))!!
+        val heavier = CalibrationRamp.of(squat, body = BodySize(Kilograms(130.0), Sex.MALE))!!
+
+        // Strength scales with bodyweight to about the half power, not the first (457,471 lifters,
+        // exponent 0.50–0.55). Twice the bodyweight is well under twice the starting weight, which
+        // is the direction a seed has to err in.
+        assertTrue(heavier.rung(0)!!.value > lighter.rung(0)!!.value)
+        assertTrue(heavier.rung(0)!!.value < 2 * lighter.rung(0)!!.value)
+    }
+
+    @Test
+    fun `not saying your sex starts you no higher than the lower answer`() {
+        val female = CalibrationRamp.of(squat, body = BodySize(Kilograms(80.0), Sex.FEMALE))!!
+        val unsaid = CalibrationRamp.of(squat, body = BodySize(Kilograms(80.0), sex = null))!!
+        val male = CalibrationRamp.of(squat, body = BodySize(Kilograms(80.0), Sex.MALE))!!
+
+        // Biased low, as every seed is: without the answer, the app assumes the one that starts
+        // lighter rather than guessing.
+        assertEquals(female.rung(0)!!.value, unsaid.rung(0)!!.value, TOLERANCE)
+        assertTrue(male.rung(0)!!.value >= female.rung(0)!!.value)
+    }
+
+    @Test
+    fun `a pressing lift is raised less than a squat`() {
+        val body = BodySize(Kilograms(95.0), Sex.MALE)
+
+        val squatStart = CalibrationRamp.of(squat, body = body)!!.rung(0)!!.value
+        val benchStart = CalibrationRamp.of(exercise("barbell"), body = body)!!.rung(0)!!.value
+
+        assertTrue(benchStart <= squatStart)
+    }
+
+    @Test
+    fun `a body says nothing about a machine, a dumbbell or a barbell curl`() {
+        val body = BodySize(Kilograms(110.0), Sex.MALE)
+
+        // A stack number is not a load, a dumbbell rack starts where it starts, and an isolation
+        // lift has no research anchor at all. Only barbell compounds are raised.
+        listOf(
+            exercise("machine"),
+            exercise("dumbbell"),
+            exercise("barbell").copy(mechanic = "isolation", primaryMuscles = listOf("biceps")),
+        ).forEach {
+            assertEquals(
+                CalibrationRamp.of(it)!!.rung(0)!!.value,
+                CalibrationRamp.of(it, body = body)!!.rung(0)!!.value,
+                TOLERANCE,
+            )
+        }
+    }
+
     private companion object {
         const val TOLERANCE = 0.0001
+
+        val squat get() = exercise("barbell").copy(primaryMuscles = listOf("quadriceps"))
 
         fun exercise(equipment: String, loggingType: LoggingType = LoggingType.WEIGHT_REPS) =
             Exercise(

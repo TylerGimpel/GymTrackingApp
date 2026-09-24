@@ -2,6 +2,8 @@ package com.tylergimpel.gymtracker.data
 
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.CalibrationRamp
+import kotlinx.coroutines.flow.first
+import com.tylergimpel.gymtracker.domain.BodySize
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseProgress
 import com.tylergimpel.gymtracker.domain.Increment
@@ -81,6 +83,12 @@ class RecommendationRepository(
      * allowed to reach back and re-band an exercise a lifter is mid-progression on.
      */
     private val routines: RoutineDao = database.routineDao(),
+    /**
+     * The weigh-ins, read for the latest one: what a barbell compound's first ramp may start
+     * closer to. Never required — no weigh-in is the ordinary case, and costs a few ramp sets.
+     */
+    private val bodyweights: BodyweightRepository =
+        BodyweightRepository(database, database.bodyweightDao()),
 ) {
 
     /**
@@ -123,6 +131,7 @@ class RecommendationRepository(
                     exercise = exercise,
                     rounding = rounding,
                     bar = plates.barbell(exercise.displayUnit).bar.takeIf { exercise.isBarbell },
+                    body = bodySize(),
                 ),
                 setsToday = open?.let { sessions.setsLoggedInSession(exercise.id, it) } ?: 0,
                 rounding = rounding,
@@ -134,6 +143,15 @@ class RecommendationRepository(
                 planned = plannedSetsOf(next, exercise, open, rounding),
             )
         }
+    }
+
+    /**
+     * The lifter's size as far as they have given it: their latest weigh-in, and their sex if said.
+     *
+     * Null without a weigh-in, which leaves every ramp where it always started (#90).
+     */
+    private suspend fun bodySize(): BodySize? = bodyweights.latest()?.let { latest ->
+        BodySize(bodyweight = latest.weight, sex = profile.observeProfile().first().sex)
     }
 
     /**

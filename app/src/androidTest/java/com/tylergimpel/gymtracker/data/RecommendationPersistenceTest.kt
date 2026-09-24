@@ -1,5 +1,8 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.Kilograms
+import java.time.LocalDate
+import com.tylergimpel.gymtracker.domain.Sex
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -121,6 +124,22 @@ class RecommendationPersistenceTest {
         assertTrue(next is Recommendation.Calibrating)
         assertEquals(20.0, next.prescription.load!!.value, TOLERANCE)
         assertEquals(CalibrationRamp.RAMP_REPS, next.prescription.reps)
+    }
+
+    @Test
+    fun aLifterWhoWeighedInStartsTheirFirstSquatCloserToThem() = runBlocking {
+        val fromTheBar = recommendations.nextSet(exercise(SQUAT))!!.prescription.load!!
+
+        BodyweightRepository(database, database.bodyweightDao())
+            .record(at("2026-09-14T07:00"), LocalDate.parse("2026-09-14"), Kilograms(95.0))
+        profile.setSex(Sex.MALE)
+        val profiled = recommendations.nextSet(exercise(SQUAT))!!.prescription.load!!
+
+        // What the profile is for, end to end: the latest weigh-in and the sex the lifter gave
+        // reach the first prescription and skip the rungs that were never going to be hard.
+        // Without them the same lift still ramps, from the bar (#90).
+        assertTrue(profiled.value > fromTheBar.value)
+        assertTrue(profiled.value <= 40.0)
     }
 
     @Test
