@@ -186,6 +186,8 @@
     <string name="routine_too_long">%1$s runs about %2$d minutes, past the %3$d you have to play with.</string>
     <string name="routine_off_band">%1$s gets %2$s sets a week, outside the %3$s to %4$s this routine aims at.</string>
     <string name="routine_only_disliked">Nothing is left to train %1$s except ones you said never to suggest. Which is least bad?</string>
+    <string name="routine_not_trained">Nothing in this cycle trains %1$s.</string>
+    <string name="routine_only_secondary">Nothing in this cycle is for %1$s. It gets %2$s sets a week from other exercises.</string>
     <string name="routine_relax">· %1$s</string>
     <string name="routine_muscle_load">%1$s · %2$d× a cycle · %3$s sets a week</string>
     <string name="routine_muscle_target">aiming for %1$s to %2$s</string>

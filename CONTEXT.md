@@ -223,7 +223,11 @@ A hand-authored day structure: the rotation a routine is laid out from, before a
 _Avoid_: template, which suggests the exercises come with it.
 
 **Binding constraint**:
-Something a routine cannot satisfy, paired with what would give if the lifter relaxed it. Never an error and never a refusal: an impossible request is a conversation, so the app says what is binding and leaves the decision where it belongs. The time ceiling usually binds before volume does.
+Something a routine cannot satisfy or does not do, paired with what would give if the lifter relaxed it: a day too long for its ceiling, a muscle outside its band, a **Main muscle** nothing in the cycle trains, or a muscle their exclusions emptied. Never an error and never a refusal: an impossible request is a conversation, so the app says what is binding and leaves the decision where it belongs. The time ceiling usually binds before volume does.
+
+**Main muscle**:
+One of the twelve every routine should train directly somewhere in its cycle: what an upper day and a lower day reach between them. Coverage is by direct work — a muscle only ever trained as secondary is not covered. Abdominals and forearms are not main muscles, and "full body, every session" is the one **Split shape** that leaves some out, on purpose, because one day holding all twelve is not a session anybody finishes.
+_Avoid_: major muscle group
 
 **Experience**:
 How much training a lifter has behind them — novice, trained or advanced. Theirs rather than any routine's, so it sits with their **Preferred unit**. One rule reads it: whether to steer somebody away from high-rep work whose value depends on judging proximity to failure. Trained until they say otherwise, because that is the answer that overrules nothing.

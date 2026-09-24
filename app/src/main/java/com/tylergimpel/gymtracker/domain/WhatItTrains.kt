@@ -45,8 +45,9 @@ data class MuscleLoad(
  * getting the most and the least, not an alphabet.
  *
  * **A muscle the cycle never trains is absent rather than zero.** Forty rows of nothing would bury
- * the handful that say something, and what is missing entirely is a coverage question for the
- * generator rather than a line in a report of what is there.
+ * the handful that say something. A **main** muscle missing entirely is said once, by name, where
+ * the rest of what is binding is — [Binding.MuscleNotTrained] — rather than as a line in a report
+ * of what is there; anything else missing, forearms say, goes unmentioned on purpose.
  *
  * Nothing here can refuse a routine. It is run over hand-built ones as readily as generated ones,
  * and a lopsided routine somebody built on purpose comes back reported, never rejected.

@@ -105,6 +105,30 @@ class SplitShapeTest {
     }
 
     @Test
+    fun `every shape the app offers trains every main muscle directly somewhere in its cycle`() {
+        // The coverage check reads the same list, so a shape that missed one would have the app
+        // flagging a gap in a routine it built itself — the lifter chose "full body" and was told
+        // their full body never trains traps.
+        //
+        // Less the one shape that misses them on purpose: one day holding all twelve runs three
+        // hours at three times a week, so it names five and the check says what it leaves out.
+        SPLIT_SHAPES.filter { it.id != "full-body-1" }.forEach { shape ->
+            val named = shape.days.flatMap { it.muscles }.toSet()
+            assertEquals(shape.id, emptySet<String>(), MAIN_MUSCLES.toSet() - named)
+        }
+    }
+
+    @Test
+    fun `full body every session is still the one shape that leaves main muscles out`() {
+        val everySession = SPLIT_SHAPES.single { it.id == "full-body-1" }
+
+        // Pinned so the exception above stays one: if this shape ever covers everything, the
+        // exemption is stale and should go; if another shape needs one, it should be argued here.
+        val leftOut = MAIN_MUSCLES.toSet() - everySession.days.flatMap { it.muscles }.toSet()
+        assertTrue(leftOut.isNotEmpty())
+    }
+
+    @Test
     fun `every day a shape lays out names muscles the bank knows`() {
         // A day asking for a muscle the bank has never heard of is a day nothing can fill, and
         // the failure would show up as an empty routine rather than as an error.

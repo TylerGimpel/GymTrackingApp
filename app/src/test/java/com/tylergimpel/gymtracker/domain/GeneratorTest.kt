@@ -307,6 +307,30 @@ class GeneratorTest {
     }
 
     @Test
+    fun `a generated full body routine that differs by day says nothing about coverage`() {
+        val twoDifferent = SPLIT_SHAPES.single { it.id == "full-body-2" }
+        val filled = fillDays(twoDifferent, bank, allEquipment, HYPERTROPHY, cadence = 3)
+        val routine = Routine(
+            id = 1,
+            name = twoDifferent.description,
+            goal = HYPERTROPHY,
+            cadence = 3,
+            equipment = allEquipment,
+            repPreference = RepPreference.MODERATE,
+            shape = twoDifferent,
+            days = filled.mapIndexed { index, day ->
+                RoutineDay(index + 1L, index + 1, day.shape.name, exercises = day.exercises)
+            },
+        )
+
+        // Built by the app from a gym that has something for every muscle, and then read back by
+        // the app's own check. A gap here would be the app flagging a routine it made itself.
+        assertTrue(
+            bindingOn(routine, bank = bank).filterIsInstance<Binding.MuscleNotTrained>().isEmpty(),
+        )
+    }
+
+    @Test
     fun `sessions a shape promises differ actually differ`() {
         val twoDifferent = SPLIT_SHAPES.single { it.id == "full-body-2" }
 

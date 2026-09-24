@@ -46,7 +46,7 @@ class WhatItTrainsTest {
         val routine = routineOf(day(bench to 4))
 
         // Absence rather than a row of zeroes for all forty muscles in the bank. What is missing
-        // is a question for the generator's coverage check, not for a report of what is there.
+        // is said by the coverage finding in what is binding, not by a report of what is there.
         assertTrue(routine.whatItTrains().none { it.muscle == "middle back" })
     }
 

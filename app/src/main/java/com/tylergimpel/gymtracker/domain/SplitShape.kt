@@ -87,6 +87,20 @@ private val UPPER =
 /** Everything below it, plus the lower back that holds it all up. */
 private val LOWER = listOf("quadriceps", "hamstrings", "glutes", "calves", "lower back")
 
+/**
+ * Every muscle a routine should train directly somewhere in its cycle.
+ *
+ * **What upper and lower reach between them**, taken from the same lists the shapes are built
+ * from rather than restated, so the shapes and the check that reads this share one idea of what
+ * "everything" is. Every shape offered reaches all of it but one — "full body, every session",
+ * which the check reports on like any routine (see [FULL_BODY_A]'s comment for why).
+ *
+ * Abdominals and forearms are not in it: forearms are named only on an arms day, for the reason
+ * above, and abdominals on one full-body day and no upper or lower one. Neither is a gap worth
+ * telling a lifter about.
+ */
+val MAIN_MUSCLES: List<String> = UPPER + LOWER
+
 private val PUSH = listOf("chest", "shoulders", "triceps")
 private val PULL = listOf("lats", "middle back", "traps", "biceps")
 private val LEGS = LOWER
@@ -95,11 +109,21 @@ private val LEGS = LOWER
  * Full-body days, and there are three of them because **they have to differ**. Selection is
  * deterministic, so two days naming the same muscles come back holding the same exercises — which
  * would make "full body, two sessions that differ" a lie told twice. What differs is what each
- * day is for, and between them they reach everything an upper/lower pair does.
+ * day is for.
+ *
+ * **A and B between them reach every one of the [MAIN_MUSCLES]**, so any cycle holding both
+ * covers everything, as the coverage check holds every routine to. The three the pair used to
+ * miss — biceps, traps and the lower back — were added to B rather than A, because A is also the
+ * whole of "full body, every session": naming all twelve on its one day measured three hours
+ * rather than eighty minutes at three times a week, and a gap the lifter is told about is better
+ * than a session nobody can finish.
+ * C only has to differ, because it is never offered without A and B beside it.
  */
 private val FULL_BODY_A =
     listOf("quadriceps", "chest", "middle back", "shoulders", "abdominals")
-private val FULL_BODY_B = listOf("hamstrings", "lats", "glutes", "triceps", "calves")
+private val FULL_BODY_B = listOf(
+    "hamstrings", "lats", "glutes", "triceps", "calves", "biceps", "traps", "lower back",
+)
 private val FULL_BODY_C =
     listOf("quadriceps", "chest", "lats", "biceps", "lower back")
 

@@ -52,6 +52,23 @@ sealed interface Binding {
     ) : Binding
 
     /**
+     * One of the [MAIN_MUSCLES] that nothing in the cycle trains directly.
+     *
+     * **A fact about the cycle, never a verdict on it.** "This cycle never trains hamstrings" is
+     * something a lifter can act on or choose to ignore — a routine that skips a muscle on purpose
+     * is theirs to build, and nothing here blocks it.
+     *
+     * [weeklySets] is what it gets anyway, as secondary work in other muscles' exercises. Zero
+     * means nothing touches it at all; more than zero means "never trained" would be false, and
+     * the screen says which. Coverage is by direct work either way, as it is for the generator.
+     */
+    data class MuscleNotTrained(
+        val muscle: String,
+        val weeklySets: Double,
+        override val relax: List<String>,
+    ) : Binding
+
+    /**
      * A muscle the lifter's exclusions have left nothing to train with.
      *
      * Carries the banned candidates rather than resolving it, because **the app asks which is
@@ -229,9 +246,54 @@ fun bindingOn(
         }
     }
 
+    val trains = routine.whatItTrains().associateBy { it.muscle }
+
+    // Asked before anything else is said about a muscle, because it is the most useful thing to
+    // say about one: see below for why it reads what the routine meant to train.
+    val askedAbout = if (bank.isEmpty()) {
+        emptyList()
+    } else {
+        routine.musclesItMeansToTrain().mapNotNull { leastBadFor(it, bank, routine.equipment) }
+    }
+
+    // The main muscles nothing in the cycle is for. Checked only where the routine trains
+    // something, because an empty routine already says it is empty and twelve findings saying so
+    // one muscle at a time would bury that.
+    //
+    // **Direct work, as the generator counts coverage.** A muscle that only ever turns up as
+    // secondary is not trained by anything in the cycle — but it is not untouched either, so the
+    // finding carries what it does get and the screen says which of the two is true.
+    //
+    // Not said of a muscle the lifter's exclusions emptied: that muscle is already being asked
+    // about, and the question of which banned exercise is least bad is the same fact put to them
+    // as something they can answer.
+    val notTrained = if (trains.isEmpty()) {
+        emptyList()
+    } else {
+        MAIN_MUSCLES.filter { muscle ->
+            (trains[muscle]?.sessions ?: 0) == 0 && askedAbout.none { it.muscle == muscle }
+        }
+    }
+    notTrained.forEach { muscle ->
+        add(
+            Binding.MuscleNotTrained(
+                muscle = muscle,
+                weeklySets = trains[muscle]?.weeklySets ?: 0.0,
+                relax = listOf(
+                    "Add an exercise for $muscle to one of your days",
+                    "Leave it out, if this cycle is not meant to train it",
+                ),
+            ),
+        )
+    }
+
     val target = weeklyVolumeTargetFor(routine.goal)
-    routine.whatItTrains().forEach { load ->
-        if (load.weeklySets !in target) {
+    trains.values.forEach { load ->
+        // A muscle already said to be untrained is not said again as *under* its band: that is
+        // one fact, and the band is not what is wrong with it. Over its band is a second fact —
+        // twenty sets a week out of other muscles' pressing is too much whatever it is for.
+        val saidAlready = load.muscle in notTrained && load.weeklySets < target.start
+        if (load.weeklySets !in target && !saidAlready) {
             add(
                 Binding.VolumeOutsideBand(
                     muscle = load.muscle,
@@ -261,11 +323,7 @@ fun bindingOn(
     // fill — so reading the days back would ask only about muscles that are fine, and the one
     // case this exists for would go silently unasked. Which is precisely the "silently skipping a
     // muscle group" the spec forbids.
-    if (bank.isNotEmpty()) {
-        routine.musclesItMeansToTrain()
-            .mapNotNull { leastBadFor(it, bank, routine.equipment) }
-            .forEach { add(it) }
-    }
+    addAll(askedAbout)
 }
 
 /**

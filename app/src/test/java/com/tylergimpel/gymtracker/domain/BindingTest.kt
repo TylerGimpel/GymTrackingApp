@@ -19,11 +19,107 @@ class BindingTest {
 
     @Test
     fun `a routine that fits reports nothing binding`() {
-        val findings = bindingOn(fittingDay)
+        val findings = bindingOn(everyMainMuscle)
 
-        // Fourteen sets of one muscle, once a week: inside the hypertrophy band and comfortably
-        // inside ninety minutes. Nothing to say, and the app says nothing.
+        // Every main muscle trained directly, each inside the hypertrophy band, and no day near
+        // ninety minutes. Nothing to say, and the app says nothing.
         assertTrue(findings.toString(), findings.isEmpty())
+    }
+
+    @Test
+    fun `a main muscle the cycle never trains is said by name`() {
+        val missing = bindingOn(fittingDay).filterIsInstance<Binding.MuscleNotTrained>()
+
+        // Fourteen sets of chest and nothing else. Legs never trained is the one fact most worth
+        // knowing about this routine, and the report of what it trains cannot say it: an
+        // untrained muscle is absent from that report, not a row of zeroes.
+        assertEquals(MAIN_MUSCLES.toSet() - "chest", missing.map { it.muscle }.toSet())
+        val hamstrings = missing.single { it.muscle == "hamstrings" }
+        assertEquals(0.0, hamstrings.weeklySets, 0.0)
+        assertTrue(hamstrings.relax.isNotEmpty())
+    }
+
+    @Test
+    fun `a muscle trained only as secondary work is said to be, not called untrained`() {
+        val pressing = routineOf(
+            day("Push", exercise("Bench", "chest", secondary = listOf("triceps")) to 14),
+        )
+
+        val triceps = bindingOn(pressing)
+            .filterIsInstance<Binding.MuscleNotTrained>()
+            .single { it.muscle == "triceps" }
+
+        // Coverage is by direct work, as the generator's is — but "never trained" would be false
+        // about a muscle that gets seven sets a week out of every bench press.
+        assertEquals(7.0, triceps.weeklySets, 0.001)
+    }
+
+    @Test
+    fun `a muscle reported as not trained directly is not reported again as under its band`() {
+        val pressing = routineOf(
+            day("Push", exercise("Bench", "chest", secondary = listOf("triceps")) to 14),
+        )
+
+        val findings = bindingOn(pressing)
+
+        // One fact, said once. Seven sets of triceps is under the band, but the band is not the
+        // problem: nothing in the cycle is for triceps at all.
+        assertTrue(
+            findings.filterIsInstance<Binding.VolumeOutsideBand>().none { it.muscle == "triceps" },
+        )
+    }
+
+    @Test
+    fun `an empty routine is not a list of every muscle`() {
+        val empty = routineOf(day("Nothing yet"))
+
+        // The screen already says there is nothing in it. Twelve findings saying the same thing
+        // one muscle at a time would bury that under a list.
+        assertTrue(bindingOn(empty).filterIsInstance<Binding.MuscleNotTrained>().isEmpty())
+    }
+
+    @Test
+    fun `a muscle the lifter's exclusions emptied is asked about, not also called untrained`() {
+        // The shape asked for chest and back; every chest exercise is banned, so the generator
+        // skipped chest and only back reached the days. That is one fact, and the question —
+        // which banned exercise is least bad — is the more useful way to say it.
+        val shape = SplitShape(
+            id = "chest-and-back",
+            description = "Chest and back",
+            rotation = 1,
+            days = listOf(SplitDay("Both", listOf("chest", "middle back"))),
+        )
+        val allBanned = bank.map {
+            if ("chest" in it.primaryMuscles) it.copy(isDisliked = true) else it
+        }
+        val emptied = routineOf(day("Both", exercise("Row", "middle back") to 14)).copy(
+            shape = shape,
+            equipment = setOf("barbell", "dumbbell"),
+        )
+
+        val findings = bindingOn(emptied, bank = allBanned)
+
+        assertEquals(
+            listOf("chest"),
+            findings.filterIsInstance<Binding.OnlyDislikedLeft>().map { it.muscle },
+        )
+        assertTrue(
+            findings.filterIsInstance<Binding.MuscleNotTrained>().none { it.muscle == "chest" },
+        )
+    }
+
+    @Test
+    fun `a muscle only ever trained as secondary work is still said to be over its band`() {
+        val pressing = routineOf(
+            day("Push", exercise("Bench", "chest", secondary = listOf("triceps")) to 40),
+        )
+
+        val findings = bindingOn(pressing, ceiling = Duration.ofHours(8))
+
+        // Twenty sets of triceps a week out of the pressing alone. Nothing in the cycle is for
+        // triceps, and it is also getting more than the band — two facts, not one said twice.
+        assertTrue(findings.filterIsInstance<Binding.MuscleNotTrained>().any { it.muscle == "triceps" })
+        assertTrue(findings.filterIsInstance<Binding.VolumeOutsideBand>().any { it.muscle == "triceps" })
     }
 
     @Test
@@ -221,11 +317,16 @@ class BindingTest {
     ) = dayLength(routine.days.single(), cardio, RepRange.DEFAULT)
 
     private companion object {
-        fun exercise(id: String, primary: String, equipment: String? = "barbell") = Exercise(
+        fun exercise(
+            id: String,
+            primary: String,
+            equipment: String? = "barbell",
+            secondary: List<String> = emptyList(),
+        ) = Exercise(
             id = id,
             bankName = id,
             primaryMuscles = listOf(primary),
-            secondaryMuscles = emptyList(),
+            secondaryMuscles = secondary,
             equipment = equipment,
             mechanic = "compound",
             force = "push",
@@ -250,6 +351,15 @@ class BindingTest {
 
         /** Two sets a week, which is under any band the app aims at. */
         val barelyAnything = routineOf(day("Short", exercise("Bench", "chest") to 2))
+
+        /**
+         * Every main muscle, fourteen sets each, one muscle a day and as many days a week as
+         * there are muscles. Contrived, but it lands every one of them in the middle of the band
+         * and every day inside the ceiling, which is what a routine with nothing binding has to do.
+         */
+        val everyMainMuscle = routineOf(
+            *MAIN_MUSCLES.map { day(it, exercise(it, it) to 14) }.toTypedArray(),
+        ).copy(cadence = MAIN_MUSCLES.size)
 
         /** Fourteen sets of one muscle: inside the band, and inside the hour and a half. */
         val fittingDay = routineOf(day("Fits", exercise("Bench", "chest") to 14))

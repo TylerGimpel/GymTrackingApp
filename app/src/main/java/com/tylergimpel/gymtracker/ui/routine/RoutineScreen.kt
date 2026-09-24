@@ -370,6 +370,14 @@ private fun Binding.said(): String = when (this) {
     )
 
     is Binding.OnlyDislikedLeft -> stringResource(R.string.routine_only_disliked, muscle)
+
+    // Which of the two is true, because "never trained" is false about a muscle getting real
+    // secondary work — and the lifter deciding whether to care needs the honest one.
+    is Binding.MuscleNotTrained -> if (weeklySets == 0.0) {
+        stringResource(R.string.routine_not_trained, muscle)
+    } else {
+        stringResource(R.string.routine_only_secondary, muscle, weeklySets.asSetsText())
+    }
 }
 
 /**
