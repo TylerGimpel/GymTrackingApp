@@ -28,6 +28,9 @@ import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.data.FitNotesParser
 import com.tylergimpel.gymtracker.data.ImportRepository
 import com.tylergimpel.gymtracker.data.ImportResult
+import com.tylergimpel.gymtracker.data.ImportOutcome
+import com.tylergimpel.gymtracker.data.ListedImport
+import java.time.Instant
 import java.io.File
 import com.tylergimpel.gymtracker.domain.spreadsheetExport
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +54,10 @@ data class SettingsUiState(
      * confirmation earns its keep.
      */
     val confirmingRestore: ConfirmRestore? = null,
+    /** Every import still standing, newest first, each of which can be undone (#102). */
+    val imports: List<ListedImport> = emptyList(),
+    /** An import the lifter asked to undo, waiting on them to confirm: it removes history. */
+    val confirmingUndo: ListedImport? = null,
 )
 
 /** A backup ready to restore, and what restoring it would replace. */
@@ -85,6 +92,12 @@ sealed interface DataMessage {
     /** What a FitNotes import brought in, and what it left behind and why. */
     data class Imported(val result: ImportResult) : DataMessage
 
+    /** That exact file was already imported, when; nothing was added the second time (#102). */
+    data class AlreadyImported(val importedAt: Instant) : DataMessage
+
+    /** An import was undone, and how many sessions it took with it. */
+    data class Undone(val sessions: Int) : DataMessage
+
     /** The export could not be written where the lifter chose. */
     data object Failed : DataMessage {
         override val isError: Boolean get() = true
@@ -117,14 +130,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val dataMessage = MutableStateFlow<DataMessage?>(null)
     private val confirming = MutableStateFlow<ConfirmRestore?>(null)
 
+    private val importer = ImportRepository(database, profile = profile)
+    private val confirmingUndo = MutableStateFlow<ListedImport?>(null)
+
     val state: StateFlow<SettingsUiState> = combine(
-        profile.observeDisplayUnit(),
-        profile.observeTheme(),
-        restAlerts,
-        dataMessage,
-        confirming,
-        ::SettingsUiState,
-    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState())
+        combine(
+            profile.observeDisplayUnit(),
+            profile.observeTheme(),
+            restAlerts,
+            dataMessage,
+            confirming,
+        ) { unit, theme, alerts, message, restoring ->
+            SettingsUiState(unit, theme, alerts, message, restoring)
+        },
+        importer.observeListed(),
+        confirmingUndo,
+    ) { settings, imports, undoing -> settings.copy(imports = imports, confirmingUndo = undoing) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState())
 
     fun setDisplayUnit(unit: WeightUnit) {
         viewModelScope.launch { profile.setDisplayUnit(unit) }
@@ -245,7 +266,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val records = withContext(Dispatchers.IO) { FitNotesParser.parse(copy) }
                 val bank = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
                     .observeBank().first()
-                DataMessage.Imported(ImportRepository(database).import(records, bank))
+                when (val outcome = importer.import(records, bank)) {
+                    is ImportOutcome.Imported -> DataMessage.Imported(outcome.result)
+                    is ImportOutcome.AlreadyImported -> DataMessage.AlreadyImported(outcome.importedAt)
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failed: Exception) {
@@ -254,6 +278,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 // Whatever happened: a copy of somebody's training log is not left lying about.
                 copy.delete()
             }
+        }
+    }
+
+    /** Asks before undoing an import, because undoing removes the history it brought. */
+    fun askToUndo(listed: ListedImport) {
+        confirmingUndo.value = listed
+    }
+
+    fun keepImport() {
+        confirmingUndo.value = null
+    }
+
+    /** Removes exactly what the confirmed import brought in, and nothing the lifter logged. */
+    fun undoImport() {
+        val listed = confirmingUndo.value ?: return
+        confirmingUndo.value = null
+        viewModelScope.launch {
+            importer.undo(listed.id)
+            dataMessage.value = DataMessage.Undone(listed.sessions)
         }
     }
 

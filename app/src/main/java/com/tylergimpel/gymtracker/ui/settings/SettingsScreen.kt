@@ -38,6 +38,12 @@ import com.tylergimpel.gymtracker.ui.WeightUnitChips
 import com.tylergimpel.gymtracker.ui.settingsFor
 import com.tylergimpel.gymtracker.data.ImportResult
 import com.tylergimpel.gymtracker.data.RefusedBecause
+import com.tylergimpel.gymtracker.data.ListedImport
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.fillMaxWidth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import java.time.LocalDate
@@ -116,6 +122,9 @@ fun SettingsScreen(
         onDismissDataMessage = viewModel::dismissDataMessage,
         onConfirmRestore = viewModel::confirmRestore,
         onCancelRestore = viewModel::cancelRestore,
+        onAskToUndo = viewModel::askToUndo,
+        onUndoImport = viewModel::undoImport,
+        onKeepImport = viewModel::keepImport,
     )
 }
 
@@ -137,6 +146,9 @@ fun SettingsScreen(
     onDismissDataMessage: () -> Unit = {},
     onConfirmRestore: () -> Unit = {},
     onCancelRestore: () -> Unit = {},
+    onAskToUndo: (ListedImport) -> Unit = {},
+    onUndoImport: () -> Unit = {},
+    onKeepImport: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -225,6 +237,28 @@ fun SettingsScreen(
                 TextButton(onClick = onImportFitNotes) {
                     Text(stringResource(R.string.settings_import))
                 }
+                // Where imports are listed, each with the way to take it back (#102).
+                state.imports.forEach { listed ->
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.import_listed,
+                                listed.importedAt.atZone(ZoneId.systemDefault()).toLocalDate()
+                                    .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                                listed.sessions,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { onAskToUndo(listed) }) {
+                            Text(stringResource(R.string.import_undo))
+                        }
+                    }
+                }
                 Text(
                     text = stringResource(R.string.settings_export_why),
                     style = MaterialTheme.typography.bodySmall,
@@ -251,6 +285,12 @@ fun SettingsScreen(
                             )
                             DataMessage.NotImportable -> stringResource(R.string.settings_not_importable)
                             is DataMessage.Imported -> importedText(message.result)
+                            is DataMessage.AlreadyImported -> stringResource(
+                                R.string.import_already,
+                                message.importedAt.atZone(ZoneId.systemDefault()).toLocalDate()
+                                    .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                            )
+                            is DataMessage.Undone -> stringResource(R.string.import_undone, message.sessions)
                             DataMessage.BackupFailed -> stringResource(R.string.settings_backup_failed)
                             DataMessage.Failed -> stringResource(R.string.settings_export_failed)
                         },
@@ -281,6 +321,20 @@ fun SettingsScreen(
             }
 
             HorizontalDivider()
+
+            state.confirmingUndo?.let { listed ->
+                AlertDialog(
+                    onDismissRequest = onKeepImport,
+                    title = { Text(stringResource(R.string.import_undo_title)) },
+                    text = { Text(stringResource(R.string.import_undo_body, listed.sessions)) },
+                    confirmButton = {
+                        TextButton(onClick = onUndoImport) { Text(stringResource(R.string.import_undo_confirm)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = onKeepImport) { Text(stringResource(R.string.import_undo_keep)) }
+                    },
+                )
+            }
 
             state.confirmingRestore?.let {
                 ConfirmRestoreDialog(confirm = it, onConfirm = onConfirmRestore, onCancel = onCancelRestore)

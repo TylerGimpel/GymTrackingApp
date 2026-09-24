@@ -6,9 +6,19 @@ import com.tylergimpel.gymtracker.domain.ImportedSet
 import com.tylergimpel.gymtracker.domain.NeutralImport
 import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.matchExactly
+import kotlinx.coroutines.flow.Flow
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
+
+/** How an import went: done, or recognised as a file already brought in (#102). */
+sealed interface ImportOutcome {
+    data class Imported(val result: ImportResult) : ImportOutcome
+
+    /** This exact file was imported before, when; nothing was written the second time. */
+    data class AlreadyImported(val importedAt: Instant) : ImportOutcome
+}
 
 /** What an import did, in the lifter's terms. */
 data class ImportResult(
@@ -41,7 +51,39 @@ class ImportRepository(
     private val sessions = database.sessionDao()
     private val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
 
-    suspend fun import(records: NeutralImport, bank: List<Exercise>): ImportResult = database.withTransaction {
+    /**
+     * Brings [records] in, unless this exact file already was.
+     *
+     * **A repeat is caught before anything is written** (#102): the file's fingerprint is looked
+     * up among the imports still standing, so importing the same backup twice does not double a
+     * training history. An import that was undone is gone, so its file can come in again.
+     */
+    suspend fun import(records: NeutralImport, bank: List<Exercise>): ImportOutcome = database.withTransaction {
+        database.importBatchDao().withFingerprint(records.fingerprint)?.let {
+            return@withTransaction ImportOutcome.AlreadyImported(it.importedAt)
+        }
+        ImportOutcome.Imported(write(records, bank))
+    }
+
+    /**
+     * Removes exactly what the import [batchId] brought in, and nothing else (#102).
+     *
+     * Its sessions go, and with them every exercise, set, drop and superset that hangs off one,
+     * by cascade. Nothing the lifter logged — before the import or since — points at the batch,
+     * so nothing of theirs is touched. What an import filled in about an exercise where there was
+     * a gap (#101) stays: it is a setting now, and the lifter may have come to rely on it.
+     */
+    suspend fun undo(batchId: Long): Unit = database.withTransaction {
+        database.importBatchDao().deleteSessionsOf(batchId)
+        database.importBatchDao().delete(batchId)
+    }
+
+    /** Every import still standing, newest first, with how many sessions each brought in. */
+    fun observeListed(): Flow<List<ListedImport>> = database.importBatchDao().observeListed()
+
+    suspend fun listed(): List<ListedImport> = database.importBatchDao().listed()
+
+    private suspend fun write(records: NeutralImport, bank: List<Exercise>): ImportResult {
         val batchId = database.importBatchDao().insert(
             ImportBatchEntity(
                 source = records.source.id,
@@ -94,7 +136,7 @@ class ImportRepository(
 
         applyExerciseSettings(records, matches)
 
-        ImportResult(
+        return ImportResult(
             batchId = batchId,
             sessions = sessionCount,
             sets = matched.size,

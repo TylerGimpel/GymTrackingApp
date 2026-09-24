@@ -154,13 +154,15 @@ class FitNotesImportTest {
     @Test
     fun theBatchRecordsFitNotesVolumeAsApproximateBecauseOfTheSourceNotTheImport() = runBlocking {
         val fitNotes = importFixture()
-        val declaring = ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)).import(
-            FitNotesParser.parse(fixture).copy(
-                source = ImportSource(id = "declares-types", declaresSetTypes = true, declaresSupersets = false),
-                fingerprint = "another",
-            ),
-            bank(),
-        )
+        val declaring = (
+            imports().import(
+                FitNotesParser.parse(fixture).copy(
+                    source = ImportSource(id = "declares-types", declaresSetTypes = true, declaresSupersets = false),
+                    fingerprint = "another",
+                ),
+                bank(),
+            ) as ImportOutcome.Imported
+            ).result
 
         val batches = database.importBatchDao().all().associateBy { it.id }
         assertFalse(batches.getValue(fitNotes.batchId).volumeReliable)
@@ -220,6 +222,49 @@ class FitNotesImportTest {
     }
 
     @Test
+    fun importingTheSameFileTwiceIsRecognisedAndAddsNothing() = runBlocking {
+        importFixture()
+        val before = importedSessions().size
+
+        val again = imports().import(FitNotesParser.parse(fixture), bank())
+
+        // Caught before anything is written: doubling a training history by accident is exactly
+        // what the batch's fingerprint is for (#102).
+        assertTrue("a repeat import was not recognised: $again", again is ImportOutcome.AlreadyImported)
+        assertEquals(before, importedSessions().size)
+    }
+
+    @Test
+    fun undoingAnImportRemovesExactlyWhatItAddedAndNothingElse() = runBlocking {
+        sessions().logSet(BENCH, SetDraft("60", "8"))
+        sessions().finishSession(sessions().observeActiveSession().first()!!.id)
+        val batch = importFixture().batchId
+        sessions().logSet(SQUAT_ID, SetDraft("100", "5"))
+        sessions().finishSession(sessions().observeActiveSession().first()!!.id)
+        val loggedBefore = sessions().observeRecent(limit = 100).first().filter { !it.session.isImported }
+
+        imports().undo(batch)
+
+        // Every imported session, set, superset and drop gone; both sessions the lifter logged,
+        // one before the import and one after, exactly as they were.
+        assertTrue(importedSessions().isEmpty())
+        assertEquals(loggedBefore, sessions().observeRecent(limit = 100).first())
+        assertTrue(imports().listed().isEmpty())
+        // And the same file can be brought in again, since nothing of it is left.
+        assertTrue(imports().import(FitNotesParser.parse(fixture), bank()) is ImportOutcome.Imported)
+    }
+
+    @Test
+    fun importsAreListedWithWhatEachBroughtIn() = runBlocking {
+        importFixture()
+
+        val listed = imports().listed().single()
+
+        assertEquals("fitnotes", listed.source)
+        assertEquals(importedSessions().size, listed.sessions)
+    }
+
+    @Test
     fun importingTouchesNothingAlreadyLogged() = runBlocking {
         sessions().logSet(BENCH, SetDraft("60", "8"))
         sessions().finishSession(sessions().observeActiveSession().first()!!.id)
@@ -256,7 +301,13 @@ class FitNotesImportTest {
     }
 
     private suspend fun importFixture(): ImportResult =
-        ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)).import(FitNotesParser.parse(fixture), bank())
+        (imports().import(FitNotesParser.parse(fixture), bank()) as ImportOutcome.Imported).result
+
+    private fun imports() =
+        ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS))
+
+    private suspend fun importedSessions() =
+        sessions().observeRecent(limit = 100).first().filter { it.session.isImported }
 
     private suspend fun bank() = ExerciseRepository(
         database,
@@ -363,5 +414,6 @@ class FitNotesImportTest {
     private companion object {
         const val TEST_DATABASE = "fitnotes-import-test.db"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
+        const val SQUAT_ID = "Barbell_Squat"
     }
 }
