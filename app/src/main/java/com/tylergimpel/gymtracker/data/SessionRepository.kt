@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.data
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSession
+import com.tylergimpel.gymtracker.domain.PlannedSession
 import com.tylergimpel.gymtracker.domain.Prescription
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
@@ -14,6 +15,7 @@ import com.tylergimpel.gymtracker.domain.Side
 import com.tylergimpel.gymtracker.domain.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.Clock
 import java.time.Instant
@@ -61,6 +63,22 @@ class SessionRepository(
         sessions.observeRecent(limit).withLifterUnit { recent, unit ->
             recent.map { it.toLoggedSession(unit) }
         }
+
+    /**
+     * What a run of past sessions was planned to be, for rebuilding a routine out of the log.
+     *
+     * A one-shot read rather than a flow: the lifter asks once, on a button, and a rotation read
+     * back out of history does not change while they are looking at it.
+     *
+     * Reads the plans and nothing else. That is what lets [limit] reach back far enough to find
+     * a routine from months ago without the cost climbing with how much the lifter has trained.
+     */
+    suspend fun recentPlans(limit: Int): List<PlannedSession> {
+        val unit = profile.observeDisplayUnit().first()
+        return sessions.recentPlans(limit).map {
+            PlannedSession(session = it.session.toDomain(), plan = it.plan.toSessionPlan(unit))
+        }
+    }
 
     fun observeSession(sessionId: Long): Flow<LoggedSession?> =
         sessions.observeContent(sessionId).withLifterUnit { content, unit -> content?.toLoggedSession(unit) }

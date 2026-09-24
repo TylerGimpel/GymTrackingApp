@@ -71,6 +71,26 @@ data class SessionWithContent(
 )
 
 /**
+ * A session and what it was asked for, with nothing about what was actually lifted.
+ *
+ * A [SessionWithContent] with the content left off. Rebuilding a routine reads the plans and
+ * nothing else, and the window it reads has to reach back far enough to find a routine from last
+ * spring — so pulling every set and every drop of a year's training along with them would be
+ * paying for the whole log to answer a question about a small corner of it.
+ */
+data class SessionWithPlan(
+    @Embedded
+    val session: SessionEntity,
+
+    @Relation(
+        entity = SessionPlanEntity::class,
+        parentColumn = "id",
+        entityColumn = "session_id",
+    )
+    val plan: List<SessionPlanWithExercise>,
+)
+
+/**
  * What the session was for, in the order its routine day held it.
  *
  * Empty for a session trained with no routine, which reads back as a plan of nothing rather than as

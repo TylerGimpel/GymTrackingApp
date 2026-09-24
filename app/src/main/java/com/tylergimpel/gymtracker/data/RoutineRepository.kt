@@ -90,6 +90,13 @@ class RoutineRepository(
         cardio: CardioPlacement = CardioPlacement.NONE,
         /** The shape it was laid out from, where it was laid out from one. */
         shapeId: String? = null,
+        /**
+         * Which of the routines that shape could have produced this one is.
+         *
+         * Travels with [shapeId] and is null wherever it is: the two together are how a routine
+         * was arrived at, and neither answers without the other.
+         */
+        seed: Int? = null,
     ): Long = routines.insert(
         RoutineEntity(
             name = name,
@@ -99,6 +106,7 @@ class RoutineRepository(
             repPreference = repPreference.name,
             cardio = cardio.name,
             shapeId = shapeId,
+            seed = seed,
         ),
     )
 
@@ -129,8 +137,13 @@ class RoutineRepository(
          */
         bank: List<Exercise> = emptyList(),
     ): Long = database.withTransaction {
-        val id = createRoutine(name, goal, cadence, equipment, repPreference, cardio, shape.id)
-        val filled = fillDays(shape, bank, equipment, goal, cadence).associateBy { it.shape.name }
+        // Zero because that is the seed the days below are filled at. Stored rather than assumed,
+        // so asking for variety climbs from what this routine actually is.
+        val id = createRoutine(
+            name, goal, cadence, equipment, repPreference, cardio, shape.id, seed = FIRST_SEED,
+        )
+        val filled = fillDays(shape, bank, equipment, goal, cadence, seed = FIRST_SEED)
+            .associateBy { it.shape.name }
 
         shape.days.forEach { day ->
             val dayId = routines.insert(
@@ -216,8 +229,13 @@ class RoutineRepository(
      * Builds the routine's days again, keeping what the lifter pinned.
      *
      * **Only ever because they asked.** Routines do not self-rotate exercises across cycles, so
-     * nothing calls this on its own — a different routine is a decision, and [seed] is how that
-     * decision reaches the generator.
+     * nothing calls this on its own — a different routine is a decision, and the seed climbing is
+     * how that decision reaches the generator.
+     *
+     * **The seed climbs in storage, not on screen.** Held in a view model it reset to zero every
+     * launch, so the first "build it again" after closing the app handed back the routine already
+     * showing. Read from the routine and written back to it, the next answer is a new one however
+     * long ago the last one was asked for.
      *
      * The shape is unchanged: this replaces what unpinned days *hold*, which is not a revision
      * and ends no cycle (ADR 0006). Which is also why one step of undo can point at the live day
@@ -226,10 +244,18 @@ class RoutineRepository(
     suspend fun regenerate(
         shape: SplitShape,
         bank: List<Exercise>,
-        seed: Int,
     ): Unit = database.withTransaction {
         val routine = routines.routine() ?: return@withTransaction
         val days = routines.days(routine.id)
+
+        // A routine with no seed stored was laid out at the first one, so the next is the one
+        // after it. Written before the days are filled from it, so what is stored is the number
+        // that reproduces what is on screen — until an undo, which puts the days back and leaves
+        // the seed where it is. That is deliberate: the seed only climbs, so asking again after
+        // undoing moves on past the routine the lifter just turned down rather than offering it
+        // straight back.
+        val seed = (routine.seed ?: FIRST_SEED) + 1
+        routines.update(routine.copy(seed = seed))
 
         // The step back, taken before anything moves. Replacing the previous one rather than
         // stacking: one step is the whole promise.
@@ -385,24 +411,37 @@ class RoutineRepository(
         }
     }
 
-    /** Removes a day from the rotation. A revision, so the current cycle ends. */
-    suspend fun removeDay(dayId: Long) = database.withTransaction {
-        val routineId = routines.routine()?.id ?: return@withTransaction
+    /**
+     * Removes a day from the rotation. A revision, so the current cycle ends.
+     *
+     * Answers whether it did: a day that is not in the routine removes nothing and revises
+     * nothing, and the screen should not say the cycle started again when it did not.
+     */
+    suspend fun removeDay(dayId: Long): Boolean = database.withTransaction {
+        val routineId = routines.routine()?.id ?: return@withTransaction false
+        if (routines.days(routineId).none { it.id == dayId }) return@withTransaction false
         routines.deleteDay(dayId)
         renumber(routineId)
         revise(routineId)
+        true
     }
 
-    /** Moves a day one position earlier or later. A revision, so the current cycle ends. */
-    suspend fun moveDay(dayId: Long, by: Int) = database.withTransaction {
-        val routineId = routines.routine()?.id ?: return@withTransaction
+    /**
+     * Moves a day one position earlier or later. A revision, so the current cycle ends.
+     *
+     * Answers whether it did. Moving the first day earlier or the last one later leaves the
+     * rotation as it was, which is no revision and ends no cycle.
+     */
+    suspend fun moveDay(dayId: Long, by: Int): Boolean = database.withTransaction {
+        val routineId = routines.routine()?.id ?: return@withTransaction false
         val days = routines.days(routineId).toMutableList()
         val from = days.indexOfFirst { it.id == dayId }
         val to = from + by
-        if (from < 0 || to !in days.indices) return@withTransaction
+        if (from < 0 || to !in days.indices || to == from) return@withTransaction false
         days.add(to, days.removeAt(from))
         days.forEachIndexed { index, day -> routines.update(day.copy(orderIndex = index + 1)) }
         revise(routineId)
+        true
     }
 
     /**
@@ -511,6 +550,16 @@ class RoutineRepository(
         routines.days(routineId).forEachIndexed { index, day ->
             if (day.orderIndex != index + 1) routines.update(day.copy(orderIndex = index + 1))
         }
+    }
+
+    private companion object {
+        /**
+         * The seed a routine is generated with before anybody has asked for variety.
+         *
+         * Zero rather than anything else because the generator takes the candidates in the order
+         * it would recommend them, and rotating by zero is that order.
+         */
+        const val FIRST_SEED = 0
     }
 }
 

@@ -10,6 +10,8 @@ import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.domain.liftingCadence
 import com.tylergimpel.gymtracker.domain.SPLIT_SHAPES
 import com.tylergimpel.gymtracker.domain.rebuildFrom
+import com.tylergimpel.gymtracker.domain.RecoveredDay
+import com.tylergimpel.gymtracker.domain.fillDays
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.CardioPlacement
@@ -703,7 +705,7 @@ class RoutinePersistenceTest {
         val kept = dayNow(push).exercises.first().exercise
 
         routines.setPinned(push.id, kept.id, pinned = true)
-        routines.regenerate(shape, bank, seed = 1)
+        routines.regenerate(shape, bank)
 
         val after = dayNow(push).exercises.map { it.exercise.id }
 
@@ -726,7 +728,7 @@ class RoutinePersistenceTest {
         reGoal(RoutineGoal.HYPERTROPHY)
         assertEquals(before, everyExercise())
 
-        routines.regenerate(shape, bank, seed = 2)
+        routines.regenerate(shape, bank)
         assertNotEquals("asking for variety gave back the same routine", before, everyExercise())
     }
 
@@ -736,7 +738,7 @@ class RoutinePersistenceTest {
         val bank = generated(shape)
         val before = everyExercise()
 
-        routines.regenerate(shape, bank, seed = 4)
+        routines.regenerate(shape, bank)
         assertTrue(routines.canUndo())
 
         routines.undoRegeneration()
@@ -751,7 +753,7 @@ class RoutinePersistenceTest {
     fun aRegenerationCanNoLongerBeUndoneOnceTheRoutineHasBeenTrained() = runBlocking {
         val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
         val bank = generated(shape)
-        routines.regenerate(shape, bank, seed = 5)
+        routines.regenerate(shape, bank)
         assertTrue(routines.canUndo())
 
         complete(routines.observeProgress().first()!!.routine.rotation.first())
@@ -813,10 +815,10 @@ class RoutinePersistenceTest {
         routines.deleteRoutine()
         assertEquals(null, routines.observeProgress().first())
 
-        val recovered = rebuildFrom(sessions.observeRecent(40).first())
+        val recovered = rebuildFrom(sessions.recentPlans(40)).single()
         routines.rebuildFromSessions(
-            name = "Last spring",
-            recovered = recovered,
+            name = recovered.name,
+            recovered = recovered.days,
             goal = RoutineGoal.HYPERTROPHY,
             cadence = 3,
             equipment = setOf("barbell"),
@@ -831,6 +833,132 @@ class RoutinePersistenceTest {
     }
 
     @Test
+    fun theLogOffersEveryRoutineItHoldsRatherThanABlendOfThem() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        generated(shape)
+        val spring = routines.observeProgress().first()!!.routine
+        complete(spring.rotation.first(), on = LocalDate.parse("2026-03-14"))
+        routines.deleteRoutine()
+
+        val id = routines.createRoutine(name = "Upper lower")
+        val upper = routines.addDay(id, "Upper")
+        routines.addExerciseToDay(upper, SQUAT)
+        complete(routines.observeProgress().first()!!.routine.rotation.single())
+
+        // Read the way the app reads it: the plans alone, reaching back months. Each session
+        // carries the routine it followed, so the two come back as two, most recent first.
+        val recovered = rebuildFrom(sessions.recentPlans(500))
+        assertEquals(listOf("Upper lower", spring.name), recovered.map { it.name })
+        assertEquals(listOf("Upper"), recovered.first().days.map { it.name })
+        assertEquals(listOf(spring.rotation.first().name), recovered.last().days.map { it.name })
+    }
+
+    @Test
+    fun movingADayOffEitherEndIsNoRevisionAndSaysSo() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation.first())
+        val cycle = routines.observeProgress().first()!!.cycle?.ordinal
+
+        // Nothing moved, so nothing was revised: the screen must not tell the lifter their cycle
+        // started again when it did not, and the cycle must not have.
+        assertFalse(routines.moveDay(routine.rotation.first().id, -1))
+        assertFalse(routines.moveDay(routine.rotation.last().id, 1))
+        assertEquals(cycle, routines.observeProgress().first()!!.cycle?.ordinal)
+
+        assertTrue(routines.moveDay(routine.rotation.first().id, 1))
+        assertEquals(cycle!! + 1, routines.observeProgress().first()!!.cycle?.ordinal)
+    }
+
+    @Test
+    fun removingADayThatIsNotThereIsNoRevision() = runBlocking {
+        val routine = pushPullLegs()
+        complete(routine.rotation.first())
+        val cycle = routines.observeProgress().first()!!.cycle?.ordinal
+
+        assertFalse(routines.removeDay(dayId = -1))
+        assertEquals(cycle, routines.observeProgress().first()!!.cycle?.ordinal)
+
+        assertTrue(routines.removeDay(routine.rotation.last().id))
+        assertEquals(cycle!! + 1, routines.observeProgress().first()!!.cycle?.ordinal)
+    }
+
+    @Test
+    fun askingForVarietyAfterTheAppIsClosedGivesSomethingOtherThanWhatIsOnScreen() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        routines.regenerate(shape, bank)
+        val onScreen = everyExercise()
+
+        // Closing the app and opening it again. Nothing survives it but what was stored, which is
+        // exactly what a repository built fresh over the same database can see. The repository
+        // never held the seed — the view model did — so what this proves is the part that
+        // matters: the next seed is read from storage, and nothing else is there to read it from.
+        val reopened = RoutineRepository(
+            database,
+            database.routineDao(),
+            database.sessionDao(),
+            clock,
+        )
+        reopened.regenerate(shape, bank)
+
+        // The seed kept climbing rather than starting over, so the answer moves on. Held on
+        // screen it reset to zero, and the first ask after a restart reproduced this very routine.
+        assertNotEquals(
+            "asking for variety after a restart gave back the routine already on screen",
+            onScreen,
+            everyExercise(),
+        )
+    }
+
+    @Test
+    fun theRoutineOnScreenIsWhatTheSeedStoredWithItProduces() = runBlocking {
+        val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
+        val bank = generated(shape)
+        routines.regenerate(shape, bank)
+
+        val routine = routines.observeProgress().first()!!.routine
+        val fromTheSeed = fillDays(
+            shape = shape,
+            bank = bank,
+            equipment = routine.equipment,
+            goal = routine.goal,
+            cadence = routine.cadence,
+            seed = routine.seed!!,
+        )
+
+        // Reproducibility is the point of the seed: the number stored is the one that builds what
+        // the lifter is looking at, so the same seed is still the same routine.
+        assertEquals(
+            fromTheSeed.map { day -> day.exercises.map { it.exercise.id } },
+            routine.rotation.map { day -> day.exercises.map { it.exercise.id } },
+        )
+    }
+
+    @Test
+    fun aRoutineNobodyGeneratedCarriesNoSeed() = runBlocking {
+        routines.createRoutine(name = "Mine")
+        val byHand = routines.observeProgress().first()!!.routine
+
+        // It carries no shape either, and for the same reason: nothing generated it, so there is
+        // no number that reproduces it and nothing for asking again to move on from.
+        assertNull(byHand.shape)
+        assertNull("a routine built by hand was given a seed", byHand.seed)
+
+        routines.rebuildFromSessions(
+            name = "Last spring",
+            recovered = listOf(RecoveredDay("Push", emptyList())),
+            goal = RoutineGoal.HYPERTROPHY,
+            cadence = 3,
+            equipment = emptySet(),
+            repPreference = RepPreference.MODERATE,
+            cardio = CardioPlacement.NONE,
+        )
+        val rebuilt = routines.observeProgress().first()!!.routine
+        assertNull(rebuilt.shape)
+        assertNull("a routine rebuilt from the log was given a seed", rebuilt.seed)
+    }
+
+    @Test
     fun renamingADayDoesNotCostItsContentsWhenTheRoutineIsBuiltAgain() = runBlocking {
         val shape = SPLIT_SHAPES.single { it.id == "push-pull-legs-3" }
         val bank = generated(shape)
@@ -840,7 +968,7 @@ class RoutinePersistenceTest {
         // it must not quietly cost the lifter what that day holds either. Matching the generated
         // days to the stored ones by name emptied exactly the days somebody had renamed.
         routines.renameDay(push.id, "Chest and shoulders")
-        routines.regenerate(shape, bank, seed = 1)
+        routines.regenerate(shape, bank)
 
         val after = routines.observeProgress().first()!!.routine.rotation
             .single { it.id == push.id }
@@ -856,7 +984,7 @@ class RoutinePersistenceTest {
         val mine = routines.addDay(routineId, "Calves and abs")
         routines.addExerciseToDay(mine, BENCH)
 
-        routines.regenerate(shape, bank, seed = 2)
+        routines.regenerate(shape, bank)
 
         // The shape has nothing to say about a day the lifter invented, so it says nothing.
         val after = routines.observeProgress().first()!!.routine.rotation.single { it.id == mine }

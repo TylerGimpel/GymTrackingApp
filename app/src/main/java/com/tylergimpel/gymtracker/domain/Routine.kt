@@ -160,6 +160,26 @@ data class Routine(
      * structure nobody chose, so the offer is simply not made.
      */
     val shape: SplitShape? = null,
+    /**
+     * Which of the equally good routines this shape could have produced is the one on screen.
+     *
+     * Null wherever [shape] is, and for the same reason: a routine built by hand or rebuilt from
+     * the log was never generated, so there is no number that reproduces it and nothing for
+     * asking again to move on from.
+     *
+     * Stored before the days are filled from it, so it is the number that reproduces what is on
+     * screen — until an undo, which puts the days back and leaves this where it is. So after an
+     * undo it is one ahead of the routine showing, which is what makes asking again move on past
+     * the one the lifter just turned down rather than offering it straight back.
+     *
+     * **It only ever climbs.** The alternative — remembering which routines the lifter has already
+     * turned down and refusing to offer them again — buys nothing a counter does not: asking for
+     * variety moves on from what is on screen either way, and the app would be storing a list of
+     * rejections to answer a question the next number answers for free. What climbing does not
+     * promise is that a routine can never come round again, because a gym with four candidates
+     * for a muscle has four answers and no counter invents a fifth.
+     */
+    val seed: Int? = null,
     val days: List<RoutineDay>,
 ) {
     /** The days in rotation order, whatever order they arrived in. */

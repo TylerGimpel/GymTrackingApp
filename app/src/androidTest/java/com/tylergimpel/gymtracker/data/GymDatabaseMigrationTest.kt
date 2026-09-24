@@ -941,6 +941,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_THIRD_DATABASE = "migration-twenty-third.db"
         const val TWENTY_FOURTH_DATABASE = "migration-twenty-fourth.db"
         const val TWENTY_FIFTH_DATABASE = "migration-twenty-fifth.db"
+        const val TWENTY_SIXTH_DATABASE = "migration-twenty-sixth.db"
     }
 
     /**
@@ -1168,6 +1169,44 @@ class GymDatabaseMigrationTest {
                 db.query("SELECT shape_id FROM routine WHERE id = 1").use {
                     it.moveToFirst()
                     assertTrue("a shape was invented for a routine nobody generated", it.isNull(0))
+                }
+            }
+    }
+
+    /**
+     * Version 27 gives the app somewhere to keep which of a shape's routines the lifter has.
+     *
+     * Zero for anything that was generated, because zero is what every generated routine was
+     * built with: the seed lived on screen and started there every launch. Null for anything
+     * that was not, which is the same answer its shape gives.
+     */
+    @Test
+    fun migratesToARememberedSeedForEveryRoutineThatWasGenerated() {
+        helper.createDatabase(TWENTY_SIXTH_DATABASE, 26).use { version26 ->
+            version26.execSQL(
+                "INSERT INTO routine " +
+                    "(name, goal, cadence, equipment, rep_preference, cardio, shape_id) " +
+                    "VALUES ('Generated', 'HYPERTROPHY', 3, '', 'MODERATE', 'NONE', " +
+                    "'push-pull-legs-3')",
+            )
+            version26.execSQL(
+                "INSERT INTO routine " +
+                    "(name, goal, cadence, equipment, rep_preference, cardio, shape_id) " +
+                    "VALUES ('By hand', 'HYPERTROPHY', 3, '', 'MODERATE', 'NONE', NULL)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TWENTY_SIXTH_DATABASE, 27, true, MIGRATION_26_27)
+            .use { db ->
+                // Picked by name rather than by the migration's own condition, so a wrong
+                // condition cannot pass by being asked the same question it answered.
+                db.query("SELECT seed FROM routine WHERE name = 'Generated'").use {
+                    it.moveToFirst()
+                    assertEquals(0, it.getInt(0))
+                }
+                db.query("SELECT seed FROM routine WHERE name = 'By hand'").use {
+                    it.moveToFirst()
+                    assertTrue("a routine nobody generated was given a seed", it.isNull(0))
                 }
             }
     }

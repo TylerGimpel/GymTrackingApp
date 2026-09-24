@@ -53,6 +53,9 @@ import com.tylergimpel.gymtracker.domain.SplitShape
 import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.ui.exercise.ExercisePicker
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.RecoveredRoutine
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * A minimal routine editor: a name, the properties, and an ordered list of day names.
@@ -86,18 +89,21 @@ fun RoutineScreen(
             EmptyRoutine(
                 insets = insets,
                 availableEquipment = state.availableEquipment,
+                experience = state.experience,
                 onCreate = { viewModel.createRoutine(defaultName) },
                 onRebuildFromLog = viewModel::rebuildFromLog,
-                onCreateFromShape = { shape, frequency, cardio, equipment ->
-                    viewModel.createFromShape(
-                        name = shape.description,
-                        shape = shape,
-                        cadence = frequency,
-                        cardio = cardio,
-                        equipment = equipment,
-                    )
+                onCreateFromShape = { shape, setup ->
+                    viewModel.createFromShape(name = shape.description, shape = shape, setup = setup)
                 },
             )
+            state.choosingRoutine?.let { choice ->
+                ChooseRoutine(
+                    choices = choice.routines,
+                    limit = choice.limit,
+                    onChoose = viewModel::choose,
+                    onCancel = viewModel::cancelRebuildChoice,
+                )
+            }
             return@Scaffold
         }
 
@@ -112,6 +118,25 @@ fun RoutineScreen(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp),
                 )
+            }
+            // Beside the days, where the change was made, rather than as a notification somewhere
+            // else. A fact and nothing more: no button, because there is nothing to approve —
+            // the cycle has already started again by the time this is read.
+            state.revised?.let { revised ->
+                item {
+                    Text(
+                        text = stringResource(
+                            when (revised) {
+                                Revised.ADDED -> R.string.routine_revised_added
+                                Revised.REMOVED -> R.string.routine_revised_removed
+                                Revised.MOVED -> R.string.routine_revised_moved
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
             items(routine.rotation, key = RoutineDay::id) { day ->
                 RoutineDayRow(
@@ -360,9 +385,11 @@ private fun Double.asSetsText(): String =
 private fun EmptyRoutine(
     insets: PaddingValues,
     availableEquipment: List<String>,
+    /** How much training the lifter has behind them, which one conflict rule reads. */
+    experience: Experience,
     onCreate: () -> Unit,
-    onCreateFromShape: (SplitShape, Int, CardioPlacement, Set<String>) -> Unit,
-    onRebuildFromLog: (Int, CardioPlacement, Set<String>) -> Unit,
+    onCreateFromShape: (SplitShape, RoutineSetup) -> Unit,
+    onRebuildFromLog: (RoutineSetup) -> Unit,
 ) {
     // The one question everybody can answer, and the one the volume arithmetic actually needs.
     // What is never asked is a cycle length: "how many days is your routine" reads as both this
@@ -370,6 +397,18 @@ private fun EmptyRoutine(
     var frequency by rememberSaveable { mutableStateOf(3) }
     var cardio by rememberSaveable { mutableStateOf(CardioPlacement.NONE) }
     var equipment by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    // Null until answered, because not answering is allowed and is not the same as answering
+    // with the default. What skipping assumes is said beside each question.
+    var goal by rememberSaveable { mutableStateOf<RoutineGoal?>(null) }
+    var repPreference by rememberSaveable { mutableStateOf<RepPreference?>(null) }
+
+    val setup = RoutineSetup(
+        cadence = frequency,
+        cardio = cardio,
+        equipment = equipment,
+        goal = goal ?: RoutineSetup.ASSUMED_GOAL,
+        repPreference = repPreference ?: RoutineSetup.ASSUMED_REP_PREFERENCE,
+    )
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(insets),
@@ -448,6 +487,49 @@ private fun EmptyRoutine(
                 }
             }
         }
+        // Asked before the shapes, because these two change what the shapes are filled with more
+        // than anything else here — and a routine built against a guess is the first thing the
+        // app ever hands somebody.
+        item {
+            SkippableChoiceRow(
+                label = stringResource(R.string.routine_setup_goal),
+                options = RoutineGoal.entries.map { it to it.name.lowercase() },
+                selected = goal,
+                onSelect = { goal = it },
+                skipped = stringResource(
+                    R.string.routine_setup_goal_skipped,
+                    RoutineSetup.ASSUMED_GOAL.name.lowercase(),
+                ),
+            )
+        }
+        item {
+            SkippableChoiceRow(
+                label = stringResource(R.string.routine_setup_rep_preference),
+                options = RepPreference.entries.map { it to it.name.lowercase() },
+                selected = repPreference,
+                onSelect = { repPreference = it },
+                skipped = stringResource(
+                    R.string.routine_setup_rep_preference_skipped,
+                    RoutineSetup.ASSUMED_REP_PREFERENCE.name.lowercase(),
+                ),
+            )
+        }
+        // The same table the routine's own properties explain, read against what setup will
+        // actually build with — so a skipped question that lands in a conflict says so too.
+        items(
+            conflictsFor(
+                goal = setup.goal,
+                preference = setup.repPreference,
+                experience = experience,
+                equipment = setup.equipment,
+            ),
+        ) {
+            Text(
+                text = it.explanation,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         item {
             Text(
                 text = stringResource(R.string.routine_setup_shape),
@@ -467,7 +549,7 @@ private fun EmptyRoutine(
         // choose, and "a 2-position cycle" is not. Nothing invalid is here to be rejected,
         // because nothing invalid was ever authored.
         items(splitShapesFor(frequency, cardio), key = SplitShape::id) { shape ->
-            TextButton(onClick = { onCreateFromShape(shape, frequency, cardio, equipment) }) {
+            TextButton(onClick = { onCreateFromShape(shape, setup) }) {
                 Text(
                     stringResource(
                         R.string.routine_shape_days,
@@ -487,7 +569,7 @@ private fun EmptyRoutine(
         item {
             // And the seasonal case: something that worked last spring, read back out of the log.
             // This is what makes one active routine non-lossy rather than approximately so.
-            TextButton(onClick = { onRebuildFromLog(frequency, cardio, equipment) }) {
+            TextButton(onClick = { onRebuildFromLog(setup) }) {
                 Text(stringResource(R.string.routine_rebuild_from_log))
             }
         }
@@ -650,6 +732,93 @@ private fun <T> ChoiceRow(
             }
         }
     }
+}
+
+/**
+ * A choice the lifter may leave unanswered, saying what leaving it assumes.
+ *
+ * Tapping the chip that is already chosen takes the answer back, so skipping stays possible after
+ * a first tap and is never a thing the lifter has to go looking for.
+ */
+@Composable
+private fun <T : Any> SkippableChoiceRow(
+    label: String,
+    options: List<Pair<T, String>>,
+    selected: T?,
+    onSelect: (T?) -> Unit,
+    /** What is assumed while nothing is chosen, said while nothing is. */
+    skipped: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, text) ->
+                FilterChip(
+                    selected = value == selected,
+                    onClick = { onSelect(if (value == selected) null else value) },
+                    label = { Text(text) },
+                )
+            }
+        }
+        if (selected == null) {
+            Text(
+                text = skipped,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * Which past routine to bring back, where the log holds more than one.
+ *
+ * Each is named as the sessions named it, with when it was last trained — which is how somebody
+ * tells "the routine I ran last spring" from another they also called "My routine". Cancelling
+ * brings nothing back and touches nothing.
+ */
+@Composable
+private fun ChooseRoutine(
+    choices: List<RecoveredRoutine>,
+    /** Whether the log goes back further than was read, which is said rather than hidden. */
+    limit: Int?,
+    onChoose: (RecoveredRoutine) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val formatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.routine_rebuild_which)) },
+        text = {
+            LazyColumn {
+                items(choices) { choice ->
+                    TextButton(onClick = { onChoose(choice) }) {
+                        Text(
+                            stringResource(
+                                R.string.routine_rebuild_choice,
+                                choice.name,
+                                choice.lastTrained.format(formatter),
+                                choice.days.size,
+                            ),
+                        )
+                    }
+                }
+                limit?.let {
+                    item {
+                        Text(
+                            text = stringResource(R.string.routine_rebuild_limit, it),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.routine_rebuild_cancel)) }
+        },
+    )
 }
 
 @Composable

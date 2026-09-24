@@ -656,6 +656,20 @@ internal val MIGRATION_25_26 = object : Migration(25, 26) {
     }
 }
 
+/**
+ * Somewhere to keep which of the routines a shape could have produced the lifter is looking at.
+ *
+ * Null for a routine built by hand or rebuilt from the log, which have no shape either. Zero for
+ * one that was generated, because zero is the answer every generated routine was built with: the
+ * seed lived on screen and started there every launch, which is the bug this column closes.
+ */
+internal val MIGRATION_26_27 = object : Migration(26, 27) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `routine` ADD COLUMN `seed` INTEGER")
+        db.execSQL("UPDATE `routine` SET `seed` = 0 WHERE `shape_id` IS NOT NULL")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -682,6 +696,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_23_24,
     MIGRATION_24_25,
     MIGRATION_25_26,
+    MIGRATION_26_27,
 )
 
 /**

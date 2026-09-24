@@ -38,6 +38,17 @@ interface SessionDao {
     @Query("SELECT * FROM session WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<SessionWithContent>>
 
+    /**
+     * The most recent finished sessions and the plans they were trained against, newest first.
+     *
+     * What rebuilding a routine out of the log reads. Deliberately not [observeRecent]: this
+     * window reaches back years rather than weeks, and every set it did not fetch is a set the
+     * rebuild had no use for.
+     */
+    @Transaction
+    @Query("SELECT * FROM session WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT :limit")
+    suspend fun recentPlans(limit: Int): List<SessionWithPlan>
+
     @Transaction
     @Query("SELECT * FROM session WHERE id = :sessionId")
     fun observeContent(sessionId: Long): Flow<SessionWithContent?>

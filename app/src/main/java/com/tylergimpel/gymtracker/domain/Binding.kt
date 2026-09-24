@@ -152,13 +152,6 @@ internal fun Set<String>.canLoadHeavy(): Boolean = any {
 }
 
 /**
- * How long one day runs.
- *
- * **The rest is the engine's own**, derived per exercise from what that set is — a heavy
- * multi-joint lift rests for three minutes and a machine isolation set for ninety seconds, and a
- * ceiling that assumed one number for both would be measuring the wrong session entirely.
- */
-/**
  * How long one day runs, which is the number the ceiling is checked against.
  *
  * **Rest is most of a session**, and it is the engine's own — derived per exercise from what that

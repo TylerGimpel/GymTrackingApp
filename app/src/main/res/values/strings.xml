@@ -146,6 +146,17 @@
     <string name="routine_build_by_hand">Start from an empty routine</string>
     <string name="routine_rebuild_from_log">Rebuild what I used to do</string>
     <string name="routine_rebuild_none">Nothing in your log to rebuild from yet.</string>
+    <string name="routine_rebuild_which">Which routine?</string>
+    <string name="routine_rebuild_choice">%1$s · last trained %2$s · %3$d days</string>
+    <string name="routine_rebuild_cancel">Not now</string>
+    <string name="routine_rebuild_limit">Only your most recent %1$d sessions are read, so the oldest routine here may be missing days you trained before that.</string>
+    <string name="routine_setup_goal">What are you training for?</string>
+    <string name="routine_setup_goal_skipped">Leave it and the routine is built for %1$s. You can change it later.</string>
+    <string name="routine_setup_rep_preference">Heavy low reps or lighter high reps?</string>
+    <string name="routine_setup_rep_preference_skipped">Leave it and the routine uses %1$s reps. You can change it later.</string>
+    <string name="routine_revised_added">Day added, so the cycle has started again and you are back at the first day. Renaming a day never does this.</string>
+    <string name="routine_revised_removed">Day removed, so the cycle has started again and you are back at the first day. Renaming a day never does this.</string>
+    <string name="routine_revised_moved">Days reordered, so the cycle has started again and you are back at the first day. Renaming a day never does this.</string>
     <string name="routine_setup_frequency">How many times a week do you train?</string>
     <string name="routine_setup_frequency_why">Used to work out how much work a week your routine adds up to. It never schedules anything.</string>
     <string name="routine_setup_shape">Pick a shape</string>

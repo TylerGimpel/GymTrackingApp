@@ -65,6 +65,21 @@ data class RoutineEntity(
      */
     @ColumnInfo(name = "shape_id")
     val shapeId: String? = null,
+
+    /**
+     * Which of the routines [shapeId] could have produced this one is.
+     *
+     * Stored beside the shape because it answers the same question the shape does — how this
+     * routine was arrived at — and because the seed was the one half of that answer the app could
+     * not remember across a restart. Held only on screen, it reset to zero every launch, so the
+     * next "build it again" reproduced the routine already showing and the lifter had to ask
+     * twice to get anywhere.
+     *
+     * Null wherever [shapeId] is: a routine built by hand or rebuilt from the log was generated
+     * from nothing, so no number reproduces it.
+     */
+    @ColumnInfo(name = "seed")
+    val seed: Int? = null,
 )
 
 /** One ordered position within a routine. Never a calendar day. */
@@ -120,6 +135,7 @@ fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
     repPreference = RepPreference.valueOf(repPreference),
     cardio = CardioPlacement.valueOf(cardio),
     shape = shapeId?.let { id -> SPLIT_SHAPES.firstOrNull { it.id == id } ?: shapeOf(id) },
+    seed = seed,
     days = days.map { it.toDomain(RoutineGoal.valueOf(goal)) },
 )
 
