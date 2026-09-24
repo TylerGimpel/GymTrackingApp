@@ -223,7 +223,7 @@
     <string name="settings_restore">Restore from a backup</string>
     <string name="settings_import">Import from FitNotes</string>
     <string name="settings_import_why">Bring your FitNotes history with you. In FitNotes, use Backup (a .fitnotes file), not the CSV export: the CSV loses your supersets. Nothing already logged here is changed.</string>
-    <string name="settings_not_importable">Nothing was imported: that file could not be read as a FitNotes backup (%1$s).</string>
+    <string name="settings_not_importable">Nothing was imported: that file could not be read as a FitNotes backup. In FitNotes, make a Backup and pick the .fitnotes file.</string>
     <string name="import_done">Brought in %1$d sessions, %2$d sets.</string>
     <string name="import_unmatched">%1$d sets were left out because their exercise names have no exact match here: %2$s.</string>
     <string name="import_not_yet">%1$d timed or cardio sets are not brought across yet.</string>
@@ -236,7 +236,10 @@
     <string name="restore_confirm_keep">Keep what is here</string>
     <string name="settings_restored">Restored %1$d sessions.</string>
     <string name="settings_restored_alarms">One thing did not come across: this phone does not yet let rests end on time. Allow alarms, and rests will reach you with the phone in your pocket.</string>
-    <string name="settings_not_restorable">Nothing was changed: that file could not be restored (%1$s).</string>
+    <string name="restore_refused_not_backup">Nothing was changed: that file is not a backup this app made.</string>
+    <string name="restore_refused_newer">Nothing was changed: that backup was made by a newer version of the app. Update the app, then restore it.</string>
+    <string name="restore_refused_does_not_fit">Nothing was changed: that backup could not be restored into this app.</string>
+    <string name="settings_backup_failed">That file could not be written, so there is no backup yet. Try somewhere else.</string>
     <string name="settings_export_why">Every set you have logged, one row each, for a spreadsheet. It is not a backup: supersets are not kept, drops and sides become rows of their own, and routines, exclusions, plates and your profile are left out. Nothing here needs an account or the internet.</string>
     <string name="settings_exported">Exported %1$d sessions.</string>
     <string name="settings_export_failed">That file could not be written, so nothing was exported. Try somewhere else.</string>

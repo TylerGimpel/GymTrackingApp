@@ -124,6 +124,21 @@ class SpreadsheetExportTest {
     }
 
     @Test
+    fun `a name or note that starts like a formula is shown rather than run`() {
+        val set = PerformedSet(
+            1,
+            SetType.WORKING,
+            listOf(Effort(id = 1, side = null, performance = Performance.WeightAndReps(Kilograms(60.0), 8), note = "=HYPERLINK(1)")),
+        )
+
+        val row = spreadsheetExport(listOf(session("2026-09-14", performed(exercise("+Cable Fly"), 1, set)))).lines()[1]
+
+        // Typed text is the lifter's; a spreadsheet running it as a formula would be the export
+        // doing something with their note that they never asked for.
+        assertEquals("2026-09-14,'+Cable Fly,1,working,,60,,kg,8,,,'=HYPERLINK(1)", row)
+    }
+
+    @Test
     fun `supersets are not in it, and it says so rather than pretending`() {
         // Asserted so the loss is stable: nothing in the header can carry a grouping, which is the
         // first thing the settings screen says about this file (#98).

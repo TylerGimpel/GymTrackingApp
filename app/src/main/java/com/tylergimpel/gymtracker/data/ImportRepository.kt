@@ -19,7 +19,6 @@ data class ImportResult(
     val unmatched: Map<String, Int>,
     /** Sets read but not yet brought across, by why. */
     val notYetSupported: Map<String, Int>,
-    val volumeReliable: Boolean,
 )
 
 /**
@@ -52,10 +51,11 @@ class ImportRepository(
         // Exactly or not at all: an unmatched name's sets are left out and counted, never put
         // under an exercise that merely looks close (#99 gives them somewhere to go).
         val matches = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank)
-        val (matched, unmatched) = records.sets.partition { matches[it.exerciseName] != null }
+        val matched = records.sets.mapNotNull { set -> matches[set.exerciseName]?.let { set to it.id } }
+        val unmatched = records.sets.filter { matches[it.exerciseName] == null }
 
         var sessionCount = 0
-        matched.sortedBy(ImportedSet::order).groupBy(ImportedSet::date).forEach { (date, sets) ->
+        matched.sortedBy { (set, _) -> set.order }.groupBy { (set, _) -> set.date }.forEach { (date, sets) ->
             // FitNotes keeps no times, so an imported session is filed at midday on its own date:
             // the date is what the lifter recorded, and midday keeps it on that date in any zone.
             val filedAt = date.atTime(LocalTime.NOON).atZone(zone).toInstant()
@@ -72,12 +72,13 @@ class ImportRepository(
             )
             sessionCount++
             // In the order they were first done, each with its own sets numbered from one.
-            sets.groupBy { matches.getValue(it.exerciseName)!!.id }.entries.forEachIndexed { index, (exerciseId, done) ->
-                val performedId = sessions.insert(
-                    SessionExerciseEntity(sessionId = sessionId, exerciseId = exerciseId, orderIndex = index + 1),
-                )
-                done.forEachIndexed { setIndex, set -> sessions.insert(set.toEntity(performedId, setIndex + 1)) }
-            }
+            sets.groupBy({ (_, exerciseId) -> exerciseId }, { (set, _) -> set })
+                .entries.forEachIndexed { index, (exerciseId, itsSets) ->
+                    val performedId = sessions.insert(
+                        SessionExerciseEntity(sessionId = sessionId, exerciseId = exerciseId, orderIndex = index + 1),
+                    )
+                    itsSets.forEachIndexed { setIndex, set -> sessions.insert(set.toEntity(performedId, setIndex + 1)) }
+                }
         }
 
         ImportResult(
@@ -86,7 +87,6 @@ class ImportRepository(
             sets = matched.size,
             unmatched = unmatched.groupingBy(ImportedSet::exerciseName).eachCount(),
             notYetSupported = records.notYetSupported,
-            volumeReliable = records.source.volumeIsReliable,
         )
     }
 }

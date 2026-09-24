@@ -22,6 +22,8 @@ import com.tylergimpel.gymtracker.data.BackupRepository
 import com.tylergimpel.gymtracker.data.NotABackup
 import com.tylergimpel.gymtracker.data.Backup
 import com.tylergimpel.gymtracker.data.WouldReplace
+import com.tylergimpel.gymtracker.data.RefusedBecause
+import kotlinx.coroutines.CancellationException
 import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.data.FitNotesParser
 import com.tylergimpel.gymtracker.data.ImportRepository
@@ -40,7 +42,7 @@ data class SettingsUiState(
     val theme: Theme = Theme.SYSTEM,
     /** What the rest timer can currently do, read from the platform as the session reads it. */
     val restAlerts: RestAlerts = RestAlerts(),
-    /** What the last export or backup did, said once and then cleared. */
+    /** What the last export, backup, restore or import did, said once and then cleared. */
     val dataMessage: DataMessage? = null,
     /**
      * A restore waiting on the lifter, because it would replace something they have (#104).
@@ -54,24 +56,39 @@ data class SettingsUiState(
 /** A backup ready to restore, and what restoring it would replace. */
 data class ConfirmRestore(val backup: Backup, val replacing: WouldReplace)
 
-/** The outcome of writing the lifter's data out, in their terms. */
+/** What happened to the lifter's data, going out or coming in, in their terms. */
 sealed interface DataMessage {
+    /** Whether it is a failure, which the screen says in the colour for one. */
+    val isError: Boolean get() = false
+
     data class Exported(val sessions: Int) : DataMessage
 
     data class BackedUp(val sessions: Int) : DataMessage
 
     data class Restored(val sessions: Int) : DataMessage
 
-    /** The file picked to restore from was not a backup this app can read, and why. */
-    data class NotRestorable(val reason: String) : DataMessage
+    /** The file picked to restore from could not be restored, and why; nothing changed. */
+    data class NotRestorable(val because: RefusedBecause) : DataMessage {
+        override val isError: Boolean get() = true
+    }
 
-    /** The file picked to import was not a FitNotes backup this app can read, and why. */
-    data class NotImportable(val reason: String) : DataMessage
+    /** The file picked to import could not be read as a FitNotes backup; nothing changed. */
+    data object NotImportable : DataMessage {
+        override val isError: Boolean get() = true
+    }
+
+    /** The backup could not be written where the lifter chose. */
+    data object BackupFailed : DataMessage {
+        override val isError: Boolean get() = true
+    }
 
     /** What a FitNotes import brought in, and what it left behind and why. */
     data class Imported(val result: ImportResult) : DataMessage
 
-    data object Failed : DataMessage
+    /** The export could not be written where the lifter chose. */
+    data object Failed : DataMessage {
+        override val isError: Boolean get() = true
+    }
 }
 
 /**
@@ -136,7 +153,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      */
     fun exportForSpreadsheets(destination: Uri) {
         viewModelScope.launch {
-            dataMessage.value = runCatching {
+            dataMessage.value = try {
                 val all = sessions.observeRecent(limit = Int.MAX_VALUE).first()
                 withContext(Dispatchers.IO) {
                     getApplication<Application>().contentResolver.openOutputStream(destination)
@@ -145,7 +162,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         ?: error("nowhere to write")
                 }
                 DataMessage.Exported(all.size)
-            }.getOrElse { DataMessage.Failed }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failed: Exception) {
+                DataMessage.Failed
+            }
         }
     }
 
@@ -157,12 +178,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      */
     fun backUp(destination: Uri) {
         viewModelScope.launch {
-            dataMessage.value = runCatching {
-                getApplication<Application>().contentResolver.openOutputStream(destination)
+            dataMessage.value = try {
+                val written = getApplication<Application>().contentResolver.openOutputStream(destination)
                     ?.use { backups.write(it) }
                     ?: error("nowhere to write")
-                DataMessage.BackedUp(sessions.observeRecent(limit = Int.MAX_VALUE).first().size)
-            }.getOrElse { DataMessage.Failed }
+                DataMessage.BackedUp(written)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failed: Exception) {
+                DataMessage.BackupFailed
+            }
         }
     }
 
@@ -177,7 +202,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             dataMessage.value = try {
                 val backup = getApplication<Application>().contentResolver.openInputStream(source)
                     ?.use { backups.read(it) }
-                    ?: throw NotABackup("the file could not be opened")
+                    ?: throw NotABackup(RefusedBecause.NOT_A_BACKUP, "the file could not be opened")
                 // Asked first where there is anything to lose; a new phone is simply restored.
                 val replacing = backups.wouldReplace()
                 if (!replacing.isNothing) {
@@ -190,9 +215,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 recheckRestAlerts()
                 DataMessage.Restored(backup.sessions)
             } catch (refused: NotABackup) {
-                DataMessage.NotRestorable(refused.message.orEmpty())
+                DataMessage.NotRestorable(refused.because)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failed: Exception) {
-                DataMessage.NotRestorable(failed.message.orEmpty())
+                // Anything else went wrong applying it; the transaction rolled back, so it is a
+                // backup that does not fit this app rather than a half-done restore.
+                DataMessage.NotRestorable(RefusedBecause.DOES_NOT_FIT)
             }
         }
     }
@@ -205,21 +234,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      */
     fun importFitNotes(source: Uri) {
         viewModelScope.launch {
+            val app = getApplication<Application>()
+            val copy = File(app.cacheDir, "import.fitnotes")
             dataMessage.value = try {
-                val app = getApplication<Application>()
-                val copy = File(app.cacheDir, "import.fitnotes")
                 withContext(Dispatchers.IO) {
                     app.contentResolver.openInputStream(source)?.use { input ->
                         copy.outputStream().use { input.copyTo(it) }
                     } ?: error("the file could not be opened")
                 }
                 val records = withContext(Dispatchers.IO) { FitNotesParser.parse(copy) }
-                copy.delete()
                 val bank = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
                     .observeBank().first()
                 DataMessage.Imported(ImportRepository(database).import(records, bank))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failed: Exception) {
-                DataMessage.NotImportable(failed.message.orEmpty())
+                DataMessage.NotImportable
+            } finally {
+                // Whatever happened: a copy of somebody's training log is not left lying about.
+                copy.delete()
             }
         }
     }
@@ -233,8 +266,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 backups.restore(confirmed.backup)
                 recheckRestAlerts()
                 DataMessage.Restored(confirmed.backup.sessions)
+            } catch (refused: NotABackup) {
+                DataMessage.NotRestorable(refused.because)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failed: Exception) {
-                DataMessage.NotRestorable(failed.message.orEmpty())
+                DataMessage.NotRestorable(RefusedBecause.DOES_NOT_FIT)
             }
         }
     }

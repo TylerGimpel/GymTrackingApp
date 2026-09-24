@@ -79,7 +79,7 @@ private fun StringBuilder.row(
     append(
         listOf(
             logged.session.date.toString(),
-            performed.exercise.name,
+            inert(performed.exercise.name),
             set.setIndex.toString(),
             type,
             side?.stored,
@@ -89,7 +89,7 @@ private fun StringBuilder.row(
             reps?.toString(),
             seconds?.toString(),
             metres,
-            note,
+            note?.let(::inert),
         ).joinToString(",") { csvCell(it) },
     )
 }
@@ -112,6 +112,14 @@ private fun csvCell(value: String?): String = when {
     value.any { it == ',' || it == '"' || it == '\n' || it == '\r' } -> "\"" + value.replace("\"", "\"\"") + "\""
     else -> value
 }
+
+/**
+ * Text the lifter typed, made safe to open: a name or note that starts like a formula is written
+ * with a leading apostrophe, so a spreadsheet shows it rather than running it.
+ */
+private fun inert(text: String): String = if (text.firstOrNull() in FORMULA_STARTS) "'$text" else text
+
+private val FORMULA_STARTS = setOf('=', '+', '-', '@')
 
 /** What a drop's own row says it is: part of the set above it, not a set of its own. */
 private const val DROP = "drop"

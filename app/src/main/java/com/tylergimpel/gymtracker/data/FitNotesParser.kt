@@ -34,7 +34,7 @@ object FitNotesParser {
 
     fun parse(file: File): NeutralImport {
         val sets = mutableListOf<ImportedSet>()
-        val notYet = mutableMapOf<String, Int>()
+        val notYetSupported = mutableMapOf<String, Int>()
         SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
             db.rawQuery(
                 "SELECT t._id, t.date, t.metric_weight, t.reps, e.name, e.exercise_type_id " +
@@ -44,7 +44,7 @@ object FitNotesParser {
                 while (rows.moveToNext()) {
                     val type = rows.getInt(5)
                     if (type != WEIGHT_AND_REPS) {
-                        notYet.merge(if (type == TIMED) TIMED_SETS else CARDIO_SETS, 1, Int::plus)
+                        notYetSupported.merge(if (type == TIMED) TIMED_SETS else CARDIO_SETS, 1, Int::plus)
                         continue
                     }
                     sets += ImportedSet(
@@ -57,7 +57,7 @@ object FitNotesParser {
                 }
             }
         }
-        return NeutralImport(source = FITNOTES, fingerprint = fingerprintOf(file), sets = sets, notYetSupported = notYet)
+        return NeutralImport(source = FITNOTES, fingerprint = fingerprintOf(file), sets = sets, notYetSupported = notYetSupported)
     }
 
     /** What identifies this exact file, so importing it twice can be recognised (#102). */
@@ -74,8 +74,10 @@ object FitNotesParser {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /** FitNotes' `exercise_type_id` values, verified against a real file. */
+    /** FitNotes' `exercise_type_id` for weight × reps, verified against a real file. */
     private const val WEIGHT_AND_REPS = 0
+
+    /** FitNotes' `exercise_type_id` for a hold, verified against a real file; `1` is cardio. */
     private const val TIMED = 3
 
     /** What the tracer counts rather than brings across, until #100. */

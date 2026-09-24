@@ -55,7 +55,7 @@ data class SessionEntity(
      * The import that brought this session in, or null for one logged in the app.
      *
      * Provenance lives here, on the session every one of its sets belongs to: an imported set is
-     * an ordinary **Working set** whose session came from an import, not a sixth set type
+     * an ordinary working set whose session came from an import, not a sixth set type
      * (ADR 0007). No foreign key, because undoing an import deletes its sessions by this id.
      */
     @ColumnInfo(name = "import_batch_id")

@@ -131,6 +131,44 @@ class BackupRestoreTest {
     }
 
     @Test
+    fun historyOnAnExerciseTheBankHasSinceDroppedStillRestores() = runBlocking {
+        // A bank update dropped an exercise the lifter had trained, so this phone keeps it as a
+        // Tombstone for the history pointing at it. A new install's bank no longer has the row at
+        // all — and without it, that history would point at nothing and the restore would fail.
+        sessions().logSet(SQUAT, SetDraft("100", "5"))
+        database.exerciseDao().tombstone(SQUAT)
+        val file = ByteArrayOutputStream().also { BackupRepository(database, clock).write(it) }.toByteArray()
+
+        database.close()
+        context.deleteDatabase(TEST_DATABASE)
+        database = fresh()
+        // A newer bank, without the row.
+        database.openHelper.writableDatabase.execSQL("DELETE FROM exercise WHERE id = ?", arrayOf(SQUAT))
+
+        val restoring = BackupRepository(database, clock)
+        restoring.restore(restoring.read(ByteArrayInputStream(file)))
+
+        assertEquals(1, rowsOf("set_entry").size)
+        assertEquals(SQUAT, rowsOf("session_exercise").single()["exercise_id"])
+    }
+
+    @Test
+    fun aBackupNamingATableItDoesNotCoverIsRefused() = runBlocking {
+        val backups = BackupRepository(database, clock)
+        val forged = """{"format":"gym-tracker-backup","formatVersion":1,"databaseVersion":${GymDatabase.VERSION},""" +
+            """"tables":{"room_master_table":[{"id":42,"identity_hash":"x"}]}}"""
+
+        // Only the tables a backup covers can be restored into; Room's and SQLite's own are not
+        // the lifter's, and a file naming one is not a backup this app wrote.
+        try {
+            backups.restore(backups.read(ByteArrayInputStream(forged.toByteArray())))
+            fail("a backup naming a table it does not cover was restored")
+        } catch (expected: NotABackup) {
+            // Refused inside the transaction, so nothing was changed.
+        }
+    }
+
+    @Test
     fun aRestoreReplacesRatherThanMerges() = runBlocking {
         val backups = BackupRepository(database, clock)
         sessions().logSet(BENCH, SetDraft("60", "8"))
@@ -303,7 +341,7 @@ class BackupRestoreTest {
 
     /** Every row of [table] the backup covers, as comparable values. */
     private fun rowsOf(table: String): List<Map<String, Any?>> {
-        val where = if (table == "exercise") " WHERE source = 'user'" else ""
+        val where = if (table == "exercise") " WHERE source = 'user' OR tombstoned = 1" else ""
         return database.openHelper.readableDatabase.query("SELECT * FROM `$table`$where").use { rows ->
             buildList {
                 while (rows.moveToNext()) {

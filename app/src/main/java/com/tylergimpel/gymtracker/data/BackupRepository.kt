@@ -8,6 +8,7 @@ import android.util.JsonWriter
 import androidx.room.withTransaction
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.tylergimpel.gymtracker.domain.ExerciseSource
+import com.tylergimpel.gymtracker.domain.Experience
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -45,8 +46,12 @@ data class WouldReplace(
     val isNothing: Boolean get() = sessions == 0 && !routine && weighIns == 0 && !customised
 }
 
-/** Why a file could not be restored, in terms the lifter can act on. */
-class NotABackup(message: String) : Exception(message)
+/** Why a file could not be restored, each of which the lifter is told in words of their own. */
+enum class RefusedBecause { NOT_A_BACKUP, NEWER_APP, DOES_NOT_FIT }
+
+/** A file that could not be restored, and why; nothing was changed by it. */
+class NotABackup(val because: RefusedBecause, detail: String? = null) :
+    Exception(detail ?: because.name)
 
 /**
  * The complete backup, and restoring it (#97).
@@ -59,9 +64,11 @@ class NotABackup(message: String) : Exception(message)
  *   column comes with it. A table or column added next year is in the backup without anybody
  *   remembering to add it — which is the failure a hand-kept list invites.
  * - **One exception, stated:** `exercise` also holds the shipped bank, which a new install
- *   brings with it, so only the lifter's own exercises are backed up from it. Everything that
- *   hangs off a bank row — renames, units, notes, **Dislikes** — lives in tables that are backed
- *   up whole.
+ *   brings with it, so from it only the lifter's own exercises and every **Tombstone** are backed
+ *   up. A tombstone is a bank row an update dropped, kept for the history pointing at it; a new
+ *   install's bank may not have it at all, and without it that history would point at nothing.
+ *   Everything that hangs off a bank row — renames, units, notes, **Dislikes** — lives in tables
+ *   that are backed up whole.
  *
  * **Restore replaces rather than merges**, inside one transaction with foreign keys checked at the
  * end: a file that cannot be applied changes nothing. Columns are matched by name, so a backup
@@ -73,8 +80,14 @@ class BackupRepository(
 ) {
     private val db: SupportSQLiteDatabase get() = database.openHelper.writableDatabase
 
-    /** Writes everything to [output] as JSON, streamed, so years of training stay quick. */
-    suspend fun write(output: OutputStream): Unit = withContext(Dispatchers.IO) {
+    /**
+     * Writes everything to [output] as JSON, streamed, so years of training stay quick.
+     *
+     * Answers how many sessions it wrote, counted from the rows that went into the file rather
+     * than asked again afterwards, so what the lifter is told is what the file holds.
+     */
+    suspend fun write(output: OutputStream): Int = withContext(Dispatchers.IO) {
+        var sessions = 0
         JsonWriter(output.bufferedWriter()).use { json ->
             json.beginObject()
             json.name("format").value(FORMAT)
@@ -84,7 +97,8 @@ class BackupRepository(
             json.name("tables").beginObject()
             backedUpTables().forEach { table ->
                 json.name(table).beginArray()
-                db.query("SELECT * FROM `$table`" + whereFor(table)).use { rows ->
+                db.query("SELECT * FROM `$table`" + backedUpWhere(table)).use { rows ->
+                    if (table == SESSION_TABLE) sessions = rows.count
                     while (rows.moveToNext()) {
                         json.beginObject()
                         for (column in 0 until rows.columnCount) {
@@ -99,6 +113,7 @@ class BackupRepository(
             json.endObject()
             json.endObject()
         }
+        sessions
     }
 
     /** Reads a backup from [input], or says why the file is not one. */
@@ -108,7 +123,7 @@ class BackupRepository(
         } catch (notOne: NotABackup) {
             throw notOne
         } catch (unreadable: Exception) {
-            throw NotABackup("not a backup this app wrote: ${unreadable.message}")
+            throw NotABackup(RefusedBecause.NOT_A_BACKUP, unreadable.message)
         }
     }
 
@@ -119,13 +134,17 @@ class BackupRepository(
      * does not matter and a backup that does not hold together leaves the app as it was.
      */
     suspend fun restore(backup: Backup): Unit = database.withTransaction {
+        val covered = backedUpTables().toSet()
+        // Only into tables the backup covers. A name from the file is never trusted on its own:
+        // Room's and SQLite's own tables are not the lifter's, and a file naming one — or naming
+        // a table this version does not have — is refused rather than half-applied.
+        backup.tables.keys.firstOrNull { it !in covered }?.let {
+            throw NotABackup(RefusedBecause.DOES_NOT_FIT, "unknown table $it")
+        }
         db.execSQL("PRAGMA defer_foreign_keys = ON")
-        backedUpTables().forEach { table -> db.execSQL("DELETE FROM `$table`" + whereFor(table)) }
+        covered.forEach { table -> db.execSQL("DELETE FROM `$table`" + replacedWhere(table)) }
         backup.tables.forEach { (table, rows) ->
             val columns = columnsOf(table)
-            // A table this version does not have is one it cannot restore into; said rather than
-            // skipped, because skipping is exactly the silent loss a backup must never have.
-            if (columns.isEmpty()) throw NotABackup("made by a newer version of the app ($table)")
             rows.forEach { row -> insert(table, row.filterKeys { it in columns }) }
         }
     }
@@ -143,12 +162,12 @@ class BackupRepository(
             routine = count("SELECT COUNT(*) FROM routine") > 0,
             weighIns = count("SELECT COUNT(*) FROM bodyweight_entry"),
             customised = count(
-                "SELECT (SELECT COUNT(*) FROM exercise WHERE source = '${ExerciseSource.USER.stored}') + " +
+                "SELECT (SELECT COUNT(*) FROM exercise WHERE source = '$USER_SOURCE') + " +
                     "(SELECT COUNT(*) FROM exercise_preference) + " +
                     "(SELECT COUNT(*) FROM plate_inventory) + " +
                     "(SELECT COUNT(*) FROM profile WHERE sex IS NOT NULL OR birth_year IS NOT NULL " +
                     "OR height_cm IS NOT NULL OR bar_kg IS NOT NULL OR display_unit IS NOT NULL " +
-                    "OR experience != 'TRAINED')",
+                    "OR experience != '${Experience.TRAINED.name}')",
             ) > 0,
         )
     }
@@ -161,8 +180,16 @@ class BackupRepository(
                 "ORDER BY name",
         ).use { rows -> buildList { while (rows.moveToNext()) add(rows.getString(0)) } }
 
-    private fun whereFor(table: String): String =
-        if (table == EXERCISE_TABLE) " WHERE source = '${ExerciseSource.USER.stored}'" else ""
+    /** Which rows of [table] go into a backup: all of them, less the bank's own live rows. */
+    private fun backedUpWhere(table: String): String =
+        if (table == EXERCISE_TABLE) " WHERE source = '$USER_SOURCE' OR tombstoned = 1" else ""
+
+    /**
+     * Which rows of [table] a restore clears first: the lifter's own exercises, but never a bank
+     * row, tombstoned or not, since the new install's bank is what it is.
+     */
+    private fun replacedWhere(table: String): String =
+        if (table == EXERCISE_TABLE) " WHERE source = '$USER_SOURCE'" else ""
 
     private fun columnsOf(table: String): Set<String> =
         db.query("PRAGMA table_info(`$table`)").use { rows ->
@@ -174,7 +201,9 @@ class BackupRepository(
         if (row.isEmpty()) return
         val columns = row.keys.joinToString(",") { "`$it`" }
         val holes = row.keys.joinToString(",") { "?" }
-        db.execSQL("INSERT INTO `$table` ($columns) VALUES ($holes)", row.values.toTypedArray())
+        // A tombstone the new bank still has is the bank's to keep: it is the same exercise.
+        val verb = if (table == EXERCISE_TABLE) "INSERT OR IGNORE" else "INSERT"
+        db.execSQL("$verb INTO `$table` ($columns) VALUES ($holes)", row.values.toTypedArray())
     }
 
     private fun JsonWriter.writeCell(rows: Cursor, column: Int) {
@@ -206,9 +235,9 @@ class BackupRepository(
             }
         }
         endObject()
-        if (format != FORMAT) throw NotABackup("not a backup this app wrote")
-        val written = version ?: throw NotABackup("no database version")
-        if (written > GymDatabase.VERSION) throw NotABackup("made by a newer version of the app")
+        if (format != FORMAT) throw NotABackup(RefusedBecause.NOT_A_BACKUP)
+        val written = version ?: throw NotABackup(RefusedBecause.NOT_A_BACKUP, "no database version")
+        if (written > GymDatabase.VERSION) throw NotABackup(RefusedBecause.NEWER_APP)
         return Backup(written, tables)
     }
 
@@ -247,7 +276,7 @@ class BackupRepository(
             endObject()
             bytes
         }
-        else -> throw NotABackup("unexpected ${peek()}")
+        else -> throw NotABackup(RefusedBecause.NOT_A_BACKUP, "unexpected ${peek()}")
     }
 
     companion object {
@@ -258,6 +287,8 @@ class BackupRepository(
         const val FORMAT_VERSION = 1L
 
         private const val EXERCISE_TABLE = "exercise"
+        private const val SESSION_TABLE = "session"
+        private val USER_SOURCE = ExerciseSource.USER.stored
         private const val BLOB = "base64"
     }
 }

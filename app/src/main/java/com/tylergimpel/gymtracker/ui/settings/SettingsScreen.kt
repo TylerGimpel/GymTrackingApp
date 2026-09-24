@@ -37,6 +37,7 @@ import com.tylergimpel.gymtracker.ui.RestFix
 import com.tylergimpel.gymtracker.ui.WeightUnitChips
 import com.tylergimpel.gymtracker.ui.settingsFor
 import com.tylergimpel.gymtracker.data.ImportResult
+import com.tylergimpel.gymtracker.data.RefusedBecause
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import java.time.LocalDate
@@ -241,17 +242,20 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_backed_up, message.sessions)
                             is DataMessage.Restored ->
                                 stringResource(R.string.settings_restored, message.sessions)
-                            is DataMessage.NotRestorable ->
-                                stringResource(R.string.settings_not_restorable, message.reason)
-                            is DataMessage.NotImportable ->
-                                stringResource(R.string.settings_not_importable, message.reason)
+                            is DataMessage.NotRestorable -> stringResource(
+                                when (message.because) {
+                                    RefusedBecause.NOT_A_BACKUP -> R.string.restore_refused_not_backup
+                                    RefusedBecause.NEWER_APP -> R.string.restore_refused_newer
+                                    RefusedBecause.DOES_NOT_FIT -> R.string.restore_refused_does_not_fit
+                                },
+                            )
+                            DataMessage.NotImportable -> stringResource(R.string.settings_not_importable)
                             is DataMessage.Imported -> importedText(message.result)
+                            DataMessage.BackupFailed -> stringResource(R.string.settings_backup_failed)
                             DataMessage.Failed -> stringResource(R.string.settings_export_failed)
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (message == DataMessage.Failed || message is DataMessage.NotRestorable ||
-                            message is DataMessage.NotImportable
-                        ) {
+                        color = if (message.isError) {
                             MaterialTheme.colorScheme.error
                         } else {
                             MaterialTheme.colorScheme.onSurface
