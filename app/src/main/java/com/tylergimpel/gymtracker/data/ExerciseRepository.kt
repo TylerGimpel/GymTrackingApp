@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import java.time.LocalDate
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.BankChange
 import com.tylergimpel.gymtracker.domain.Exercise
@@ -95,6 +96,17 @@ class ExerciseRepository(
         exercises.setRest(exerciseId, rest?.seconds?.toInt())
         exercises.forgetEmptyPreference(exerciseId)
     }
+
+    /**
+     * Resets [exerciseId]'s estimate [on] a day, so the engine finds it again from there (#128).
+     *
+     * Nothing logged is touched: records, charts and history still read every set. Only the fold
+     * the engine prescribes from starts again, which with nothing logged since is a calibration.
+     */
+    suspend fun resetEstimate(exerciseId: String, on: LocalDate) = exercises.setEstimateResetOn(exerciseId, on)
+
+    /** The lifter said not now to resetting [exerciseId]'s estimate: the offer waits for the pattern again. */
+    suspend fun keepEstimate(exerciseId: String, on: LocalDate) = exercises.setResetOfferDismissedOn(exerciseId, on)
 
     /**
      * Records that the lifter never wants [exerciseId] suggested again, or takes it back.

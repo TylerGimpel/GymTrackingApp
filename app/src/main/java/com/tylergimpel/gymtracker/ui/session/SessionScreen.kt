@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -228,6 +229,8 @@ fun SessionScreen(
             onKeepAvoided = viewModel::keepAvoided,
             onSwapAvoided = viewModel::swapAvoided,
             onRemoveAvoided = viewModel::removeAvoided,
+            onResetEstimate = viewModel::resetEstimate,
+            onKeepEstimate = viewModel::keepEstimate,
         ),
         wholeSession = SessionActions(
             onGroupWithNext = viewModel::groupWithNext,
@@ -318,6 +321,8 @@ data class ExerciseActions(
     val onKeepAvoided: (Avoided) -> Unit = {},
     val onSwapAvoided: (Avoided) -> Unit = {},
     val onRemoveAvoided: (Avoided) -> Unit = {},
+    val onResetEstimate: () -> Unit = {},
+    val onKeepEstimate: () -> Unit = {},
 )
 
 /** The session as a whole, and the way out to the other screens. */
@@ -579,6 +584,9 @@ fun SessionScreen(
                         onReadIn = entry.onReadIn,
                         onToggleDisplayUnitOverride = entry.onToggleDisplayUnitOverride,
                     )
+                    if (state.offerResetEstimate) {
+                        ResetEstimateOffer(exercises.onResetEstimate, exercises.onKeepEstimate)
+                    }
                     HorizontalDivider()
                 }
             }
@@ -1317,6 +1325,25 @@ private val DRAG_TO_OPEN = 72.dp
  * a prompt that made "remove" the easy answer would quietly strip the most valuable work out of a
  * programme. The app noticed; the lifter decides, and nothing happens until they do.
  */
+/**
+ * The engine admitting it has been wrong about a lift, and offering to find it again (#128).
+ *
+ * In line rather than a dialog: it is not urgent, and a lifter mid-set should not have to answer
+ * anything to carry on. It says what the app will do and nothing about how often it was overruled.
+ */
+@Composable
+private fun ResetEstimateOffer(onReset: () -> Unit, onKeep: () -> Unit) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.reset_estimate_offer), style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onKeep) { Text(stringResource(R.string.reset_estimate_keep)) }
+                TextButton(onClick = onReset) { Text(stringResource(R.string.reset_estimate_reset)) }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AvoidedPrompt(
     avoided: Avoided,

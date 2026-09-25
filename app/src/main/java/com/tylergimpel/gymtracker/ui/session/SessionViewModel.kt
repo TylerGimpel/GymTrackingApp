@@ -355,6 +355,11 @@ data class SessionUiState(
     val newRecord: PersonalRecord? = null,
     /** How long since each muscle was trained, longest ago first (#127). */
     val lastTrained: List<MuscleLastTrained> = emptyList(),
+    /**
+     * Whether to offer to find the selected lift's estimate again, because the lifter has set
+     * their own weight on it in every session for a month (#128). A prompt, never a statistic.
+     */
+    val offerResetEstimate: Boolean = false,
     /** How far through the exercise, and how far through the work that counts. */
     val pace: SessionPace? = null,
     /** Roughly how much longer the session has to run, cardio included. */
@@ -447,6 +452,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val plateLine: PlateLine? = null,
         /** How many sets this session asked for of it, where it asked for any. */
         val planned: PlannedSets? = null,
+        /** Whether to offer to find its estimate again (#128). */
+        val offerReset: Boolean = false,
     )
 
     /**
@@ -469,6 +476,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                         plateLine = next.recommendation.prescription.load
                             ?.let { recommendations.plateLine(exercise, it) },
                         planned = next.planned,
+                        offerReset = next.offerReset,
                     )
                 }
             }
@@ -550,6 +558,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 plateLine = forThisExercise?.plateLine,
                 lastTrained = training.lastTrained,
                 newRecord = screen.newRecord,
+                offerResetEstimate = forThisExercise?.offerReset == true,
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(
                         sets = logged?.setsOf(chosen).orEmpty(),
@@ -745,6 +754,27 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             is AfterLogging.StartResting -> restTimer.start(next.length)
 
             AfterLogging.Nothing -> Unit
+        }
+    }
+
+    /** Finds the selected lift's estimate again from today (#128). */
+    fun resetEstimate() {
+        val exercise = state.value.selected ?: return
+        val today = LocalDate.now(clock)
+        viewModelScope.launch {
+            exercises.resetEstimate(exercise.id, today)
+            // A changed exercise is what asks the engine again, as every other choice here does.
+            screen.update { it.copy(selected = it.selected?.copy(estimateResetOn = today)) }
+        }
+    }
+
+    /** Not now: the offer waits until the whole pattern has happened again. */
+    fun keepEstimate() {
+        val exercise = state.value.selected ?: return
+        val today = LocalDate.now(clock)
+        viewModelScope.launch {
+            exercises.keepEstimate(exercise.id, today)
+            screen.update { it.copy(selected = it.selected?.copy(resetOfferDismissedOn = today)) }
         }
     }
 

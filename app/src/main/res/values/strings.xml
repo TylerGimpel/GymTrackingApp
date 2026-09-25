@@ -24,6 +24,9 @@
     <string name="exercise_progression_model">Progression</string>
     <string name="progression_double">Reps, then weight</string>
     <string name="progression_none">Do not coach this</string>
+    <string name="reset_estimate_offer">Your own weights on this have not matched what the app suggests for a while. Reset the estimate? It will be worked out again from your next sets, and nothing you logged changes.</string>
+    <string name="reset_estimate_reset">Reset the estimate</string>
+    <string name="reset_estimate_keep">Not now</string>
     <string name="drawer_last_trained">Last trained</string>
     <string name="drawer_trained_today">%1$s: today</string>
     <string name="drawer_trained_yesterday">%1$s: yesterday</string>

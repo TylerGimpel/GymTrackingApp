@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.Prescription
+import org.junit.Assert.assertFalse
 import com.tylergimpel.gymtracker.domain.Kilograms
 import java.time.LocalDate
 import com.tylergimpel.gymtracker.domain.Sex
@@ -171,6 +173,32 @@ class RecommendationPersistenceTest {
         // A session spent finding out what somebody can lift must not corrupt the history it is
         // establishing, and volume is the first thing it would corrupt.
         assertEquals(emptyMap<String, Double>(), volumeByMuscle(performed))
+    }
+
+    @Test
+    fun aLiftOverriddenEverySessionForAMonthOffersAResetThatFindsItAgain() = runBlocking {
+        overrideTheSquatWeeklyForAMonth()
+        assertTrue(recommendations.nextSetWithPlan(exercise(SQUAT))!!.offerReset)
+
+        exercises.resetEstimate(SQUAT, LocalDate.parse("2026-09-14"))
+
+        // Found again from the next session (#128): nothing logged since the reset, so the engine
+        // calibrates rather than prescribing from a month of weights it kept getting wrong.
+        val after = recommendations.nextSetWithPlan(exercise(SQUAT))!!
+        assertTrue(after.recommendation is Recommendation.Calibrating)
+        assertFalse(after.offerReset)
+    }
+
+    @Test
+    fun sayingNotNowToAResetWaitsForTheWholePatternAgain() = runBlocking {
+        overrideTheSquatWeeklyForAMonth()
+
+        exercises.keepEstimate(SQUAT, LocalDate.parse("2026-09-14"))
+
+        val after = recommendations.nextSetWithPlan(exercise(SQUAT))!!
+        assertFalse(after.offerReset)
+        // And the estimate is exactly what it was: not now changes nothing about the engine.
+        assertTrue(after.recommendation is Recommendation.Prescribing)
     }
 
     @Test
@@ -633,6 +661,15 @@ class RecommendationPersistenceTest {
         addedWeightText = help.toString(),
         repsText = reps.toString(),
     )
+
+    /** Five weekly squat sessions, each asked for 60 kg and each lifted at 70 instead. */
+    private suspend fun overrideTheSquatWeeklyForAMonth() {
+        listOf("2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31", "2026-09-07").forEach { day ->
+            train("${day}T18:00") {
+                logSet(SQUAT, SetDraft("70", "5"), prescription = Prescription(load = Kilograms(60.0), reps = 5))
+            }
+        }
+    }
 
     private suspend fun bank(): List<Exercise> = exercises.observeBank().first()
 

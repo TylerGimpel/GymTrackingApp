@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.from
+import com.tylergimpel.gymtracker.domain.keepsOverriding
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.CalibrationRamp
 import kotlinx.coroutines.flow.first
@@ -37,6 +39,8 @@ import java.time.LocalDate
 data class PrescribedNext(
     val recommendation: Recommendation,
     val planned: PlannedSets?,
+    /** Whether to offer to find this lift's estimate again, because it keeps being overridden (#128). */
+    val offerReset: Boolean = false,
 )
 
 /**
@@ -114,7 +118,9 @@ class RecommendationRepository(
 
         return database.withTransaction {
             val open = sessions.activeSession()?.id
-            val history = historyOf(exercise.id, open)
+            // A reset estimate is found again from the day it was reset (#128). The log is untouched;
+            // only what the engine folds starts there.
+            val history = historyOf(exercise.id, open).from(exercise.estimateResetOn)
             // Two bands, and they are not the same question. The seed is what the routine's
             // goal put this exercise in and is what gets stored; the lifter's own answer, where
             // they gave one, is what the set is actually prescribed in. Storing the effective one
@@ -141,6 +147,9 @@ class RecommendationRepository(
                 recommendation = warmUpFirst(next, exercise, open, rounding)
                     .let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) },
                 planned = plannedSetsOf(next, exercise, open, rounding),
+                // Offered on the sessions since the lifter last said not now, so saying it means
+                // waiting for the whole pattern again rather than being asked next time.
+                offerReset = history.from(exercise.resetOfferDismissedOn?.plusDays(1)).keepsOverriding(),
             )
         }
     }

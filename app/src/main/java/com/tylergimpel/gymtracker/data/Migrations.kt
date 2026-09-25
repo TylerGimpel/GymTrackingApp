@@ -730,6 +730,19 @@ internal val MIGRATION_31_32 = object : Migration(31, 32) {
     }
 }
 
+/**
+ * When the lifter reset a lift's estimate, and when they last said not now to the offer (#128).
+ *
+ * Both decisions, so both beside the rest of what the lifter decided (ADR 0009). Nobody upgrading
+ * has made either: no dates.
+ */
+internal val MIGRATION_32_33 = object : Migration(32, 33) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `exercise_preference` ADD COLUMN `estimate_reset_on` TEXT")
+        db.execSQL("ALTER TABLE `exercise_preference` ADD COLUMN `reset_offer_dismissed_on` TEXT")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -762,6 +775,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_29_30,
     MIGRATION_30_31,
     MIGRATION_31_32,
+    MIGRATION_32_33,
 )
 
 /**

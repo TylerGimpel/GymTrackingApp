@@ -947,6 +947,7 @@ class GymDatabaseMigrationTest {
         const val TWENTY_NINTH_DATABASE = "migration-twenty-ninth.db"
         const val THIRTIETH_DATABASE = "migration-thirtieth.db"
         const val THIRTY_FIRST_DATABASE = "migration-thirty-first.db"
+        const val THIRTY_SECOND_DATABASE = "migration-thirty-second.db"
     }
 
     /**
@@ -1327,6 +1328,32 @@ class GymDatabaseMigrationTest {
             db.query("SELECT import_batch_id FROM exercise WHERE id = 'Barbell_Bench'").use {
                 it.moveToFirst()
                 assertTrue("an exercise nobody imported was given a batch", it.isNull(0))
+            }
+        }
+    }
+
+    /**
+     * Version 33 records a reset estimate and a declined offer to reset one (#128). Nobody upgrading
+     * has done either, and a preference they did have — a rest, here — comes through as it was.
+     */
+    @Test
+    fun migratesToPreferencesWithNoEstimateReset() {
+        helper.createDatabase(THIRTY_SECOND_DATABASE, 32).use { version32 ->
+            version32.execSQL(
+                "INSERT INTO exercise (id, name, primary_muscles, secondary_muscles, equipment, " +
+                    "logging_type, mechanic, force, category, level, unilateral, source, " +
+                    "tombstoned, progression_model) VALUES ('Barbell_Bench', 'Bench Press', " +
+                    "'chest', '', 'barbell', 'weight_reps', 'compound', 'push', 'strength', " +
+                    "'beginner', 0, 'upstream', 0, 'double_progression')",
+            )
+            version32.execSQL("INSERT INTO exercise_preference (exercise_id, rest_seconds, disliked) VALUES ('Barbell_Bench', 120, 0)")
+        }
+
+        helper.runMigrationsAndValidate(THIRTY_SECOND_DATABASE, 33, true, MIGRATION_32_33).use { db ->
+            db.query("SELECT rest_seconds, estimate_reset_on, reset_offer_dismissed_on FROM exercise_preference").use {
+                it.moveToFirst()
+                assertEquals(120, it.getInt(0))
+                assertTrue("nobody upgrading has reset an estimate", it.isNull(1) && it.isNull(2))
             }
         }
     }

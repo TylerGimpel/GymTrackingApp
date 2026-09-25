@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import java.time.LocalDate
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -76,6 +77,24 @@ interface ExerciseDao {
     )
     suspend fun setDisliked(exerciseId: String, disliked: Boolean)
 
+    /** Records the day the lifter reset this lift's estimate (#128). */
+    @Query(
+        """
+        INSERT INTO exercise_preference (exercise_id, estimate_reset_on) VALUES (:exerciseId, :on)
+        ON CONFLICT(exercise_id) DO UPDATE SET estimate_reset_on = excluded.estimate_reset_on
+        """,
+    )
+    suspend fun setEstimateResetOn(exerciseId: String, on: LocalDate)
+
+    /** Records the day the lifter said not now to resetting this lift's estimate (#128). */
+    @Query(
+        """
+        INSERT INTO exercise_preference (exercise_id, reset_offer_dismissed_on) VALUES (:exerciseId, :on)
+        ON CONFLICT(exercise_id) DO UPDATE SET reset_offer_dismissed_on = excluded.reset_offer_dismissed_on
+        """,
+    )
+    suspend fun setResetOfferDismissedOn(exerciseId: String, on: LocalDate)
+
     /** Records the step this exercise moves by, or clears it back to what the equipment says. */
     @Query(
         """
@@ -135,6 +154,7 @@ interface ExerciseDao {
           AND progression_model IS NULL AND rest_seconds IS NULL AND disliked = 0
           AND increment_kg IS NULL
           AND rep_range_bottom IS NULL AND rep_range_top IS NULL
+          AND estimate_reset_on IS NULL AND reset_offer_dismissed_on IS NULL
         """,
     )
     suspend fun forgetEmptyPreference(exerciseId: String)

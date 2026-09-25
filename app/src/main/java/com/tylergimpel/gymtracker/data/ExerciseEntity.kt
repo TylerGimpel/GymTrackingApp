@@ -138,6 +138,8 @@ fun ExerciseEntity.toDomain(
     chosenRest = preference?.restSeconds?.let { Duration.ofSeconds(it.toLong()) },
     isDisliked = preference?.disliked == true,
     chosenIncrement = preference?.incrementKg?.let(::Kilograms),
+    estimateResetOn = preference?.estimateResetOn,
+    resetOfferDismissedOn = preference?.resetOfferDismissedOn,
     // Both ends or neither: half a band is not a band, and a row carrying one is a write that
     // did not finish rather than something to guess the other end of.
     chosenRepRange = preference?.repRangeBottom?.let { bottom ->

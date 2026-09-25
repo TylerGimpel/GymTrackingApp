@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.LocalDate
 import java.time.Duration
 
 /**
@@ -108,6 +109,13 @@ data class Exercise(
      * stands — not that they asked for the seed.
      */
     val chosenRepRange: RepRange? = null,
+    /**
+     * The day the lifter reset this lift's estimate, if they have (#128): the engine finds it
+     * again from sessions on and after it, and nothing else that reads the log is affected.
+     */
+    val estimateResetOn: LocalDate? = null,
+    /** The day the lifter last said not now to that, so the offer waits for the pattern again. */
+    val resetOfferDismissedOn: LocalDate? = null,
     /** What the lifter calls this, where they have renamed it. */
     val userName: String? = null,
     /** A standing note — "seat notch 3, use the long bar" — shown wherever the exercise is used. */
@@ -204,6 +212,8 @@ data class Exercise(
         isDisliked = chosen.isDisliked,
         chosenIncrement = chosen.chosenIncrement,
         chosenRepRange = chosen.chosenRepRange,
+        estimateResetOn = chosen.estimateResetOn,
+        resetOfferDismissedOn = chosen.resetOfferDismissedOn,
     )
 }
 

@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import java.time.LocalDate
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -111,4 +112,15 @@ data class ExercisePreferenceEntity(
      */
     @ColumnInfo(name = "increment_kg")
     val incrementKg: Double? = null,
+
+    /**
+     * The day the lifter reset this lift's estimate (#128): the engine finds it again from the
+     * sessions on and after it. The log is untouched, and so is everything else that reads it.
+     */
+    @ColumnInfo(name = "estimate_reset_on")
+    val estimateResetOn: LocalDate? = null,
+
+    /** The day the lifter last said not now to resetting it, so the offer waits for the pattern again. */
+    @ColumnInfo(name = "reset_offer_dismissed_on")
+    val resetOfferDismissedOn: LocalDate? = null,
 )
