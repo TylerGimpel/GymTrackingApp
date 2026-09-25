@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import com.tylergimpel.gymtracker.domain.MuscleLastTrained
 import com.tylergimpel.gymtracker.domain.PersonalRecord
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -352,6 +353,8 @@ data class SessionUiState(
     val plateLine: PlateLine? = null,
     /** A record the set just logged set, to be announced once (#124). */
     val newRecord: PersonalRecord? = null,
+    /** How long since each muscle was trained, longest ago first (#127). */
+    val lastTrained: List<MuscleLastTrained> = emptyList(),
     /** How far through the exercise, and how far through the work that counts. */
     val pace: SessionPace? = null,
     /** Roughly how much longer the session has to run, cardio included. */
@@ -482,11 +485,13 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val recommended: Recommended?,
         /** The last few finished sessions, which is what "keeps not doing it" is counted over. */
         val recent: List<LoggedSession>,
+        /** How long since each muscle was trained (#127). */
+        val lastTrained: List<MuscleLastTrained>,
     )
 
     val state: StateFlow<SessionUiState> =
         combine(
-            combine(logged, recommended, repository.observeRecent(), ::Training),
+            combine(logged, recommended, repository.observeRecent(), repository.observeLastTrained(), ::Training),
             repository.observeLastFinished(),
             routines.observeProgress(),
             // Paired rather than passed separately: `combine` runs out of typed overloads at
@@ -543,6 +548,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 restCountdownVisible = rest.alerts.countdownVisible,
                 askToShowRestCountdown = rest.askToShowCountdown,
                 plateLine = forThisExercise?.plateLine,
+                lastTrained = training.lastTrained,
                 newRecord = screen.newRecord,
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(

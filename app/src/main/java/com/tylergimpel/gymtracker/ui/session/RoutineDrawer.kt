@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import com.tylergimpel.gymtracker.domain.MuscleLastTrained
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +38,7 @@ fun RoutineDrawer(
     progress: RoutineProgress?,
     performed: Map<String, Int>,
     onJumpTo: (Exercise) -> Unit,
+    lastTrained: List<MuscleLastTrained> = emptyList(),
 ) {
     ModalDrawerSheet(modifier = Modifier.testTag(DRAWER)) {
         Text(
@@ -65,6 +67,29 @@ fun RoutineDrawer(
                         selected = false,
                         onClick = { onJumpTo(exercise) },
                         modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
+            }
+            // Where the next session is chosen, what was trained when (#127). Information in the
+            // drawer's own quiet colours, never an alarm: how long ago is a fact, not overdue.
+            if (lastTrained.isNotEmpty()) {
+                item(key = "last-trained") {
+                    Text(
+                        text = stringResource(R.string.drawer_last_trained),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                items(lastTrained, key = { "muscle-${it.muscle}" }) { muscle ->
+                    Text(
+                        text = when (muscle.daysAgo) {
+                            0L -> stringResource(R.string.drawer_trained_today, muscle.muscle)
+                            1L -> stringResource(R.string.drawer_trained_yesterday, muscle.muscle)
+                            else -> stringResource(R.string.drawer_trained_days_ago, muscle.muscle, muscle.daysAgo)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 4.dp),
                     )
                 }
             }

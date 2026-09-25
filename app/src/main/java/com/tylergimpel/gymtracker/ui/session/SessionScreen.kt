@@ -385,6 +385,7 @@ fun SessionScreen(
             RoutineDrawer(
                 progress = state.routine,
                 performed = state.exercises.associate { it.exercise.id to it.sets.size },
+                lastTrained = state.lastTrained,
                 onJumpTo = { exercise ->
                     exercises.onJumpTo(exercise)
                     scope.launch { drawer.close() }

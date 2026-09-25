@@ -253,6 +253,25 @@ interface SessionDao {
     suspend fun trainedSetsFor(exerciseId: String, excludingSession: Long): List<TrainedSetRow>
 
     /**
+     * Every exercise ever trained, with the last day it was (#127).
+     *
+     * **Trained means a set was logged.** An exercise opened and left empty, or a routine day
+     * skipped, has no set, so neither moves anything. One row per exercise rather than per set, so
+     * it stays one small answer however many years the log holds.
+     */
+    @Query(
+        """
+        SELECT exercise.*, MAX(session.date) AS last_date
+        FROM session_exercise
+        JOIN session ON session.id = session_exercise.session_id
+        JOIN exercise ON exercise.id = session_exercise.exercise_id
+        WHERE EXISTS (SELECT 1 FROM set_entry WHERE set_entry.session_exercise_id = session_exercise.id)
+        GROUP BY exercise.id
+        """,
+    )
+    fun observeLastTrained(): Flow<List<LastTrainedRow>>
+
+    /**
      * How many sets of one exercise have been logged in one session.
      *
      * What tells the calibration ramp which rung comes next. Sets rather than rows, so a per-side

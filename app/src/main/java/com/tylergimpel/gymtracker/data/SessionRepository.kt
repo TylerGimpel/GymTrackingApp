@@ -1,5 +1,8 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.ExerciseLastTrained
+import com.tylergimpel.gymtracker.domain.MuscleLastTrained
+import com.tylergimpel.gymtracker.domain.lastTrainedByMuscle
 import com.tylergimpel.gymtracker.domain.PersonalRecord
 import com.tylergimpel.gymtracker.domain.recordSetBy
 import androidx.room.withTransaction
@@ -61,6 +64,14 @@ class SessionRepository(
      * A window rather than everything: what a lifter has been avoiding lately is the question, and
      * a routine they abandoned a year ago should not answer it.
      */
+    /** How long since each muscle was trained, longest ago first (#127). */
+    fun observeLastTrained(): Flow<List<MuscleLastTrained>> = sessions.observeLastTrained().map { rows ->
+        lastTrainedByMuscle(
+            rows.map { ExerciseLastTrained(it.exercise.toDomain(preference = null), it.lastDate) },
+            LocalDate.now(clock.withZone(zone)),
+        )
+    }
+
     fun observeRecent(limit: Int = RECENT_SESSIONS): Flow<List<LoggedSession>> =
         sessions.observeRecent(limit).withLifterUnit { recent, unit ->
             recent.map { it.toLoggedSession(unit) }

@@ -238,6 +238,21 @@ class SessionPersistenceTest {
     }
 
     @Test
+    fun aMuscleWasLastTrainedOnTheLastDayASetWasLoggedForIt() = runBlocking {
+        clock.moveTo(at("2026-09-14T18:00"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+        clock.moveTo(at("2026-09-17T07:00"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+        // Thursday's squat taken back: an exercise opened and left empty is not training (#127).
+        repository.deleteSet(currentSession().exercises.single().id, 1)
+        clock.moveTo(at("2026-09-20T07:00"))
+
+        val legs = repository.observeLastTrained().first().single { it.muscle == "quadriceps" }
+
+        assertEquals(6L, legs.daysAgo)
+    }
+
+    @Test
     fun aSetKeepsTheTypeItWasLoggedWith() = runBlocking {
         repository.logSet(BENCH, SetDraft("40", "10", type = SetType.WARMUP))
         repository.logSet(BENCH, SetDraft("60", "5", type = SetType.WORKING))
