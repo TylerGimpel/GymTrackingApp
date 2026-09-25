@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.PersonalRecord
+import com.tylergimpel.gymtracker.domain.recordSetBy
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggedSession
@@ -111,6 +113,18 @@ class SessionRepository(
      *
      * Returns false if the draft does not yet read as a weight and a rep count.
      */
+    /**
+     * The record [draft] would set on [exerciseId] if it were logged now (#124), asked before it is.
+     *
+     * Against everything logged so far, the open session's earlier sets included, so a record is
+     * announced once rather than again for every set that equals it.
+     */
+    suspend fun recordSetBy(exerciseId: String, draft: SetDraft): PersonalRecord? {
+        val performance = draft.performance ?: return null
+        return sessions.trainedSetsFor(exerciseId, SessionDao.NO_SESSION).toTrainingHistory()
+            .recordSetBy(draft.type, performance, LocalDate.now(clock.withZone(zone)))
+    }
+
     suspend fun logSet(
         exerciseId: String,
         draft: SetDraft,

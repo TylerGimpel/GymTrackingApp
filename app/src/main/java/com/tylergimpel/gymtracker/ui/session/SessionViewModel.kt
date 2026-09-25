@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import com.tylergimpel.gymtracker.domain.PersonalRecord
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -221,6 +222,8 @@ private data class ScreenState(
     val pickerBank: List<Exercise> = emptyList(),
     /** Exercises the lifter has already been asked about, so the question is asked once. */
     val askedAbout: Set<String> = emptySet(),
+    /** A record the set just logged set, until it has been shown (#124). */
+    val newRecord: PersonalRecord? = null,
 )
 
 data class SessionUiState(
@@ -347,6 +350,8 @@ data class SessionUiState(
      * reading the inventory it rounded against, so the line and the number can never disagree.
      */
     val plateLine: PlateLine? = null,
+    /** A record the set just logged set, to be announced once (#124). */
+    val newRecord: PersonalRecord? = null,
     /** How far through the exercise, and how far through the work that counts. */
     val pace: SessionPace? = null,
     /** Roughly how much longer the session has to run, cardio included. */
@@ -538,6 +543,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 restCountdownVisible = rest.alerts.countdownVisible,
                 askToShowRestCountdown = rest.askToShowCountdown,
                 plateLine = forThisExercise?.plateLine,
+                newRecord = screen.newRecord,
                 pace = screen.selected?.let { chosen ->
                     SessionPace.of(
                         sets = logged?.setsOf(chosen).orEmpty(),
@@ -682,6 +688,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // 65 has overridden a recommendation, and only the offer beside the result tells that
             // apart from falling short of one.
             val asked = current.recommendation?.prescription ?: Prescription()
+            // Asked before the set is down, so the standing record is the one it had to beat. A
+            // per-side set is two efforts and not one number, so it announces nothing.
+            val record = if (current.perSide) null else repository.recordSetBy(exercise.id, current.draft)
             val recorded = if (current.perSide) {
                 repository.logPerSideSet(
                     exercise.id,
@@ -700,6 +709,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     draft = it.draft.copy(note = null),
                     rightDraft = it.rightDraft.copy(note = null),
+                    newRecord = record,
                 )
             }
             // The set it was for is down, so it has said what it had to say. Leaving it
@@ -731,6 +741,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             AfterLogging.Nothing -> Unit
         }
     }
+
+    /** The record has been shown, and is not shown again. */
+    fun recordSeen() = screen.update { it.copy(newRecord = null) }
 
     fun recheckRestAlerts() = restTimer.recheckAlerts()
 

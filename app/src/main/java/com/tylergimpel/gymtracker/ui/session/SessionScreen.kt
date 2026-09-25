@@ -1,5 +1,8 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -179,6 +182,7 @@ fun SessionScreen(
             onReadIn = viewModel::readIn,
             onToggleDisplayUnitOverride = viewModel::toggleDisplayUnitOverride,
             onLogSet = viewModel::logSet,
+            onRecordSeen = viewModel::recordSeen,
             onEditEffort = viewModel::startEditing,
             onEditingDraftChange = viewModel::changeEditingDraft,
             onSaveEditing = viewModel::saveEditing,
@@ -261,6 +265,8 @@ data class SetEntryActions(
     val onReadIn: (WeightUnit) -> Unit = {},
     val onToggleDisplayUnitOverride: () -> Unit = {},
     val onLogSet: () -> Unit = {},
+    /** A record announcement has been shown. */
+    val onRecordSeen: () -> Unit = {},
     val onEditEffort: (SessionExercise, PerformedSet, Effort) -> Unit = { _, _, _ -> },
     val onEditingDraftChange: (SetDraft) -> Unit = {},
     val onSaveEditing: () -> Unit = {},
@@ -346,6 +352,22 @@ fun SessionScreen(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    // A record registers when it is set (#124): said once, briefly, and out of the way of the next set.
+    val snackbars = remember { SnackbarHostState() }
+    val recordText = state.newRecord?.let { record ->
+        val unit = state.selected?.displayUnit ?: state.lifterUnit
+        if (record.load.value < 0) {
+            stringResource(R.string.session_record_assisted, record.reps, Kilograms(-record.load.value).asTextIn(unit), stringResource(unit.label))
+        } else {
+            stringResource(R.string.session_record, record.reps, record.load.asTextIn(unit), stringResource(unit.label))
+        }
+    }
+    LaunchedEffect(state.newRecord) {
+        recordText ?: return@LaunchedEffect
+        snackbars.showSnackbar(recordText, duration = SnackbarDuration.Short)
+        entry.onRecordSeen()
+    }
+
     // How far the current horizontal drag has travelled, so that a slow pull opens the routine
     // as a thrown one does. Reset when a drag starts rather than when it ends, because a drag
     // that ends off the edge of the screen never reports its finish.
@@ -386,6 +408,7 @@ fun SessionScreen(
                 if (opening) drawer.open() else if (closing) drawer.close()
             },
         ),
+        snackbarHost = { SnackbarHost(snackbars) },
         topBar = {
             TopAppBar(
                 title = {

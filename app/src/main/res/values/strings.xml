@@ -24,6 +24,8 @@
     <string name="exercise_progression_model">Progression</string>
     <string name="progression_double">Reps, then weight</string>
     <string name="progression_none">Do not coach this</string>
+    <string name="session_record">New best at %1$d reps: %2$s %3$s</string>
+    <string name="session_record_assisted">New best at %1$d reps: %2$s %3$s of help</string>
     <string name="session_title">Session</string>
     <string name="session_finish">Finish</string>
     <string name="session_pick_exercise">Pick an exercise</string>

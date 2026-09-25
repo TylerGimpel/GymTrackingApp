@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.domain
 
+import java.time.LocalDate
+
 /**
  * The best a lifter has done on one exercise at one rep count.
  *
@@ -43,13 +45,32 @@ fun personalRecords(history: TrainingHistory): List<PersonalRecord> = history.se
 /**
  * Whether [set] is a better set than the best this exercise had at that rep count.
  *
- * Nothing shows a record yet — the graphs and the badges arrive with the analytics (#28), and
- * this is here so that when they do, the comparison is already written once and already signed.
  * Signed is the whole point: more weight on a bar and less help on a machine are the same "better"
  * to `>`, and anybody "fixing" this to read the other way breaks assisted machines loudly rather
- * than quietly. If #28 lands and does not want it, delete it.
+ * than quietly.
  */
 fun TrainingHistory.beatsRecord(set: PersonalRecord): Boolean {
     val standing = personalRecords(this).firstOrNull { it.reps == set.reps } ?: return true
     return set.load.value > standing.load.value
+}
+
+/**
+ * The record a set of [type] performing [performance] sets, announced as it is logged (#124), or
+ * null where it sets none.
+ *
+ * This history is everything before the set, **today's earlier sets included**: the first 105 of
+ * the evening is a record and the second is not.
+ *
+ * Only a set at the working weight can set one, as only such a set counts toward [personalRecords].
+ * And **a first session is not a wall of records**: with nothing trained before [today], every set
+ * would beat nothing, so none is announced — the records exist, and the history screen shows them.
+ */
+fun TrainingHistory.recordSetBy(type: SetType, performance: Performance, today: LocalDate): PersonalRecord? {
+    if (!type.isAtTheWorkingWeight) return null
+    if (sessions.none { it.date < today }) return null
+    val set = PersonalRecord(
+        reps = performance.repsOrNull ?: return null,
+        load = performance.loadOrNull ?: return null,
+    )
+    return set.takeIf(::beatsRecord)
 }
