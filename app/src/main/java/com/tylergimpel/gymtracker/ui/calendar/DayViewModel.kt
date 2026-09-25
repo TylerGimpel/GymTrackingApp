@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.ui.calendar
 
+import com.tylergimpel.gymtracker.domain.ImportSource
+import com.tylergimpel.gymtracker.domain.importSourceWithId
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,6 +25,8 @@ data class DayUiState(
     /** Every session on the day, in the order they were started. */
     val sessions: List<LoggedSession> = emptyList(),
     val lifterUnit: WeightUnit = WeightUnit.DEFAULT,
+    /** Where each import behind these sessions came from, by batch (#119). */
+    val importedFrom: Map<Long, ImportSource?> = emptyMap(),
 )
 
 /** One day from the calendar, read back (#118). */
@@ -40,7 +44,14 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<DayUiState> = date.filterNotNull()
         .flatMapLatest { day ->
             combine(sessions.observeOnDate(day), profile.observeDisplayUnit()) { onThatDay, unit ->
-                DayUiState(day, onThatDay, unit)
+                val batches = onThatDay.mapNotNull { it.session.importBatchId }.toSet()
+                val sources = if (batches.isEmpty()) {
+                    emptyMap()
+                } else {
+                    database.importBatchDao().all().filter { it.id in batches }
+                        .associate { it.id to importSourceWithId(it.source) }
+                }
+                DayUiState(day, onThatDay, unit, sources)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), DayUiState())

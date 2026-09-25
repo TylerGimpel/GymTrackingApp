@@ -2172,7 +2172,7 @@ private fun LoggedSetRows(
 }
 
 @Composable
-private fun DropRow(drop: Drop, displayUnit: WeightUnit) {
+internal fun DropRow(drop: Drop, displayUnit: WeightUnit) {
     Text(
         text = stringResource(
             R.string.set_drop_summary,

@@ -1,5 +1,8 @@
 package com.tylergimpel.gymtracker.ui.history
 
+import androidx.compose.foundation.layout.Row
+import com.tylergimpel.gymtracker.domain.Effort
+import com.tylergimpel.gymtracker.ui.session.DropRow
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -112,19 +115,37 @@ private fun HistoryEntry(entry: ExerciseHistoryEntry, displayUnit: WeightUnit, l
 }
 
 /**
- * Sets as they were logged, one line each, numbered: the plain reading of a past set wherever
- * one is read back (#121, #118). Anything but a working set says what kind it was.
+ * Sets as they were logged, numbered, wherever a past set is read back (#121, #118, #119).
+ *
+ * **In the shape they were logged in** (#119): a per-side set is one numbered set with a line for
+ * each side, because it is one set however many rows record it (ADR 0003), and a drop set is one
+ * set with its drops beneath it rather than several sets. Anything but a working set says what
+ * kind it was.
  */
 @Composable
 internal fun LoggedSetLines(sets: List<PerformedSet>, displayUnit: WeightUnit, lifterUnit: WeightUnit) {
     sets.forEachIndexed { index, set ->
-        // Both sides of a per-side set on one line: it is one set, however many rows record it.
-        val done = set.efforts.map { it.summary(displayUnit, lifterUnit) }.joinToString(" / ")
-        val line = stringResource(R.string.history_set, index + 1, done)
-        Text(
-            text = if (set.type == SetType.WORKING) line else "$line · ${stringResource(set.type.label)}",
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        val kind = if (set.type == SetType.WORKING) null else stringResource(set.type.label)
+        val single = set.efforts.singleOrNull()
+        if (single != null && single.side == null) {
+            val line = stringResource(R.string.history_set, index + 1, single.summary(displayUnit, lifterUnit))
+            Text(text = kind?.let { "$line · $it" } ?: line, style = MaterialTheme.typography.bodyLarge)
+        } else {
+            val number = stringResource(R.string.history_set_number, index + 1)
+            Text(text = kind?.let { "$number · $it" } ?: number, style = MaterialTheme.typography.bodyLarge)
+            set.efforts.forEach { effort ->
+                val side = effort.side?.let { stringResource(it.label) }
+                val done = effort.summary(displayUnit, lifterUnit)
+                Text(
+                    text = side?.let { stringResource(R.string.history_side, it, done) } ?: done,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(start = 16.dp),
+                )
+            }
+        }
+        set.efforts.flatMap(Effort::drops).forEach { drop ->
+            Row(modifier = Modifier.padding(start = 16.dp)) { DropRow(drop, displayUnit) }
+        }
     }
 }
 

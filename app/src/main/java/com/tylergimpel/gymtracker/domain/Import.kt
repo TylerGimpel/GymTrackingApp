@@ -16,6 +16,8 @@ data class ImportSource(
     val declaresSetTypes: Boolean,
     /** Whether sets arrive grouped into supersets. */
     val declaresSupersets: Boolean,
+    /** What the lifter knows the source as — a product name, the same in every language. */
+    val name: String = id,
 ) {
     /**
      * Whether volume counted from this source can be trusted.
@@ -31,7 +33,10 @@ data class ImportSource(
  * FitNotes' `.fitnotes` backup: no set types, which is why its volume is approximate, and
  * supersets, which the backup keeps and its CSV silently drops.
  */
-val FITNOTES = ImportSource(id = "fitnotes", declaresSetTypes = false, declaresSupersets = true)
+val FITNOTES = ImportSource(id = "fitnotes", declaresSetTypes = false, declaresSupersets = true, name = "FitNotes")
+
+/** The source an import recorded as [id], or null for one this version does not know. */
+fun importSourceWithId(id: String): ImportSource? = listOf(FITNOTES).firstOrNull { it.id == id }
 
 /**
  * What a source kept about an exercise, beyond the sets done on it (#101).

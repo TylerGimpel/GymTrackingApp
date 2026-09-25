@@ -32,6 +32,11 @@
     <string name="calendar_cardio">Cardio only</string>
     <string name="calendar_weigh_in">Weigh-in</string>
     <string name="day_session">Session</string>
+    <string name="day_imported_from">Imported from %1$s</string>
+    <string name="day_imported">Imported</string>
+    <string name="day_superset">Superset</string>
+    <string name="history_set_number">%1$d.</string>
+    <string name="history_side">%1$s: %2$s</string>
     <string name="bodyweight_chart">Bodyweight over time</string>
     <string name="history_open">History</string>
     <string name="history_headline">Estimated 1RM: %1$s</string>
