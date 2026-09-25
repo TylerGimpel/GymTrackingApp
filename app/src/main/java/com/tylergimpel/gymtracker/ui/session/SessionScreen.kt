@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -44,7 +45,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.tylergimpel.gymtracker.ui.theme.AppButton
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,13 +55,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedButton
+import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -426,29 +427,27 @@ fun SessionScreen(
         ),
         snackbarHost = { SnackbarHost(snackbars) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(stringResource(R.string.session_title))
-                        state.session?.let {
-                            // Tappable, because a session logged the day after it happened is
-                            // ordinary and the date is the only thing about it that is wrong.
-                            Text(
-                                text = it.date.toString(),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .clickable(
-                                        // A label, because the date alone says nothing about being
-                                        // tappable to anyone who cannot see where it sits.
-                                        onClickLabel = stringResource(R.string.session_refile),
-                                        onClick = { cycle.onStartRefiling(it) },
-                                    )
-                                    // Padding rather than a button: it keeps the top bar quiet
-                                    // while giving the target something to be hit with.
-                                    .padding(vertical = 4.dp),
-                            )
-                        }
+            AppTopBar(
+                title = stringResource(R.string.session_title),
+                subtitle = state.session?.let {
+                    {
+                        // Tappable, because a session logged the day after it happened is
+                        // ordinary and the date is the only thing about it that is wrong.
+                        Text(
+                            text = it.date.toString(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .clickable(
+                                    // A label, because the date alone says nothing about being
+                                    // tappable to anyone who cannot see where it sits.
+                                    onClickLabel = stringResource(R.string.session_refile),
+                                    onClick = { cycle.onStartRefiling(it) },
+                                )
+                                // Padding rather than a button: it keeps the top bar quiet
+                                // while giving the target something to be hit with. Vertical
+                                // only as far as the 52 tall bar has room for.
+                                .padding(vertical = 2.dp),
+                        )
                     }
                 },
                 actions = {
@@ -976,7 +975,7 @@ private fun EmptySession(
             Text(
                 text = stringResource(R.string.session_last, logged.session.date.toString()),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = LocalGymColors.current.accentText,
                 modifier = Modifier
                     .clickable(
                         onClickLabel = stringResource(R.string.session_refile),
@@ -1155,13 +1154,12 @@ private fun SetEntryThumbZone(
             SetValueFields(rightDraft, onRightDraftChange)
         }
 
-        Button(
+        AppButton(
+            text = stringResource(R.string.session_log_set),
             onClick = onLogSet,
             enabled = draft.isLoggable && (!perSide || rightDraft.isLoggable),
             modifier = Modifier.fillMaxWidth().testTag(LOG_SET),
-        ) {
-            Text(stringResource(R.string.session_log_set))
-        }
+        )
     }
 }
 
@@ -1476,19 +1474,25 @@ private fun WaysToStart(onBuild: () -> Unit, onLetTheAppBuild: () -> Unit, onImp
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onBuild, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.start_build))
-            }
-            OutlinedButton(onClick = onLetTheAppBuild, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.start_generate))
-            }
+            AppOutlinedButton(
+                text = stringResource(R.string.start_build),
+                onClick = onBuild,
+                modifier = Modifier.weight(1f),
+            )
+            AppOutlinedButton(
+                text = stringResource(R.string.start_generate),
+                onClick = onLetTheAppBuild,
+                modifier = Modifier.weight(1f),
+            )
         }
         // Beside them rather than inside either: somebody arriving with years of FitNotes history
         // takes this and gets a first session that knows them, and somebody without it never
         // meets a file picker or a name to map (#94).
-        OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.start_import))
-        }
+        AppOutlinedButton(
+            text = stringResource(R.string.start_import),
+            onClick = onImport,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -1674,7 +1678,7 @@ private fun WheelFooting(
             Text(
                 text = stringResource(R.string.wheel_resting, it.length.asTimeText()),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = LocalGymColors.current.accentText,
             )
             Row {
                 // The timer bends to the session rather than the other way round.
@@ -1915,12 +1919,14 @@ private fun WeightSteppers(draft: SetDraft, onChange: (SetDraft) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedButton(onClick = { onChange(draft.stepWeight(-1)) }) {
-            Text(stringResource(R.string.set_weight_down, draft.displayUnit.step.asAmountText()))
-        }
-        OutlinedButton(onClick = { onChange(draft.stepWeight(1)) }) {
-            Text(stringResource(R.string.set_weight_up, draft.displayUnit.step.asAmountText()))
-        }
+        AppOutlinedButton(
+            text = stringResource(R.string.set_weight_down, draft.displayUnit.step.asAmountText()),
+            onClick = { onChange(draft.stepWeight(-1)) },
+        )
+        AppOutlinedButton(
+            text = stringResource(R.string.set_weight_up, draft.displayUnit.step.asAmountText()),
+            onClick = { onChange(draft.stepWeight(1)) },
+        )
     }
 }
 
@@ -2032,7 +2038,7 @@ private fun SessionPositionRows(
                 Text(
                     text = stringResource(R.string.session_superset, position.exercises.size),
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = LocalGymColors.current.accentText,
                 )
                 TextButton(onClick = { onUngroup(position.superset.id) }) {
                     Text(stringResource(R.string.session_ungroup))

@@ -9,6 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
+import android.graphics.Color
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,13 +46,19 @@ class MainActivity : ComponentActivity() {
             // Following the phone until the lifter says otherwise, which is also what shows for
             // the moment before the stored choice has been read.
             val theme by themes.collectAsStateWithLifecycle(initialValue = Theme.SYSTEM)
-            GymTrackerTheme(
-                darkTheme = when (theme) {
-                    Theme.SYSTEM -> isSystemInDarkTheme()
-                    Theme.LIGHT -> false
-                    Theme.DARK -> true
-                },
-            ) {
+            val dark = when (theme) {
+                Theme.SYSTEM -> isSystemInDarkTheme()
+                Theme.LIGHT -> false
+                Theme.DARK -> true
+            }
+            // The status bar's icons follow the app's theme rather than the phone's, or a lifter who
+            // picked light on a dark phone gets white icons on the page right under them.
+            DisposableEffect(dark) {
+                val bars = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+                onDispose {}
+            }
+            GymTrackerTheme(darkTheme = dark) {
                 GymTracker()
             }
         }

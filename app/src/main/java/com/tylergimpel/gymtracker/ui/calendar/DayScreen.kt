@@ -21,8 +21,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -96,8 +96,8 @@ fun DayScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(state.date?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)).orEmpty()) },
+            AppTopBar(
+                title = state.date?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)).orEmpty(),
                 actions = { TextButton(onClick = onBack) { Text(stringResource(R.string.settings_done)) } },
             )
         },
