@@ -1,0 +1,387 @@
+<title>Gym Tracker Looks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=Archivo:wdth,wght@112,700;112,800&family=Figtree:wght@400;500;600&family=Rubik:wght@400;500;700&display=swap">
+<!--
+  THROWAWAY PROTOTYPE - not production code. Wayfinder ticket #133
+  "Prototype: the new look and the app's structure".
+
+  Question: what does the app look like, and how is it structured?
+  Three directions, switchable from the floating bar (or the arrow keys):
+    A  Plate   - one hero card and a huge Start button
+    B  Ledger  - big type, today's exercises listed, Start pinned above the nav
+    C  Tiles   - a grid of tiles with Start as the biggest tile
+  Each has Today / Calendar / Routine / More tabs and a full-screen workout with
+  no top bar. The Today screen and the nav differ in structure per direction; the
+  other tabs share markup and take each direction's type, colour and shapes, so the
+  style can be judged there. The workout here is only a style sample: its real
+  design is the next ticket.
+  Sample data is an example Upper / Lower routine, not the lifter's own.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); -webkit-user-select: none; user-select: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- tokens: three directions x two modes ---- */
+  body.vA { --bg:#14130F; --surface:#1E1C17; --s2:#2A2720; --line:#3E392E; --text:#F5F2EA; --dim:#ABA590; --accent:#F5C518; --on:#1A1600; --good:#6FCF7F;
+            --disp:"Barlow Condensed","Arial Narrow",sans-serif; --body:"Barlow",system-ui,sans-serif; --r:6px; --rbig:10px; }
+  body.vA.light { color-scheme: light; --bg:#F6F4EE; --surface:#FFFFFF; --s2:#ECE8DD; --line:#D6CFBC; --text:#1A1813; --dim:#696350; --accent:#EDB800; --on:#1A1600; --good:#2E8B3E; }
+  /* Plate colour options (p1 = the yellow above) */
+  body.vA.p2 { --bg:#151314; --surface:#201D1F; --s2:#2C2729; --line:#403A3D; --text:#F6F2F3; --dim:#ADA3A7; --accent:#E5484D; --on:#FFFFFF; }
+  body.vA.p2.light { --bg:#F7F4F4; --surface:#FFFFFF; --s2:#EDE6E7; --line:#D9CED0; --text:#1B1516; --dim:#6D6063; --accent:#D4343A; --on:#FFFFFF; }
+  body.vA.p3 { --bg:#0F1219; --surface:#181D28; --s2:#222938; --line:#323B4E; --text:#EEF1F8; --dim:#9CA5BA; --accent:#4C7DFF; --on:#FFFFFF; }
+  body.vA.p3.light { --bg:#F3F5F9; --surface:#FFFFFF; --s2:#E4E9F2; --line:#CFD6E4; --text:#121726; --dim:#5A647C; --accent:#2F62E8; --on:#FFFFFF; }
+  body.vA.p4 { --bg:#0F1412; --surface:#18201C; --s2:#212C27; --line:#31403A; --text:#EDF5F1; --dim:#98AAA2; --accent:#3DDC97; --on:#04261A; }
+  body.vA.p4.light { --bg:#F2F6F4; --surface:#FFFFFF; --s2:#E1ECE6; --line:#C9D9D0; --text:#0F1A15; --dim:#56705F; --accent:#16A06A; --on:#FFFFFF; }
+  body.vA.p5 { --bg:#121119; --surface:#1C1A26; --s2:#272434; --line:#3A3649; --text:#F2F0F8; --dim:#A4A0B8; --accent:#9B7BFF; --on:#14082E; }
+  body.vA.p5.light { --bg:#F5F4FA; --surface:#FFFFFF; --s2:#E9E6F3; --line:#D5D0E6; --text:#17142A; --dim:#635E7D; --accent:#6D4AE8; --on:#FFFFFF; }
+  body.vA.p6 { --bg:#2A1628; --surface:#3A1F37; --s2:#52294F; --line:#6A3A66; --text:#F4F4F4; --dim:#CDAFC6; --accent:#E5696E; --on:#2A1628; --good:#F6E594; }
+  body.vA.p6.light { --bg:#F4F4F4; --surface:#FFFFFF; --s2:#EFE3EC; --line:#DCC8D8; --text:#2A1628; --dim:#8A4F7D; --accent:#E5696E; --on:#2A1628; --good:#9E5F8F; }
+  body.vB { --bg:#0F1420; --surface:#182033; --s2:#222C44; --line:#303C5A; --text:#EEF2FA; --dim:#9AA6C0; --accent:#FF7A45; --on:#1B0A02; --good:#5DD39E;
+            --disp:"Archivo",system-ui,sans-serif; --body:"Figtree",system-ui,sans-serif; --r:14px; --rbig:22px; }
+  body.vB.light { color-scheme: light; --bg:#F3F5FA; --surface:#FFFFFF; --s2:#E6EAF3; --line:#D0D7E6; --text:#121828; --dim:#5B6780; --accent:#E2561C; --on:#FFFFFF; --good:#1E9460; }
+  body.vC { --bg:#101413; --surface:#1A201F; --s2:#243030; --line:#344443; --text:#ECF4F2; --dim:#96A9A5; --accent:#2EC4B6; --on:#03201D; --good:#8FD694;
+            --disp:"Rubik",system-ui,sans-serif; --body:"Rubik",system-ui,sans-serif; --r:18px; --rbig:26px; }
+  body.vC.light { color-scheme: light; --bg:#F2F6F5; --surface:#FFFFFF; --s2:#E0EBE9; --line:#C9D8D5; --text:#0F1A18; --dim:#56706A; --accent:#11897E; --on:#FFFFFF; --good:#2E8B3E; }
+
+  body { font: 17px/1.4 var(--body); }
+  #app { max-width: 440px; margin-inline: auto; min-height: 100%; display: flex; flex-direction: column; position: relative; }
+  .scroll { flex: 1; padding: 0 16px 24px; overflow-y: auto; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .dim { color: var(--dim); }
+
+  /* top bar: short, sits right under the status bar */
+  .topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+            height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+  .topbar h1 { margin: 0; font: 700 24px/1 var(--disp); letter-spacing: .01em; }
+  .vA .topbar h1 { font-size: 28px; text-transform: uppercase; letter-spacing: .03em; }
+  .topbar .act { margin-left: auto; }
+
+  /* shared pieces */
+  .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+         min-height: 60px; border-radius: var(--r); font: 700 20px/1 var(--disp); letter-spacing: .02em; }
+  .btn.primary { background: var(--accent); color: var(--on); }
+  .btn.big { min-height: 72px; font-size: 24px; }
+  .vA .btn { text-transform: uppercase; font-size: 22px; }
+  .vA .btn.big { font-size: 28px; }
+  .btn.ghost { background: var(--s2); color: var(--text); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+          background: var(--s2); font-size: 15px; font-weight: 500; }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--mc); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .label { font: 600 13px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); }
+  .row { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 10px 16px; }
+  .rows > .row + .row { border-top: 1px solid var(--line); }
+  .row .t { font-weight: 600; font-size: 18px; }
+  .row .s { font-size: 15px; color: var(--dim); }
+  .row .end { margin-left: auto; color: var(--dim); font-size: 15px; text-align: right; }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+
+  /* bottom nav */
+  nav.bn { position: sticky; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(4, 1fr);
+           background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  nav.bn button { min-height: 68px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+                  font-size: 13px; font-weight: 600; color: var(--dim); }
+  nav.bn svg { width: 26px; height: 26px; }
+  nav.bn button[aria-current="page"] { color: var(--text); }
+  .vA nav.bn button[aria-current="page"] { box-shadow: inset 0 3px 0 var(--accent); }
+  .vA nav.bn button[aria-current="page"] svg { color: var(--accent); }
+  .vB nav.bn { margin: 0 12px 12px; border: 1px solid var(--line); border-radius: 24px; }
+  .vB nav.bn button span { display: none; }
+  .vB nav.bn button[aria-current="page"] svg { background: var(--accent); color: var(--on); border-radius: 999px; padding: 6px 18px; width: 64px; height: 38px; }
+  .vC nav.bn { background: var(--bg); }
+  .vC nav.bn button { font-size: 14px; }
+  .vC nav.bn button[aria-current="page"] { color: var(--accent); }
+
+  /* ---- A: Plate ---- */
+  .a-hero { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .a-hero .name { font: 700 56px/.95 var(--disp); text-transform: uppercase; letter-spacing: .01em; }
+  .a-hero .meta { display: flex; gap: 18px; font-size: 16px; color: var(--dim); }
+  .a-hero .meta b { color: var(--text); font-size: 22px; font-family: var(--disp); display: block; }
+  .a-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
+  .a-week div { padding: 10px 0; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .a-week div b { display: block; font: 700 20px/1.1 var(--disp); color: var(--text); }
+  .a-week div.done { background: var(--s2); }
+  .a-week div.done::after { content: ""; display: block; width: 8px; height: 8px; margin: 4px auto 0; border-radius: 50%; background: var(--accent); }
+  .a-week div.today { border-color: var(--accent); border-width: 2px; }
+
+  /* ---- B: Ledger ---- */
+  .b-head { padding: 12px 0 4px; }
+  .b-head .kick { font-size: 17px; color: var(--dim); }
+  .b-head .name { font: 800 64px/.95 var(--disp); font-stretch: 112%; letter-spacing: -.02em; margin: 6px 0 12px; }
+  .b-list .row { padding-inline: 0; }
+  .b-list .n { width: 30px; font: 800 18px/1 var(--disp); color: var(--dim); }
+  .b-start { position: sticky; bottom: 0; padding: 12px 16px; background: linear-gradient(transparent, var(--bg) 30%); }
+
+  /* ---- C: Tiles ---- */
+  .c-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .c-tile { background: var(--surface); border-radius: var(--rbig); padding: 16px; display: flex; flex-direction: column; gap: 8px; min-height: 132px; text-align: left; }
+  .c-tile.start { grid-column: span 2; background: var(--accent); color: var(--on); min-height: 190px; justify-content: space-between; }
+  .c-tile.start .name { font: 700 40px/1 var(--disp); }
+  .c-tile.start .go { font: 700 22px/1 var(--disp); display: flex; align-items: center; gap: 10px; }
+  .c-tile.start .go span { width: 52px; height: 52px; border-radius: 50%; background: var(--on); color: var(--accent); display: grid; place-items: center; font-size: 26px; }
+  .c-tile .big { font: 700 34px/1 var(--disp); }
+  .c-tile .label { color: var(--dim); }
+  .c-tile.start .label { color: var(--on); opacity: .75; }
+  .c-bars { display: flex; align-items: flex-end; gap: 6px; height: 44px; margin-top: auto; }
+  .c-bars i { flex: 1; background: var(--accent); border-radius: 4px; opacity: .85; }
+
+  /* calendar */
+  .cal-head { display: flex; align-items: center; gap: 8px; padding: 8px 0 12px; }
+  .cal-head h2 { margin: 0; font: 700 26px/1 var(--disp); flex: 1; }
+  .vA .cal-head h2 { text-transform: uppercase; font-size: 30px; }
+  .iconbtn { width: 48px; height: 48px; border-radius: var(--r); background: var(--s2); display: grid; place-items: center; font-size: 22px; }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; touch-action: pan-y; }
+  .cal .dow { text-align: center; font-size: 13px; color: var(--dim); padding-bottom: 4px; font-weight: 600; }
+  .cal .d { min-height: 62px; border-radius: var(--r); padding: 6px 4px; background: var(--surface); display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 15px; }
+  .cal .d.out { background: transparent; }
+  .cal .d.sel { outline: 2px solid var(--accent); }
+  .cal .d .tag { font-size: 11px; font-weight: 700; padding: 2px 4px; border-radius: 4px; background: var(--mc); color: #111; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-note { font-size: 14px; color: var(--dim); text-align: center; padding: 10px 0 4px; }
+
+  /* workout (full screen, no top bar, no nav) */
+  .wo { flex: 1; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top, 0px) + 6px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px); gap: 12px; }
+  .wo-strip { display: flex; align-items: center; gap: 10px; height: 48px; }
+  .wo-strip .handle { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 14px; border-radius: var(--r); background: var(--s2); font-weight: 600; }
+  .wo-strip .clock { flex: 1; text-align: center; font-size: 15px; color: var(--dim); }
+  .wo-strip .fin { height: 48px; padding: 0 16px; border-radius: var(--r); background: var(--s2); font-weight: 600; }
+  .wo-name { font: 700 34px/1.05 var(--disp); margin-top: 8px; }
+  .vA .wo-name { text-transform: uppercase; font-size: 40px; }
+  .wheel { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; text-align: center; min-height: 250px; }
+  .wheel .ghost { font-size: 18px; color: var(--dim); opacity: .6; transform: scale(.92); }
+  .wheel .ghost.done { color: var(--good); opacity: .85; }
+  .wheel .focus { display: flex; flex-direction: column; gap: 4px; padding: 14px 0; }
+  .wheel .focus .range { font-size: 16px; color: var(--dim); }
+  .wheel .focus .val { font: 700 64px/1 var(--disp); letter-spacing: -.01em; }
+  .wheel .focus .val small { font-size: 26px; color: var(--dim); }
+  .wheel .focus .was { font-size: 16px; color: var(--dim); }
+  .steppers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stepper { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+  .stepper button { width: 60px; height: 64px; font-size: 30px; font-weight: 500; }
+  .stepper div { flex: 1; text-align: center; font: 700 24px/1 var(--disp); }
+  .stepper div small { display: block; font: 500 13px/1.3 var(--body); color: var(--dim); }
+  .rest { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 440px; z-index: 20;
+          background: var(--accent); color: var(--on); display: flex; align-items: center; gap: 12px;
+          padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .rest .t { font: 700 40px/1 var(--disp); min-width: 100px; }
+  .rest button { background: rgba(0,0,0,.14); height: 52px; padding: 0 16px; border-radius: var(--r); font-weight: 700; font-size: 17px; }
+  .rest .sp { margin-left: auto; display: flex; gap: 8px; }
+
+  /* drawer */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 30; }
+  .drawer { position: fixed; top: 0; bottom: 0; left: max(0px, calc(50% - 220px)); width: min(84%, 360px); z-index: 31; background: var(--surface);
+            padding: calc(env(safe-area-inset-top, 0px) + 16px) 0 16px; overflow-y: auto; touch-action: pan-y; transition: transform .2s ease; }
+  .drawer h3 { margin: 0 16px 8px; font: 700 26px/1.1 var(--disp); }
+  .bar { height: 6px; border-radius: 3px; background: var(--s2); margin-top: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+
+  /* prototype switcher (not part of the design) */
+  .switcher { position: fixed; z-index: 99; top: calc(env(safe-area-inset-top, 0px) + 60px); right: 8px;
+              display: flex; flex-direction: column; align-items: stretch; gap: 2px; background: #0a0a0a; color: #fff;
+              border: 1px dashed #ff3bd4; border-radius: 12px; padding: 4px; font: 600 12px/1.2 system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+  .switcher button { color: #fff; padding: 7px 8px; border-radius: 8px; text-align: left; }
+  .switcher button.on { background: #ff3bd4; color: #000; }
+  .switcher .hr { height: 1px; background: #333; margin: 2px 0; }
+  .switcher.min > :not(.tog) { display: none; }
+  @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+</style>
+
+<div id="app"></div>
+<div class="switcher" id="sw"></div>
+
+<script>
+const MC = { Chest:"#F28B82", Back:"#8AB4F8", Shoulders:"#FDD663", Triceps:"#C58AF9", Biceps:"#78D9EC", Quads:"#81C995", Hamstrings:"#FCAD70", Glutes:"#FF8BCB", Calves:"#A8C7A0", Core:"#D7CCC8" };
+const ROUTINE = [
+  { name:"Upper A", muscles:["Chest","Back","Shoulders","Triceps"], ex:[
+    ["Bench Press","3 × 6 - 8"],["Lat Pulldown","3 × 8 - 10"],["Overhead Press","3 × 8 - 10"],
+    ["Seated Cable Row","3 × 10 - 12"],["Lateral Raise","3 × 12 - 15"],["Triceps Pushdown","2 × 12 - 15"]] },
+  { name:"Lower A", muscles:["Quads","Hamstrings","Glutes","Calves"], ex:[
+    ["Back Squat","3 × 6 - 8"],["Romanian Deadlift","3 × 8 - 10"],["Leg Press","3 × 10 - 12"],["Leg Curl","3 × 10 - 12"],["Calf Raise","3 × 12 - 15"]] },
+  { name:"Upper B", muscles:["Back","Chest","Shoulders","Biceps"], ex:[
+    ["Pull-up","3 × 6 - 10"],["Incline Dumbbell Press","3 × 8 - 10"],["Dumbbell Row","3 × 8 - 12"],["Seated Dumbbell Press","3 × 8 - 12"],["Face Pull","3 × 12 - 15"],["Dumbbell Curl","3 × 10 - 12"]] },
+  { name:"Lower B", muscles:["Glutes","Hamstrings","Quads","Core"], ex:[
+    ["Deadlift","3 × 5"],["Bulgarian Split Squat","3 × 8 - 10"],["Hip Thrust","3 × 8 - 12"],["Leg Extension","3 × 12 - 15"],["Plank","3 × 45s"]] },
+];
+// Example history: day-of-month -> routine day index, per [year, month]
+const LOG = { "2026-8":{3:0,5:1,8:2,10:3,14:0,16:1,19:2,21:3,25:0,27:1,29:2}, "2026-9":{1:3,3:0,6:1,8:2,10:3,14:0,16:1,18:2,21:3,23:0} };
+const TODAY = { y:2026, m:9, d:25 };
+const ICON = {
+  today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  routine:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8"/></svg>',
+  more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+};
+const NAMES = { A:"Plate", B:"Ledger", C:"Tiles" };
+const PALS = [["Caution","#F5C518"],["Crimson","#E5484D"],["Cobalt","#4C7DFF"],["Mint","#3DDC97"],["Violet","#9B7BFF"],["Plum","#E5696E"]];
+const S = { v:"A", p:1, mode:null, tab:"today", workout:false, ex:0, set:1, drawer:false, rest:0, ym:[2026,9], sel:23, kg:82.5, reps:6, minSw:false };
+try { const p = JSON.parse(localStorage.getItem("ui-proto")||"{}"); if (p.v) S.v = p.v; if (p.mode) S.mode = p.mode; if (p.p) S.p = p.p; } catch (e) {}
+const next = ROUTINE[1];
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const chips = ms => `<div class="chips">${ms.map(m=>`<span class="chip" style="--mc:${MC[m]}"><i></i>${m}</span>`).join("")}</div>`;
+const topbar = (t, act="") => `<header class="topbar"><h1>${t}</h1>${act?`<div class="act">${act}</div>`:""}</header>`;
+
+function nav() {
+  const tabs = [["today","Today"],["calendar","Calendar"],["routine","Routine"],["more","More"]];
+  const ic = { today:ICON.today, calendar:ICON.cal, routine:ICON.routine, more:ICON.more };
+  return `<nav class="bn">${tabs.map(([k,l])=>`<button data-tab="${k}" ${S.tab===k?'aria-current="page"':''}>${ic[k]}<span>${l}</span></button>`).join("")}</nav>`;
+}
+
+/* ---- Today, one per direction ---- */
+function todayA() {
+  const wk = ["M","T","W","T","F","S","S"], dates=[21,22,23,24,25,26,27], done={21:1,23:1};
+  return topbar("Today") + `<div class="scroll stack">
+    <section class="card a-hero">
+      <div class="label">Next up · day 2 of 4</div>
+      <div class="name">${next.name}</div>
+      ${chips(next.muscles)}
+      <div class="meta"><span><b>${next.ex.length}</b>exercises</span><span><b>~55 min</b>estimated</span></div>
+      <button class="btn primary big" data-start>Start workout</button>
+    </section>
+    <div class="label">This week · 2 done</div>
+    <div class="a-week">${wk.map((w,i)=>`<div class="${done[dates[i]]?'done':''} ${dates[i]===25?'today':''}">${w}<b>${dates[i]}</b></div>`).join("")}</div>
+    <section class="card rows">
+      <div class="row"><div><div class="t">Upper A</div><div class="s">Wed · 6 exercises · 52 min</div></div><div class="end">Last</div></div>
+    </section></div>`;
+}
+function todayB() {
+  return topbar("Today", `<span class="dim">Fri 25 Sep</span>`) + `<div class="scroll">
+    <div class="b-head"><div class="kick">Day 2 of 4 · ~55 min</div><div class="name">${next.name}</div>${chips(next.muscles)}</div>
+    <div class="rows b-list" style="margin-top:12px">${next.ex.map((e,i)=>`<div class="row"><span class="n">${i+1}</span><span class="t">${e[0]}</span><span class="end tnum">${e[1]}</span></div>`).join("")}</div>
+  </div><div class="b-start"><button class="btn primary big" data-start>Start ${next.name}</button></div>`;
+}
+function todayC() {
+  return topbar("Today") + `<div class="scroll"><div class="c-grid">
+    <button class="c-tile start" data-start><div><div class="label">Next · day 2 of 4</div><div class="name">${next.name}</div></div>
+      <div class="go"><span>▶</span>Start workout</div></button>
+    <div class="c-tile"><div class="label">This week</div><div class="big tnum">2<span class="dim" style="font-size:20px"> / 4</span></div><div class="dim" style="font-size:15px">workouts</div></div>
+    <div class="c-tile"><div class="label">Last workout</div><div class="big" style="font-size:26px">Upper A</div><div class="dim" style="font-size:15px">Wednesday</div></div>
+    <div class="c-tile" style="grid-column:span 2"><div class="label">Sets this week</div>
+      <div class="c-bars">${[8,12,6,10,4,9,7].map(h=>`<i style="height:${h*8}%"></i>`).join("")}</div>
+      <div class="chips" style="margin-top:4px">${chips(["Chest","Back","Shoulders"]).replace(/^<div class="chips">|<\/div>$/g,"")}</div></div>
+  </div></div>`;
+}
+
+/* ---- shared tabs ---- */
+function calendar() {
+  const [y,m] = S.ym, first = new Date(y,m-1,1), days = new Date(y,m,0).getDate();
+  const lead = (first.getDay()+6)%7, log = LOG[`${y}-${m}`]||{};
+  const title = first.toLocaleString("en",{month:"long", year:"numeric"});
+  let cells = ["M","T","W","T","F","S","S"].map(d=>`<div class="dow">${d}</div>`).join("");
+  for (let i=0;i<lead;i++) cells += `<div class="d out"></div>`;
+  for (let d=1; d<=days; d++) {
+    const r = log[d]; const day = r!=null ? ROUTINE[r] : null;
+    const isToday = y===TODAY.y && m===TODAY.m && d===TODAY.d;
+    cells += `<button class="d ${S.sel===d?'sel':''}" data-day="${d}"><span class="tnum" style="${isToday?'color:var(--accent);font-weight:700':''}">${d}</span>${day?`<span class="tag" style="--mc:${MC[day.muscles[0]]}">${day.name.split(" ")[0]}</span>`:""}</button>`;
+  }
+  const sd = log[S.sel]!=null ? ROUTINE[log[S.sel]] : null;
+  const detail = sd ? `<section class="card rows" style="margin-top:16px"><div class="row" style="flex-wrap:wrap"><div style="width:100%"><div class="t">${sd.name}</div><div class="s">${first.toLocaleString("en",{month:"short"})} ${S.sel} · ${sd.ex.length} exercises</div></div>${chips(sd.muscles)}</div></section>`
+                    : `<p class="cal-note">No workout that day.</p>`;
+  return topbar("Calendar") + `<div class="scroll">
+    <div class="cal-head"><button class="iconbtn" data-mon="-1" aria-label="Previous month">‹</button><h2>${title}</h2><button class="iconbtn" data-mon="1" aria-label="Next month">›</button></div>
+    <div class="cal" id="cal">${cells}</div>
+    <p class="cal-note">Swipe the month sideways to change it.</p>${detail}</div>`;
+}
+function routine() {
+  return topbar("Routine", `<button class="chip">Edit</button>`) + `<div class="scroll stack">
+    <div><div class="label">Upper / Lower · 4 days</div></div>
+    ${ROUTINE.map((d,i)=>`<section class="card"><div class="row"><div style="flex:1"><div class="t">${d.name}${i===1?' <span class="chip" style="font-size:12px;padding:3px 8px;margin-left:6px">Next</span>':''}</div><div class="s">${d.ex.map(e=>e[0]).slice(0,3).join(", ")} +${d.ex.length-3}</div></div><span class="end" style="font-size:24px">›</span></div></section>`).join("")}
+  </div>`;
+}
+function more() {
+  const items = [["Exercise history","Progress for each lift"],["Weigh-ins","80.4 kg · Tue"],["Plates","What your gym has"],["Profile",""],["Settings","Units, theme, import"]];
+  return topbar("More") + `<div class="scroll"><section class="card rows">${items.map(([t,s])=>`<div class="row"><div><div class="t">${t}</div>${s?`<div class="s">${s}</div>`:""}</div><span class="end" style="font-size:24px">›</span></div>`).join("")}</section></div>`;
+}
+
+/* ---- workout sample ---- */
+function workout() {
+  const d = next, e = d.ex[S.ex];
+  const sets = 3, prev = S.set>1 ? `<div class="ghost done tnum">Set ${S.set-1} · 80 × 8 ✓</div>` : `<div class="ghost">&nbsp;</div>`;
+  const after = S.set<sets ? `<div class="ghost tnum">Set ${S.set+1} · ${S.kg} × ${S.reps}</div>` : `<div class="ghost">&nbsp;</div>`;
+  const drawer = S.drawer ? `<div class="scrim" data-close></div><aside class="drawer" id="drawer"><h3>${d.name}</h3><div class="rows">${d.ex.map((x,i)=>`<button class="row" data-jump="${i}" style="width:100%;text-align:left;${i===S.ex?'background:var(--s2)':''}"><div style="flex:1"><div class="t">${x[0]}</div><div class="bar"><i style="width:${i<S.ex?100:i===S.ex?(S.set-1)/3*100:0}%"></i></div></div><span class="end tnum">${i<S.ex?3:i===S.ex?S.set-1:0}/3</span></button>`).join("")}</div><p class="cal-note">Swipe left or tap outside to close.</p></aside>` : "";
+  const rest = S.rest ? `<div class="rest"><div><div style="font-size:13px;font-weight:600;opacity:.8">REST</div><div class="t tnum" id="rt">${fmt(S.rest)}</div></div><div class="sp"><button data-more>+1:00</button><button data-skip>Skip</button></div></div>` : "";
+  return `<div class="wo">
+    <div class="wo-strip"><button class="handle" data-drawer>${ICON.more.replace('<svg','<svg width="22" height="22"')} ${S.ex+1}/${d.ex.length}</button><div class="clock tnum">12:04</div><button class="fin" data-finish>Finish</button></div>
+    <div><div class="wo-name">${e[0]}</div><div class="dim">Set ${S.set} of ${sets}</div></div>
+    <div class="wheel">${prev}<div class="focus"><div class="range">6 - 8 reps</div><div class="val tnum">${S.kg}<small> kg</small> × ${S.reps}</div><div class="was tnum">was 80 × 8</div></div>${after}</div>
+    <div class="steppers">
+      <div class="stepper"><button data-kg="-2.5" aria-label="Less weight">−</button><div class="tnum">${S.kg}<small>kg</small></div><button data-kg="2.5" aria-label="More weight">+</button></div>
+      <div class="stepper"><button data-rp="-1" aria-label="Fewer reps">−</button><div class="tnum">${S.reps}<small>reps</small></div><button data-rp="1" aria-label="More reps">+</button></div>
+    </div>
+    <button class="btn primary big" data-log>Log set</button>
+  </div>${drawer}${rest}`;
+}
+const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+
+/* ---- render ---- */
+function mode() { return S.mode || (matchMedia("(prefers-color-scheme: light)").matches || document.documentElement.dataset.theme==="light" ? "light" : "dark"); }
+function render() {
+  document.body.className = `v${S.v} p${S.p} ${mode()==="light"?"light":""}`;
+  const app = document.getElementById("app");
+  if (S.workout) app.innerHTML = workout();
+  else {
+    const body = S.tab==="today" ? ({A:todayA,B:todayB,C:todayC})[S.v]() : S.tab==="calendar" ? calendar() : S.tab==="routine" ? routine() : more();
+    app.innerHTML = body + nav();
+  }
+  const sw = document.getElementById("sw");
+  sw.className = "switcher" + (S.minSw ? " min" : "");
+  sw.innerHTML = `<button class="tog" data-sw-min>${S.minSw?"◀ proto":"▶ hide"}</button>` +
+    ["A","B","C"].map(k=>`<button data-v="${k}" class="${S.v===k?'on':''}">${k} ${NAMES[k]}</button>`).join("") +
+    (S.v==="A" ? `<div class="hr"></div>` + PALS.map(([n,c],i)=>`<button data-p="${i+1}" class="${S.p===i+1?'on':''}"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px"></span>${i+1} ${n}</button>`).join("") : "") +
+    `<div class="hr"></div>` + ["dark","light"].map(k=>`<button data-mode="${k}" class="${mode()===k?'on':''}">${k[0].toUpperCase()+k.slice(1)}</button>`).join("");
+  try { localStorage.setItem("ui-proto", JSON.stringify({v:S.v, p:S.p, mode:S.mode})); } catch (e) {}
+  bindSwipes();
+}
+
+let timer = null;
+function startRest() {
+  S.rest = 120; clearInterval(timer);
+  timer = setInterval(()=>{ S.rest = Math.max(0, S.rest-1); const el=document.getElementById("rt"); if (!S.rest) { clearInterval(timer); render(); } else if (el) el.textContent = fmt(S.rest); }, 1000);
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button,[data-close]"); if (!t) return;
+  const d = t.dataset;
+  if (d.tab) { S.tab = d.tab; }
+  else if (d.v) { S.v = d.v; }
+  else if (d.mode) { S.mode = d.mode; }
+  else if (d.p) { S.p = +d.p; }
+  else if ("swMin" in d) { S.minSw = !S.minSw; }
+  else if ("start" in d) { Object.assign(S, {workout:true, ex:0, set:1, kg:82.5, reps:6, rest:0}); }
+  else if ("finish" in d) { S.workout = false; S.rest = 0; clearInterval(timer); }
+  else if ("drawer" in d) { S.drawer = true; }
+  else if ("close" in d) { S.drawer = false; }
+  else if (d.jump) { S.ex = +d.jump; S.set = 1; S.drawer = false; }
+  else if (d.kg) { S.kg = Math.max(0, S.kg + +d.kg); }
+  else if (d.rp) { S.reps = Math.max(1, S.reps + +d.rp); }
+  else if ("log" in d) { if (S.set < 3) S.set++; else { S.ex = (S.ex+1) % next.ex.length; S.set = 1; } startRest(); }
+  else if ("more" in d) { S.rest += 60; }
+  else if ("skip" in d) { S.rest = 0; clearInterval(timer); }
+  else if (d.mon) { shiftMonth(+d.mon); }
+  else if (d.day) { S.sel = +d.day; }
+  else return;
+  render();
+});
+function shiftMonth(n) { let [y,m] = S.ym; m += n; if (m<1){m=12;y--;} if (m>12){m=1;y++;} S.ym=[y,m]; S.sel = 0; }
+
+function bindSwipes() {
+  const swipe = (el, onLeft, onRight) => {
+    if (!el) return; let x0=null, y0=null;
+    el.addEventListener("touchstart", e=>{ x0=e.touches[0].clientX; y0=e.touches[0].clientY; }, {passive:true});
+    el.addEventListener("touchend", e=>{ if (x0==null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
+      if (Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.5) (dx<0?onLeft:onRight)?.(); });
+  };
+  swipe(document.getElementById("cal"), ()=>{shiftMonth(1);render();}, ()=>{shiftMonth(-1);render();});
+  swipe(document.getElementById("drawer"), ()=>{S.drawer=false;render();});
+  if (S.workout && !S.drawer) swipe(document.querySelector(".wheel"), null, ()=>{S.drawer=true;render();});
+}
+document.addEventListener("keydown", e => {
+  if (e.key!=="ArrowLeft" && e.key!=="ArrowRight") return;
+  const ks=["A","B","C"], i=ks.indexOf(S.v); S.v = ks[(i+(e.key==="ArrowRight"?1:2))%3]; render();
+});
+matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", render);
+render();
+</script>
