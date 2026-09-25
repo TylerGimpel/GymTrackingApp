@@ -243,10 +243,12 @@ interface SessionDao {
      */
     @Query(
         """
-        SELECT set_entry.*, session.id AS session_id, session.date AS session_date
+        SELECT set_entry.*, session.id AS session_id, session.date AS session_date,
+               COALESCE(import_batch.volume_reliable, 1) AS session_volume_reliable
         FROM set_entry
         JOIN session_exercise ON session_exercise.id = set_entry.session_exercise_id
         JOIN session ON session.id = session_exercise.session_id
+        LEFT JOIN import_batch ON import_batch.id = session.import_batch_id
         WHERE session_exercise.exercise_id = :exerciseId AND session.id <> :excludingSession
         ORDER BY session.date, session.id, set_entry.set_index, set_entry.id
         """,

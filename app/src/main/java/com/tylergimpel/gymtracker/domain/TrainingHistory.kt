@@ -72,7 +72,16 @@ data class TrainedSet(
  * engine reasons in — it contributes one point to the estimate however many sets it took, and both
  * "what did I do last time" and "how did that go" are questions about a session rather than a row.
  */
-data class TrainedSession(val date: LocalDate, val sets: List<TrainedSet>) {
+data class TrainedSession(
+    val date: LocalDate,
+    val sets: List<TrainedSet>,
+    /**
+     * Whether this session's set types can be trusted for counting volume: false for one imported
+     * from a source that never recorded them (#96), where a warm-up and a working set look alike.
+     * Strength reads top sets and does not care; volume counts sets and does (#125).
+     */
+    val volumeReliable: Boolean = true,
+) {
 
     /**
      * What this session says a one-rep maximum is: its best set, or null where none of them says

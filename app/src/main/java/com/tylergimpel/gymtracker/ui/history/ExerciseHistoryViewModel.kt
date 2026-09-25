@@ -1,5 +1,11 @@
 package com.tylergimpel.gymtracker.ui.history
 
+import com.tylergimpel.gymtracker.domain.PersonalRecord
+import com.tylergimpel.gymtracker.domain.StrengthPoint
+import com.tylergimpel.gymtracker.domain.VolumeSeries
+import com.tylergimpel.gymtracker.domain.personalRecords
+import com.tylergimpel.gymtracker.domain.strengthSeries
+import com.tylergimpel.gymtracker.domain.volumeSeries
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,6 +31,12 @@ data class ExerciseHistoryUiState(
     val entries: List<ExerciseHistoryEntry> = emptyList(),
     /** Whether the first session ever has been read, so there is nothing further back. */
     val reachedEnd: Boolean = false,
+    /** Each session's best and the **Anchor** after it, across the whole history (#122). */
+    val strength: List<StrengthPoint> = emptyList(),
+    /** The best set at each rep count, recomputed from the log (#123). */
+    val records: List<PersonalRecord> = emptyList(),
+    /** Counted sets per session, from where set types became known (#125). */
+    val volume: VolumeSeries = VolumeSeries(emptyList(), startsAfterHistory = false),
 )
 
 /**
@@ -48,9 +60,14 @@ class ExerciseHistoryViewModel(application: Application) : AndroidViewModel(appl
     fun open(exerciseId: String) {
         viewModelScope.launch {
             val unit = profile.displayUnit()
+            val exercise = database.exerciseDao().byId(exerciseId)?.toDomain(unit)
+            val history = sessions.trainingHistoryOf(exerciseId)
             screen.value = ExerciseHistoryUiState(
-                exercise = database.exerciseDao().byId(exerciseId)?.toDomain(unit),
+                exercise = exercise,
                 lifterUnit = unit,
+                strength = history.strengthSeries(resetOn = exercise?.estimateResetOn),
+                records = personalRecords(history),
+                volume = history.volumeSeries(),
             )
             loadMore()
         }

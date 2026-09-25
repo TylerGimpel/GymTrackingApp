@@ -78,6 +78,7 @@ fun ExerciseHistoryScreen(
         },
     ) { insets ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = insets) {
+            if (state.entries.isNotEmpty()) item(key = "summary") { ExerciseSummary(state) }
             if (state.reachedEnd && state.entries.isEmpty()) {
                 item {
                     Text(

@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.TrainingHistory
 import com.tylergimpel.gymtracker.domain.ExerciseHistoryEntry
 import com.tylergimpel.gymtracker.domain.HISTORY_PAGE
 import com.tylergimpel.gymtracker.domain.ExerciseLastTrained
@@ -74,6 +75,14 @@ class SessionRepository(
         beforeId = after?.sessionExerciseId ?: Long.MAX_VALUE,
         limit = size,
     ).map(ExerciseHistoryRow::toEntry)
+
+    /**
+     * Everything [exerciseId] has ever been trained in, as the engine reads it — what its charts
+     * and records are drawn from (#122, #123, #125). Read once when they are opened, per ADR 0010:
+     * low hundreds of rows for a heavily trained lift after years.
+     */
+    suspend fun trainingHistoryOf(exerciseId: String): TrainingHistory =
+        sessions.trainedSetsFor(exerciseId, SessionDao.NO_SESSION).toTrainingHistory()
 
     /** Every session on [date], with everything logged in it, in the order they were started (#118). */
     fun observeOnDate(date: LocalDate): Flow<List<LoggedSession>> =

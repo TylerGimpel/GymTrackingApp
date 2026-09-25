@@ -224,6 +224,10 @@ data class TrainedSetRow(
 
     @ColumnInfo(name = "session_date")
     val date: LocalDate,
+
+    /** False for a session imported from a source that never recorded set types (#96, #125). */
+    @ColumnInfo(name = "session_volume_reliable")
+    val volumeReliable: Boolean,
 )
 
 /**
@@ -241,6 +245,7 @@ fun List<TrainedSetRow>.toTrainingHistory(): TrainingHistory = TrainingHistory(
     groupBy(TrainedSetRow::sessionId).map { (_, rows) ->
         TrainedSession(
             date = rows.first().date,
+            volumeReliable = rows.first().volumeReliable,
             sets = rows.groupBy { it.setEntry.sessionExerciseId to it.setEntry.setIndex }
                 .map { (_, ofOneSet) -> ofOneSet.minBy { it.setEntry.id } }
                 .map {

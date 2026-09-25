@@ -94,9 +94,23 @@ value class Anchor(val estimated1rm: Kilograms) {
          * across a history (ADR 0008) rather than a number with no working shown.
          */
         fun from(sessions: List<TrainedSession>): Anchor? =
-            sessions.sortedBy(TrainedSession::date)
-                .mapNotNull(TrainedSession::estimated1rm)
-                .fold(null as Anchor?) { anchor, best -> anchor.smoothedTo(best) }
+            series(sessions).lastOrNull()?.let { Anchor(it.anchor) }
+
+        /**
+         * The same fold with its working shown: each informing session's best, and the estimate
+         * just after it (#122). **One fold**, so the line a chart draws is the number the engine
+         * prescribes from, at every point along it, rather than a second calculation that could
+         * drift from the first.
+         */
+        fun series(sessions: List<TrainedSession>): List<StrengthPoint> {
+            var anchor: Anchor? = null
+            return sessions.sortedBy(TrainedSession::date).mapNotNull { session ->
+                session.estimated1rm?.let { best ->
+                    val moved = anchor.smoothedTo(best).also { anchor = it }
+                    StrengthPoint(session.date, best = best, anchor = moved.estimated1rm)
+                }
+            }
+        }
 
         /**
          * The first session to say anything is taken at its word; every later one moves it.
