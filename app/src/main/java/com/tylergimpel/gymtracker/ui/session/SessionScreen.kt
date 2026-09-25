@@ -136,6 +136,7 @@ fun SessionScreen(
     onBuildRoutine: () -> Unit = {},
     onLetTheAppBuild: () -> Unit = {},
     onImportFitNotes: () -> Unit = {},
+    onOpenHistory: (String) -> Unit = {},
     viewModel: SessionViewModel = viewModel(),
 ) {
     val loaded by viewModel.state.collectAsStateWithLifecycle()
@@ -230,6 +231,7 @@ fun SessionScreen(
             onSwapAvoided = viewModel::swapAvoided,
             onRemoveAvoided = viewModel::removeAvoided,
             onResetEstimate = viewModel::resetEstimate,
+            onOpenHistory = { onOpenHistory(it.id) },
             onKeepEstimate = viewModel::keepEstimate,
         ),
         wholeSession = SessionActions(
@@ -323,6 +325,7 @@ data class ExerciseActions(
     val onRemoveAvoided: (Avoided) -> Unit = {},
     val onResetEstimate: () -> Unit = {},
     val onKeepEstimate: () -> Unit = {},
+    val onOpenHistory: (Exercise) -> Unit = {},
 )
 
 /** The session as a whole, and the way out to the other screens. */
@@ -581,6 +584,7 @@ fun SessionScreen(
                         onRightDraftChange = entry.onRightDraftChange,
                         onTogglePerSide = entry.onTogglePerSide,
                         onEditExercise = exercises.onEditExercise,
+                        onOpenHistory = { exercises.onOpenHistory(selected) },
                         onReadIn = entry.onReadIn,
                         onToggleDisplayUnitOverride = entry.onToggleDisplayUnitOverride,
                     )
@@ -1009,6 +1013,7 @@ private fun SetEntryDetails(
     onRightDraftChange: (SetDraft) -> Unit,
     onTogglePerSide: () -> Unit,
     onEditExercise: () -> Unit,
+    onOpenHistory: () -> Unit,
     onReadIn: (WeightUnit) -> Unit,
     onToggleDisplayUnitOverride: () -> Unit,
 ) {
@@ -1023,6 +1028,8 @@ private fun SetEntryDetails(
                 // Beside the exercise it would replace, because that is where a lifter is
                 // standing when they find the machine occupied.
                 TextButton(onClick = onSwap) { Text(stringResource(R.string.swap_open)) }
+                // A last attempt checked without leaving the workout (#121): back returns here.
+                TextButton(onClick = onOpenHistory) { Text(stringResource(R.string.history_open)) }
                 TextButton(onClick = onEditExercise) {
                     Text(stringResource(R.string.exercise_edit))
                 }

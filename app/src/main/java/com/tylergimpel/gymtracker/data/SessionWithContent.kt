@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.ExerciseHistoryEntry
 import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Relation
@@ -46,6 +47,32 @@ data class SessionExerciseWithSets(
     )
     val sets: List<SetEntryWithDrops>,
 )
+
+/** One exercise's sets in one session, with the session's day, for that exercise's history (#121). */
+data class ExerciseHistoryRow(
+    @Embedded
+    val sessionExercise: SessionExerciseEntity,
+
+    @ColumnInfo(name = "session_date")
+    val sessionDate: LocalDate,
+
+    @ColumnInfo(name = "session_import_batch_id")
+    val importBatchId: Long?,
+
+    @Relation(
+        entity = SetEntryEntity::class,
+        parentColumn = "id",
+        entityColumn = "session_exercise_id",
+    )
+    val sets: List<SetEntryWithDrops>,
+) {
+    fun toEntry() = ExerciseHistoryEntry(
+        sessionExerciseId = sessionExercise.id,
+        date = sessionDate,
+        imported = importBatchId != null,
+        sets = sets.toPerformedSets(),
+    )
+}
 
 /** A whole session: what was done, grouped by the exercise it was done against. */
 data class SessionWithContent(

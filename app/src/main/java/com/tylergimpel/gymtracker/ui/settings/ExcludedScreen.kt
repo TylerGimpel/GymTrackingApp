@@ -68,9 +68,13 @@ class ExcludedViewModel(application: Application) : AndroidViewModel(application
 }
 
 @Composable
-fun ExcludedScreen(onBack: () -> Unit, viewModel: ExcludedViewModel = viewModel()) {
+fun ExcludedScreen(
+    onBack: () -> Unit,
+    onOpenHistory: (Exercise) -> Unit = {},
+    viewModel: ExcludedViewModel = viewModel(),
+) {
     val excluded by viewModel.excluded.collectAsStateWithLifecycle()
-    ExcludedScreen(excluded = excluded, onBack = onBack, onTakeBack = viewModel::takeBack)
+    ExcludedScreen(excluded = excluded, onBack = onBack, onTakeBack = viewModel::takeBack, onOpenHistory = onOpenHistory)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,6 +83,7 @@ fun ExcludedScreen(
     excluded: List<Exercise>,
     onBack: () -> Unit = {},
     onTakeBack: (Exercise) -> Unit = {},
+    onOpenHistory: (Exercise) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -107,11 +112,14 @@ fun ExcludedScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = exercise.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
+                    // Excluding it erased nothing: what was done on it is a tap away (#121).
+                    TextButton(onClick = { onOpenHistory(exercise) }, modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = exercise.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     TextButton(onClick = { onTakeBack(exercise) }) {
                         Text(stringResource(R.string.excluded_take_back))
                     }

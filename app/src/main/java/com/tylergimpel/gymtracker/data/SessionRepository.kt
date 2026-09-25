@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.ExerciseHistoryEntry
+import com.tylergimpel.gymtracker.domain.HISTORY_PAGE
 import com.tylergimpel.gymtracker.domain.ExerciseLastTrained
 import com.tylergimpel.gymtracker.domain.MuscleLastTrained
 import com.tylergimpel.gymtracker.domain.lastTrainedByMuscle
@@ -64,6 +66,21 @@ class SessionRepository(
      * A window rather than everything: what a lifter has been avoiding lately is the question, and
      * a routine they abandoned a year ago should not answer it.
      */
+    /**
+     * The next [size] sessions of [exerciseId]'s history, newest first, after the entry [after] —
+     * or from the newest where it is null (#121).
+     */
+    suspend fun historyPage(
+        exerciseId: String,
+        after: ExerciseHistoryEntry? = null,
+        size: Int = HISTORY_PAGE,
+    ): List<ExerciseHistoryEntry> = sessions.historyPage(
+        exerciseId = exerciseId,
+        beforeDate = after?.date ?: AFTER_EVERY_DAY,
+        beforeId = after?.sessionExerciseId ?: Long.MAX_VALUE,
+        limit = size,
+    ).map(ExerciseHistoryRow::toEntry)
+
     /** How long since each muscle was trained, longest ago first (#127). */
     fun observeLastTrained(): Flow<List<MuscleLastTrained>> = sessions.observeLastTrained().map { rows ->
         lastTrainedByMuscle(
@@ -399,6 +416,12 @@ class SessionRepository(
     private companion object {
         /** How far back the revealed-preference counts look. Recent enough to be about now. */
         const val RECENT_SESSIONS = 8
+
+        /**
+         * A cursor before which every real session falls. The last day a four-digit year writes,
+         * because dates are stored as ISO text and a larger one would not sort after it as text.
+         */
+        private val AFTER_EVERY_DAY: LocalDate = LocalDate.of(9999, 12, 31)
     }
 
     private suspend fun nextSetIndexFor(sessionExerciseId: Long): Int =

@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import java.time.LocalDate
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -251,6 +252,31 @@ interface SessionDao {
         """,
     )
     suspend fun trainedSetsFor(exerciseId: String, excludingSession: Long): List<TrainedSetRow>
+
+    /**
+     * A page of [exerciseId]'s history, newest first, strictly before a cursor (#121).
+     *
+     * **Bounded however long the history grows.** Keyed on the day and the row rather than an
+     * offset, so the hundredth page costs what the first does: an offset reads and throws away
+     * every row before it, and years of training is a lot of rows to throw away per scroll.
+     *
+     * Only sessions where a set was logged: an exercise opened and left empty was not trained.
+     */
+    @Transaction
+    @Query(
+        """
+        SELECT session_exercise.*, session.date AS session_date,
+               session.import_batch_id AS session_import_batch_id
+        FROM session_exercise
+        JOIN session ON session.id = session_exercise.session_id
+        WHERE session_exercise.exercise_id = :exerciseId
+          AND (session.date < :beforeDate OR (session.date = :beforeDate AND session_exercise.id < :beforeId))
+          AND EXISTS (SELECT 1 FROM set_entry WHERE set_entry.session_exercise_id = session_exercise.id)
+        ORDER BY session.date DESC, session_exercise.id DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun historyPage(exerciseId: String, beforeDate: LocalDate, beforeId: Long, limit: Int): List<ExerciseHistoryRow>
 
     /**
      * Every exercise ever trained, with the last day it was (#127).

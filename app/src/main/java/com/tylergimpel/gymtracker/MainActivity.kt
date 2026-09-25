@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker
 
+import com.tylergimpel.gymtracker.ui.history.ExerciseHistoryScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -53,7 +54,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Destination {
-    SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED,
+    SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED, EXERCISE_HISTORY,
 }
 
 /**
@@ -88,6 +89,14 @@ private fun GymTracker(
 
     val defaultRoutineName = stringResource(R.string.routine_default_name)
 
+    // Whose history is open (#121). Beside the stack rather than in it, like the day being picked for.
+    var historyOf by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun openHistory(exerciseId: String) {
+        historyOf = exerciseId
+        open(Destination.EXERCISE_HISTORY)
+    }
+
     // Whether Settings was opened to import, from the first screen, rather than to look around.
     var importOnArrival by rememberSaveable { mutableStateOf(false) }
 
@@ -119,6 +128,7 @@ private fun GymTracker(
                 importOnArrival = true
                 open(Destination.SETTINGS)
             },
+            onOpenHistory = ::openHistory,
             viewModel = viewModel,
         )
 
@@ -149,7 +159,9 @@ private fun GymTracker(
             onOpenExcluded = { open(Destination.EXCLUDED) },
         )
 
-        Destination.EXCLUDED -> ExcludedScreen(onBack = ::back)
+        Destination.EXCLUDED -> ExcludedScreen(onBack = ::back, onOpenHistory = { openHistory(it.id) })
+
+        Destination.EXERCISE_HISTORY -> historyOf?.let { ExerciseHistoryScreen(exerciseId = it, onBack = ::back) }
 
         Destination.ROUTINE -> RoutineScreen(
             onBack = ::back,
