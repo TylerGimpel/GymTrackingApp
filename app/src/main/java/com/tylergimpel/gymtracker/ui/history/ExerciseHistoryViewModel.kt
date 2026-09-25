@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tylergimpel.gymtracker.data.GymDatabase
-import com.tylergimpel.gymtracker.data.SessionRepository
+import com.tylergimpel.gymtracker.data.sessionRepository
 import com.tylergimpel.gymtracker.data.profileRepository
 import com.tylergimpel.gymtracker.data.toDomain
 import com.tylergimpel.gymtracker.domain.Exercise
@@ -16,8 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Clock
-import java.time.ZoneId
 
 data class ExerciseHistoryUiState(
     val exercise: Exercise? = null,
@@ -40,13 +38,7 @@ class ExerciseHistoryViewModel(application: Application) : AndroidViewModel(appl
 
     private val profile = database.profileRepository()
 
-    private val sessions = SessionRepository(
-        database,
-        database.sessionDao(),
-        Clock.systemDefaultZone(),
-        ZoneId.systemDefault(),
-        profile,
-    )
+    private val sessions = database.sessionRepository()
 
     private val screen = MutableStateFlow(ExerciseHistoryUiState())
     val state: StateFlow<ExerciseHistoryUiState> = screen.asStateFlow()

@@ -179,7 +179,9 @@ private fun GymTracker(
             },
         )
 
-        Destination.DAY -> dayOpen?.let { DayScreen(date = LocalDate.parse(it), onBack = ::back) }
+        Destination.DAY -> dayOpen?.let {
+            DayScreen(date = LocalDate.parse(it), onBack = ::back, onOpenHistory = { exercise -> openHistory(exercise.id) })
+        }
 
         Destination.ROUTINE -> RoutineScreen(
             onBack = ::back,

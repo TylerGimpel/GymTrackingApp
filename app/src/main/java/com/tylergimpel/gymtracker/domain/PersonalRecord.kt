@@ -63,7 +63,8 @@ fun TrainingHistory.beatsRecord(set: PersonalRecord): Boolean {
  *
  * Only a set at the working weight can set one, as only such a set counts toward [personalRecords].
  * And **a first session is not a wall of records**: with nothing trained before [today], every set
- * would beat nothing, so none is announced — the records exist, and the history screen shows them.
+ * would beat nothing, so none is announced — the records still exist, recomputed from the log
+ * whenever they are asked for.
  */
 fun TrainingHistory.recordSetBy(type: SetType, performance: Performance, today: LocalDate): PersonalRecord? {
     if (!type.isAtTheWorkingWeight) return null

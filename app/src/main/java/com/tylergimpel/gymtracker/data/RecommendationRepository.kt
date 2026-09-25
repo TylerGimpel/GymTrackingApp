@@ -118,9 +118,14 @@ class RecommendationRepository(
 
         return database.withTransaction {
             val open = sessions.activeSession()?.id
-            // A reset estimate is found again from the day it was reset (#128). The log is untouched;
-            // only what the engine folds starts there.
-            val history = historyOf(exercise.id, open).from(exercise.estimateResetOn)
+            // A reset **Anchor** is found again from the next session (#128): the day it was reset
+            // on carries on as it was, so accepting mid-session does not start a calibration ramp
+            // halfway down the exercise, and the overrides that prompted it are not folded into the
+            // new estimate. The log is untouched; only what the engine folds starts later.
+            val today = LocalDate.now(clock)
+            val resetPending = exercise.estimateResetOn?.let { !it.isBefore(today) } == true
+            val everything = historyOf(exercise.id, open)
+            val history = if (resetPending) everything else everything.from(exercise.estimateResetOn?.plusDays(1))
             // Two bands, and they are not the same question. The seed is what the routine's
             // goal put this exercise in and is what gets stored; the lifter's own answer, where
             // they gave one, is what the set is actually prescribed in. Storing the effective one
@@ -128,7 +133,7 @@ class RecommendationRepository(
             val seeded = seededRepRangeFor(exercise)
             val repRange = repRangeOf(chosen = exercise.chosenRepRange, seeded = seeded)
             val rounding = incrementFor(exercise)
-            val progress = history.progressIn(repRange, rounding, decay, LocalDate.now(clock))
+            val progress = history.progressIn(repRange, rounding, decay, today)
             remember(exercise.id, progress, seeded)
             val next = recommendNextSet(
                 history = history,
@@ -148,8 +153,10 @@ class RecommendationRepository(
                     .let { it.resting(restToPrescribe(exercise, it.setType, repRange, open)) },
                 planned = plannedSetsOf(next, exercise, open, rounding),
                 // Offered on the sessions since the lifter last said not now, so saying it means
-                // waiting for the whole pattern again rather than being asked next time.
-                offerReset = history.from(exercise.resetOfferDismissedOn?.plusDays(1)).keepsOverriding(),
+                // waiting for the whole pattern again rather than being asked next time — and not
+                // at all once they have said yes and are waiting for the next session.
+                offerReset = !resetPending &&
+                    history.from(exercise.resetOfferDismissedOn?.plusDays(1)).keepsOverriding(),
             )
         }
     }

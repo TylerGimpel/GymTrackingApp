@@ -76,9 +76,8 @@ class ExerciseHistoryTest {
         assertEquals(read.map { it.sessionExerciseId }.toSet().size, read.size)
         assertEquals(read.sortedByDescending(ExerciseHistoryEntry::date), read)
         assertEquals(SESSIONS * SETS_EACH, read.sumOf { it.sets.size })
-        assertTrue(SESSIONS * SETS_EACH >= AUTHORS_SETS)
-        // Only the squat's: the bench logged beside it every time is not its history.
-        assertTrue(read.all { entry -> entry.sets.all { it.efforts.single().performance is Performance.WeightAndReps } })
+        // Only the squat's fives: the bench's eights logged beside it every time are not its history.
+        assertTrue(read.all { entry -> entry.sets.all { (it.efforts.single().performance as Performance.WeightAndReps).reps == 5 } })
     }
 
     @Test
@@ -125,8 +124,8 @@ class ExerciseHistoryTest {
         const val TEST_DATABASE = "exercise-history-test.db"
         const val SQUAT = "Barbell_Squat"
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
+        /** 2,340 squat sets: more than the author's real 2,234, which is the size #28 asks for. */
         const val SESSIONS = 260
         const val SETS_EACH = 9
-        const val AUTHORS_SETS = 2234
     }
 }

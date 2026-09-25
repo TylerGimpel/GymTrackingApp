@@ -101,12 +101,6 @@ data class Resting(val startedAt: Instant, val length: Duration) {
 data class AddingDrop(val effortId: Long, val draft: SetDraft)
 
 
-/**
- * What the lifter calls an exercise and what they wrote about it, while they are editing them.
- *
- * Both at once, because they are the same conversation: this is the machine in the corner, and
- * here is what you need to remember about it.
- */
 /** What a typed **Rep range** means for the one that is stored. */
 sealed interface RepRangeEdit {
     /** Both fields empty: hand the question back to the routine's goal. */
@@ -119,6 +113,12 @@ sealed interface RepRangeEdit {
     data object Unusable : RepRangeEdit
 }
 
+/**
+ * What the lifter calls an exercise and what they wrote about it, while they are editing them.
+ *
+ * Both at once, because they are the same conversation: this is the machine in the corner, and
+ * here is what you need to remember about it.
+ */
 data class ExerciseDetails(
     val exerciseId: String,
     val name: String,
@@ -176,12 +176,11 @@ data class ExerciseDetails(
 }
 
 /**
- * Everything on this screen that is not read from the database.
+ * What no database supplies: what the screen holds, the rest timer, and where the cycle is.
  *
  * Held as one object rather than as a flow each, because `combine` runs out of typed overloads at
  * five and the alternative is packing values into pairs to smuggle them past it.
  */
-/** What no database supplies: what the screen holds, the rest timer, and where the cycle is. */
 private data class OnScreen(
     val screen: ScreenState,
     val rest: RestState,

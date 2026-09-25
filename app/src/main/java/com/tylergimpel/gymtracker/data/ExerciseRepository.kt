@@ -98,10 +98,11 @@ class ExerciseRepository(
     }
 
     /**
-     * Resets [exerciseId]'s estimate [on] a day, so the engine finds it again from there (#128).
+     * Resets [exerciseId]'s **Anchor** [on] a day, so the engine finds it again from the next
+     * session (#128).
      *
      * Nothing logged is touched: records, charts and history still read every set. Only the fold
-     * the engine prescribes from starts again, which with nothing logged since is a calibration.
+     * the engine prescribes from starts again, which with nothing logged since is **Calibrating**.
      */
     suspend fun resetEstimate(exerciseId: String, on: LocalDate) = exercises.setEstimateResetOn(exerciseId, on)
 

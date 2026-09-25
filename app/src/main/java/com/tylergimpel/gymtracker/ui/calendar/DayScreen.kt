@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.calendar
 
+import com.tylergimpel.gymtracker.domain.Exercise
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -29,10 +30,15 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 @Composable
-fun DayScreen(date: LocalDate, onBack: () -> Unit, viewModel: DayViewModel = viewModel()) {
+fun DayScreen(
+    date: LocalDate,
+    onBack: () -> Unit,
+    onOpenHistory: (Exercise) -> Unit = {},
+    viewModel: DayViewModel = viewModel(),
+) {
     LaunchedEffect(date) { viewModel.open(date) }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    DayScreen(state = state, onBack = onBack)
+    DayScreen(state = state, onBack = onBack, onOpenHistory = onOpenHistory)
 }
 
 /**
@@ -42,7 +48,7 @@ fun DayScreen(date: LocalDate, onBack: () -> Unit, viewModel: DayViewModel = vie
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DayScreen(state: DayUiState, onBack: () -> Unit = {}) {
+fun DayScreen(state: DayUiState, onBack: () -> Unit = {}, onOpenHistory: (Exercise) -> Unit = {}) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -53,7 +59,7 @@ fun DayScreen(state: DayUiState, onBack: () -> Unit = {}) {
     ) { insets ->
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
             items(state.sessions, key = { it.session.id }) { logged ->
-                PastSession(logged, state.lifterUnit)
+                PastSession(logged, state.lifterUnit, onOpenHistory)
                 HorizontalDivider()
             }
         }
@@ -61,7 +67,7 @@ fun DayScreen(state: DayUiState, onBack: () -> Unit = {}) {
 }
 
 @Composable
-private fun PastSession(logged: LoggedSession, lifterUnit: WeightUnit) {
+private fun PastSession(logged: LoggedSession, lifterUnit: WeightUnit, onOpenHistory: (Exercise) -> Unit) {
     Column(modifier = Modifier.padding(16.dp)) {
         val session = logged.session
         val heading = session.routineDayName ?: stringResource(R.string.day_session)
@@ -73,11 +79,10 @@ private fun PastSession(logged: LoggedSession, lifterUnit: WeightUnit) {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         logged.exercises.filter { it.sets.isNotEmpty() }.forEach { performed ->
-            Text(
-                text = performed.exercise.name,
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(top = 12.dp),
-            )
+            // The exercise's whole history is a tap away from any one day of it (#121).
+            TextButton(onClick = { onOpenHistory(performed.exercise) }, modifier = Modifier.padding(top = 4.dp)) {
+                Text(text = performed.exercise.name, style = MaterialTheme.typography.titleSmall)
+            }
             LoggedSetLines(performed.sets, performed.exercise.displayUnit, lifterUnit)
         }
     }

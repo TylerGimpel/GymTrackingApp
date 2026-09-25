@@ -110,8 +110,8 @@ data class Exercise(
      */
     val chosenRepRange: RepRange? = null,
     /**
-     * The day the lifter reset this lift's estimate, if they have (#128): the engine finds it
-     * again from sessions on and after it, and nothing else that reads the log is affected.
+     * The day the lifter reset this lift's **Anchor**, if they have (#128): the engine finds it
+     * again from the sessions after it, and nothing else that reads the log is affected.
      */
     val estimateResetOn: LocalDate? = null,
     /** The day the lifter last said not now to that, so the offer waits for the pattern again. */

@@ -301,10 +301,6 @@ private fun inOrderWithSupersetsTogether(byExercise: Map<String, List<ImportedSe
 }
 
 /**
- * One imported set as a row, filling the columns [toPerformance] reads back, so a set comes back
- * out of the log exactly as it went in.
- */
-/**
  * A set as the exercise it lands on logs it. FitNotes records a weighted pull-up as a weight like
  * any other lift, so on a bodyweight exercise that weight is the load added to the lifter (#100).
  */
@@ -314,6 +310,10 @@ private fun ImportedSet.asLoggedFor(exercise: Exercise): ImportedSet {
     return copy(performance = Performance.BodyweightReps(addedWeight = lifted.weight, reps = lifted.reps))
 }
 
+/**
+ * One imported set as a row, filling the columns [toPerformance] reads back, so a set comes back
+ * out of the log exactly as it went in.
+ */
 private fun ImportedSet.toEntity(sessionExerciseId: Long, setIndex: Int): SetEntryEntity {
     val base = SetEntryEntity(
         sessionExerciseId = sessionExerciseId,

@@ -114,8 +114,8 @@ data class ExercisePreferenceEntity(
     val incrementKg: Double? = null,
 
     /**
-     * The day the lifter reset this lift's estimate (#128): the engine finds it again from the
-     * sessions on and after it. The log is untouched, and so is everything else that reads it.
+     * The day the lifter reset this lift's **Anchor** (#128): the engine finds it again from the
+     * sessions after it. The log is untouched, and so is everything else that reads it.
      */
     @ColumnInfo(name = "estimate_reset_on")
     val estimateResetOn: LocalDate? = null,

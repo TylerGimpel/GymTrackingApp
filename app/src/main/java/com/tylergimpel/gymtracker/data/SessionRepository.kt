@@ -61,12 +61,6 @@ class SessionRepository(
         sessions.observeLastFinished().withLifterUnit { last, unit -> last?.toLoggedSession(unit) }
 
     /**
-     * The most recent finished sessions, newest first — what [avoidedExercises] reads.
-     *
-     * A window rather than everything: what a lifter has been avoiding lately is the question, and
-     * a routine they abandoned a year ago should not answer it.
-     */
-    /**
      * The next [size] sessions of [exerciseId]'s history, newest first, after the entry [after] —
      * or from the newest where it is null (#121).
      */
@@ -93,6 +87,12 @@ class SessionRepository(
         )
     }
 
+    /**
+     * The most recent finished sessions, newest first — what [avoidedExercises] reads.
+     *
+     * A window rather than everything: what a lifter has been avoiding lately is the question, and
+     * a routine they abandoned a year ago should not answer it.
+     */
     fun observeRecent(limit: Int = RECENT_SESSIONS): Flow<List<LoggedSession>> =
         sessions.observeRecent(limit).withLifterUnit { recent, unit ->
             recent.map { it.toLoggedSession(unit) }
@@ -133,6 +133,18 @@ class SessionRepository(
     }
 
     /**
+     * The record [draft] would set on [exerciseId] if it were logged now (#124), asked before it is.
+     *
+     * Against everything logged so far, the open session's earlier sets included, so a record is
+     * announced once rather than again for every set that equals it.
+     */
+    suspend fun recordSetBy(exerciseId: String, draft: SetDraft): PersonalRecord? {
+        val performance = draft.performance ?: return null
+        return sessions.trainedSetsFor(exerciseId, SessionDao.NO_SESSION).toTrainingHistory()
+            .recordSetBy(draft.type, performance, LocalDate.now(clock.withZone(zone)))
+    }
+
+    /**
      * Records a set against [exerciseId], opening a session and an entry for the exercise if this
      * is the first set of either.
      *
@@ -145,18 +157,6 @@ class SessionRepository(
      *
      * Returns false if the draft does not yet read as a weight and a rep count.
      */
-    /**
-     * The record [draft] would set on [exerciseId] if it were logged now (#124), asked before it is.
-     *
-     * Against everything logged so far, the open session's earlier sets included, so a record is
-     * announced once rather than again for every set that equals it.
-     */
-    suspend fun recordSetBy(exerciseId: String, draft: SetDraft): PersonalRecord? {
-        val performance = draft.performance ?: return null
-        return sessions.trainedSetsFor(exerciseId, SessionDao.NO_SESSION).toTrainingHistory()
-            .recordSetBy(draft.type, performance, LocalDate.now(clock.withZone(zone)))
-    }
-
     suspend fun logSet(
         exerciseId: String,
         draft: SetDraft,
@@ -458,3 +458,12 @@ class SessionRepository(
         return performed.copy(id = sessions.insert(performed))
     }
 }
+
+/** The session repository on the phone's own clock and zone, as every screen outside the session uses it. */
+fun GymDatabase.sessionRepository(): SessionRepository = SessionRepository(
+    database = this,
+    sessions = sessionDao(),
+    clock = Clock.systemDefaultZone(),
+    zone = ZoneId.systemDefault(),
+    profile = profileRepository(),
+)

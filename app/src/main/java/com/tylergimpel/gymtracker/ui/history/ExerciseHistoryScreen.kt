@@ -127,5 +127,5 @@ internal fun LoggedSetLines(sets: List<PerformedSet>, displayUnit: WeightUnit, l
     }
 }
 
-/** How close to the bottom of what is loaded the next page is asked for. */
+/** Invented: how close to the bottom of what is loaded the next page is asked for, in rows. */
 private const val LOAD_AHEAD = 3

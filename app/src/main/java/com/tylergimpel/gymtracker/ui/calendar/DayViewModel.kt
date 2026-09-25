@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tylergimpel.gymtracker.data.GymDatabase
-import com.tylergimpel.gymtracker.data.SessionRepository
+import com.tylergimpel.gymtracker.data.sessionRepository
 import com.tylergimpel.gymtracker.data.profileRepository
 import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.WeightUnit
@@ -16,9 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
-import java.time.Clock
 import java.time.LocalDate
-import java.time.ZoneId
 
 data class DayUiState(
     val date: LocalDate? = null,
@@ -34,13 +32,7 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val profile = database.profileRepository()
 
-    private val sessions = SessionRepository(
-        database,
-        database.sessionDao(),
-        Clock.systemDefaultZone(),
-        ZoneId.systemDefault(),
-        profile,
-    )
+    private val sessions = database.sessionRepository()
 
     private val date = MutableStateFlow<LocalDate?>(null)
 

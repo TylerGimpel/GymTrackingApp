@@ -180,10 +180,16 @@ class RecommendationPersistenceTest {
         overrideTheSquatWeeklyForAMonth()
         assertTrue(recommendations.nextSetWithPlan(exercise(SQUAT))!!.offerReset)
 
-        exercises.resetEstimate(SQUAT, LocalDate.parse("2026-09-14"))
+        // Accepted today: the session it was accepted in carries on as it was, with no ramp
+        // halfway down the exercise, and the offer is gone.
+        exercises.resetEstimate(SQUAT, LocalDate.now())
+        val sameDay = recommendations.nextSetWithPlan(exercise(SQUAT))!!
+        assertTrue(sameDay.recommendation is Recommendation.Prescribing)
+        assertFalse(sameDay.offerReset)
 
         // Found again from the next session (#128): nothing logged since the reset, so the engine
         // calibrates rather than prescribing from a month of weights it kept getting wrong.
+        exercises.resetEstimate(SQUAT, LocalDate.parse("2026-09-14"))
         val after = recommendations.nextSetWithPlan(exercise(SQUAT))!!
         assertTrue(after.recommendation is Recommendation.Calibrating)
         assertFalse(after.offerReset)

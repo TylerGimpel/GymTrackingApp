@@ -5,8 +5,8 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
 /**
- * Whether the lifter has set their own weight on this lift in every session for a month, which is
- * the engine's estimate being wrong rather than the lifter being difficult (#128).
+ * Whether the lifter has **overridden** the weight on this lift in every session for a month,
+ * which is the **Anchor** being wrong rather than the lifter being difficult (#128).
  *
  * **A prompt, never a statistic** (ADR 0008). What this answers is whether to *offer* to find the
  * estimate again; nothing here is a rate or a count to show, and nothing should be built on it
@@ -54,5 +54,8 @@ private const val A_MONTH = 28L
 /** Invented: the fewest overridden sessions that are a pattern rather than a stubborn fortnight. */
 private const val FEWEST_SESSIONS = 4
 
-/** Two weights this close are the same weight, whatever unit they were typed in (kilograms). */
+/**
+ * Invented: two weights this close are the same weight (kilograms). Enough to absorb the rounding
+ * of a weight typed in pounds and stored in kilograms, and far below any step a lifter can load.
+ */
 private const val SAME_WEIGHT = 0.01

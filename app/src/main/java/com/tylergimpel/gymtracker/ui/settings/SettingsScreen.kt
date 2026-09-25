@@ -399,14 +399,14 @@ private fun ConfirmRestoreDialog(confirm: ConfirmRestore, onConfirm: () -> Unit,
     )
 }
 
-/**
- * What an import did, and what it did not: nothing left behind goes unsaid, because a gap found
- * later is a gap the lifter stops trusting the whole import over.
- */
 /** The day an import happened, as the lifter's phone writes a date. */
 private fun Instant.asLocalDay(): String =
     atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
 
+/**
+ * What an import did, and what it did not: nothing left behind goes unsaid, because a gap found
+ * later is a gap the lifter stops trusting the whole import over.
+ */
 @Composable
 private fun importedText(result: ImportResult): String = buildList {
     add(stringResource(R.string.import_done, result.sessions, result.sets))

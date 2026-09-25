@@ -1332,14 +1332,6 @@ private const val SWIPE_TO_OPEN = 300f
 private val DRAG_TO_OPEN = 72.dp
 
 /**
- * The question the app asks about an exercise a lifter keeps not doing.
- *
- * **Keeping it is as prominent as swapping or removing it**, and that is the whole design rather
- * than a courtesy: people skip squats because squats are hard, not because they dislike them, and
- * a prompt that made "remove" the easy answer would quietly strip the most valuable work out of a
- * programme. The app noticed; the lifter decides, and nothing happens until they do.
- */
-/**
  * The engine admitting it has been wrong about a lift, and offering to find it again (#128).
  *
  * In line rather than a dialog: it is not urgent, and a lifter mid-set should not have to answer
@@ -1358,6 +1350,14 @@ private fun ResetEstimateOffer(onReset: () -> Unit, onKeep: () -> Unit) {
     }
 }
 
+/**
+ * The question the app asks about an exercise a lifter keeps not doing.
+ *
+ * **Keeping it is as prominent as swapping or removing it**, and that is the whole design rather
+ * than a courtesy: people skip squats because squats are hard, not because they dislike them, and
+ * a prompt that made "remove" the easy answer would quietly strip the most valuable work out of a
+ * programme. The app noticed; the lifter decides, and nothing happens until they do.
+ */
 @Composable
 private fun AvoidedPrompt(
     avoided: Avoided,
