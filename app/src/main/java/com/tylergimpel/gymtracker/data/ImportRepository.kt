@@ -67,7 +67,7 @@ class ImportRepository(
     private val database: GymDatabase,
     private val clock: Clock = Clock.systemDefaultZone(),
     private val zone: ZoneId = ZoneId.systemDefault(),
-    /** What the lifter reads in, which an exercise with no unit of its own follows. */
+    /** The lifter's **Preferred unit**, which an exercise with no **Display unit** of its own follows. */
     private val profile: ProfileRepository = database.profileRepository(),
 ) {
     private val sessions = database.sessionDao()
@@ -244,8 +244,8 @@ class ImportRepository(
         records.exercises.forEach { (name, kept) ->
             val exercise = matches[name] ?: return@forEach
             if (kept.note != null && exercise.note.isNullOrBlank()) exercises.note(exercise.id, kept.note)
-            // Only where the lifter has not chosen a unit for it here: a stored choice is theirs, and
-            // an exercise merely following their default has no choice to overwrite (ADR 0009).
+            // Only where the lifter has not chosen a **Display unit** for it here: a stored choice is
+            // theirs, and an exercise following their **Preferred unit** has none to overwrite (ADR 0009).
             // Read from what is stored rather than the exercise in hand, which for one created a
             // moment ago carries the built-in default rather than the lifter's.
             val chosenUnit = database.exerciseDao().byId(exercise.id)?.preference?.displayUnit

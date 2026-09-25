@@ -233,7 +233,13 @@ class FitNotesImportTest {
 
         onFixture { it.execSQL("UPDATE settings SET metric = 0") }
         assertEquals(WeightUnit.POUNDS, FitNotesParser.parse(fixture).exercises[BENCH_NAME]?.displayUnit)
-        // An exercise FitNotes gave a unit of its own keeps it, whatever the app-wide setting (#129).
+    }
+
+    @Test
+    fun anExerciseFitNotesGaveAUnitOfItsOwnKeepsItWhateverFitNotesWasSetTo() {
+        fitNotesSettings(metric = 1)
+
+        // The curl is the fixture's pounds exercise: its own unit, over the app-wide kilograms (#129).
         assertEquals(WeightUnit.POUNDS, FitNotesParser.parse(fixture).exercises["Dumbbell Bicep Curl"]?.displayUnit)
     }
 
@@ -262,6 +268,16 @@ class FitNotesImportTest {
         val bank = exercises.observeBank().first()
         assertEquals(WeightUnit.KILOGRAMS, bank.single { it.id == BENCH }.displayUnit)
         assertEquals(WeightUnit.KILOGRAMS, bank.single { it.name == "Hammer Strength Row" }.displayUnit)
+    }
+
+    @Test
+    fun poundsLoggedInFitNotesReadInPoundsOnAPhoneThatDefaultsToKilograms() = runBlocking {
+        fitNotesSettings(metric = 0)
+        onFixture { it.execSQL("UPDATE exercise SET weight_unit_id = 0") }
+
+        imports().import(FitNotesParser.parse(fixture), bank())
+
+        assertEquals(WeightUnit.POUNDS, bank().single { it.id == BENCH }.displayUnit)
     }
 
     @Test
