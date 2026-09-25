@@ -1,0 +1,517 @@
+<title>Setup Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<!--
+  THROWAWAY PROTOTYPE - not production code. Wayfinder ticket #135
+  "Prototype: the setup flow" (map #130 "Map: UI overhaul").
+
+  Question: how should first-run setup work as a clear step-by-step flow with big
+  choices, instead of one long page of small buttons?
+
+  Shared by every variant:
+    - The same answers the app already asks for (Setup.kt), plus one new one: kg or lb.
+      Goal, rep style, days a week, split, cardio, equipment.
+    - Equipment has pictures and plain plural names. No "Other". Bodyweight is always in.
+      Cardio machines only show when cardio is on.
+    - Back is real browser history, so the phone's Back button steps back. Answers are kept.
+    - The same welcome page before, and the same "ready" page after.
+
+  Three variants disagree about how a question is answered and what happens if you don't:
+    A  Pages    - one question a page, tap an answer and it moves on. Nothing chosen
+                  for you: Skip in the top bar uses the usual answer.
+    B  Tiles    - one question a page, answers as big picture tiles. The usual answer
+                  is already picked, so Next always works. No Skip.
+    C  Summary  - no questions in a row. One page lists every answer, already filled in
+                  with the usual. Build straight away, or tap a row to change it.
+    D  Tiles + review - (round 2, from the lifter's pick) B's tiles with the usual answer
+                  already picked, no bodyweight tile (A), then C's summary to review.
+                  Tapping a row there opens that question's page, and Done comes back.
+
+  Switch with the floating panel (top right) or the arrow keys.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:#14130F; --surface:#1E1C17; --s2:#2A2720; --line:#3E392E; --text:#F5F2EA; --dim:#ABA590;
+    --accent:#F5C518; --on:#1A1600; --at:#F5C518; --good:#6FCF7F; --warn:#FFB38A;
+    --disp:"Barlow Condensed","Arial Narrow",sans-serif; --body:"Barlow",system-ui,sans-serif; --r:6px; --rbig:10px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { color-scheme: light;
+      --bg:#F6F4EE; --surface:#FFFFFF; --s2:#ECE8DD; --line:#D6CFBC; --text:#1A1813; --dim:#696350;
+      --accent:#EDB800; --on:#1A1600; --at:#1A1813; --good:#2E8B3E; --warn:#A6461A; }
+  }
+  :root[data-theme="light"] { color-scheme: light;
+    --bg:#F6F4EE; --surface:#FFFFFF; --s2:#ECE8DD; --line:#D6CFBC; --text:#1A1813; --dim:#696350;
+    --accent:#EDB800; --on:#1A1600; --at:#1A1813; --good:#2E8B3E; --warn:#A6461A; }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 var(--body); -webkit-user-select: none; user-select: none; overflow: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; text-align: inherit; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  #app { max-width: 440px; margin-inline: auto; height: 100%; display: flex; flex-direction: column; position: relative; }
+  .dim { color: var(--dim); }
+  .label { font: 600 13px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 60px; border-radius: var(--r);
+         font: 700 22px/1 var(--disp); letter-spacing: .03em; text-transform: uppercase; text-align: center; }
+  .btn.primary { background: var(--accent); color: var(--on); }
+  .btn.big { min-height: 72px; font-size: 28px; }
+  .btn.ghost { background: var(--s2); }
+  .btn.quiet { min-height: 52px; font-size: 19px; color: var(--dim); }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .foot { flex: none; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); background: var(--bg); }
+  .foot.row { flex-direction: row; }
+  .q { margin: 8px 0 8px; font: 700 40px/1 var(--disp); text-transform: uppercase; text-wrap: balance; }
+  .note { font-size: 15px; color: var(--warn); }
+  .ico { width: 28px; height: 28px; flex: none; }
+
+  /* top bar */
+  .topbar { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 4px; flex: none; }
+  .topbar h1 { margin: 0; font: 700 28px/1 var(--disp); text-transform: uppercase; letter-spacing: .03em; flex: 1; padding-left: 12px; }
+  .topbar .back { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--r); }
+  .topbar .skip { height: 48px; padding: 0 14px; font: 700 18px/1 var(--disp); letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+  .segs { flex: 1; display: flex; gap: 4px; }
+  .segs i { flex: 1; height: 6px; border-radius: 3px; background: var(--s2); }
+  .segs i.on { background: var(--accent); }
+
+  /* welcome + ready */
+  .hello { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 24px 16px; gap: 10px; }
+  .hello .mark { font: 700 88px/.85 var(--disp); text-transform: uppercase; margin-bottom: 4px; }
+  .hello .mark span { color: var(--accent); }
+  .hello p { margin: 0 0 20px; font-size: 20px; color: var(--dim); }
+  .hero { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .hero .name { font: 700 56px/.95 var(--disp); text-transform: uppercase; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { padding: 5px 10px; border-radius: 4px; background: var(--s2); font: 600 15px/1.1 var(--body); }
+  .pill.cardio { background: transparent; border: 1px dashed var(--line); }
+
+  /* A: option rows */
+  .opt { display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); }
+  .opt .t { flex: 1; min-width: 0; }
+  .opt .t b { display: block; font: 700 26px/1.05 var(--disp); text-transform: uppercase; }
+  .opt .t small { display: block; font-size: 15px; color: var(--dim); margin-top: 3px; }
+  .opt .t .pills { margin-top: 8px; }
+  .opt .t .pill { font-size: 13px; padding: 3px 7px; }
+  .opt.on { border: 2px solid var(--accent); padding: 11px 15px; }
+  .opt .tick { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); flex: none; display: grid; place-items: center; }
+  .opt.on .tick { background: var(--accent); border-color: var(--accent); color: var(--on); }
+  .numgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .num { aspect-ratio: 1; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); font: 700 48px/1 var(--disp); }
+  .num.on { background: var(--accent); color: var(--on); border-color: var(--accent); }
+  .more { align-self: flex-start; height: 48px; padding: 0 4px; font: 700 18px/1 var(--disp); letter-spacing: .05em; text-transform: uppercase; color: var(--at); }
+  .sect { margin-top: 10px; }
+
+  /* equipment list rows (A, C) */
+  .eq { display: flex; align-items: center; gap: 16px; min-height: 68px; padding: 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); }
+  .eq .ico { width: 36px; height: 36px; color: var(--dim); }
+  .eq b { flex: 1; font: 700 24px/1 var(--disp); text-transform: uppercase; }
+  .eq .box { width: 32px; height: 32px; border-radius: var(--r); border: 2px solid var(--line); display: grid; place-items: center; flex: none; }
+  .eq.on { border-color: var(--accent); }
+  .eq.on .ico { color: var(--text); }
+  .eq.on .box { background: var(--accent); border-color: var(--accent); color: var(--on); }
+
+  /* B: tiles */
+  .bhead { display: flex; align-items: baseline; gap: 6px; font: 700 22px/1 var(--disp); color: var(--dim); }
+  .bhead b { color: var(--text); font-size: 32px; }
+  .bar { height: 4px; background: var(--s2); border-radius: 2px; overflow: hidden; flex: none; margin: 0 16px; }
+  .bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tiles.three { grid-template-columns: repeat(3, 1fr); }
+  .tiles.four { grid-template-columns: repeat(4, 1fr); }
+  .tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 140px; padding: 14px 8px;
+          background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); text-align: center; }
+  .tile .ico { width: 48px; height: 48px; color: var(--dim); }
+  .tile b { font: 700 24px/1 var(--disp); text-transform: uppercase; }
+  .tile small { font-size: 14px; color: var(--dim); margin-top: -4px; }
+  .tile.wide { grid-column: 1 / -1; min-height: 96px; flex-direction: row; gap: 16px; }
+  .tile.on { border: 2px solid var(--accent); background: var(--s2); }
+  .tile.on .ico { color: var(--at); }
+  .tile .usual { position: absolute; top: 8px; left: 8px; font: 600 11px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .tile .ck { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on); display: none; place-items: center; }
+  .tile.on .ck { display: grid; }
+  .tile.num2 { min-height: 88px; }
+  .tile.num2 b { font-size: 44px; }
+  .tiles.eqt .tile { min-height: 116px; gap: 8px; }
+  .tiles.eqt .tile b { font-size: 18px; }
+  .tiles.eqt .tile .ico { width: 44px; height: 44px; }
+  .tile.locked { opacity: .55; border-style: dashed; }
+  .tile.locked .ck { display: grid; background: var(--dim); }
+  .split { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); position: relative; }
+  .split b { font: 700 24px/1 var(--disp); text-transform: uppercase; }
+  .split.on { border: 2px solid var(--accent); padding: 13px 15px; background: var(--s2); }
+  .blocks { display: flex; gap: 4px; }
+  .blocks i { flex: 1; height: 40px; border-radius: 4px; background: var(--s2); display: grid; place-items: center; font: 700 14px/1 var(--disp); font-style: normal; text-transform: uppercase; color: var(--text); overflow: hidden; }
+  .split.on .blocks i { background: var(--bg); }
+  .blocks i.cardio { background: transparent !important; border: 1px dashed var(--line); color: var(--dim); }
+  .tools { display: flex; gap: 8px; justify-content: flex-end; }
+  .tools button { height: 40px; padding: 0 14px; border-radius: var(--r); background: var(--s2); font-weight: 600; font-size: 15px; }
+
+  /* C: summary */
+  .rowlist { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); overflow: hidden; }
+  .srow { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 10px 16px; border-top: 1px solid var(--line); }
+  .srow:first-child { border-top: 0; }
+  .srow .t { flex: 1; min-width: 0; }
+  .srow .t .label { display: block; margin-bottom: 6px; }
+  .srow .t b { display: block; font: 700 26px/1.05 var(--disp); text-transform: uppercase; }
+  .srow .t small { display: block; font-size: 15px; color: var(--dim); margin-top: 2px; }
+  .srow .ico { color: var(--dim); }
+  .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .preset { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 96px; border-radius: var(--rbig); background: var(--surface); border: 1px solid var(--line); }
+  .preset b { font: 700 20px/1 var(--disp); text-transform: uppercase; }
+  .preset .ico { width: 36px; height: 36px; color: var(--dim); }
+  .preset.on { border: 2px solid var(--accent); background: var(--s2); }
+  .preset.on .ico { color: var(--at); }
+
+  /* prototype panel (not part of the design) */
+  .proto { position: fixed; z-index: 99; top: calc(env(safe-area-inset-top, 0px) + 60px); right: 6px; display: flex; flex-direction: column; gap: 2px;
+           background: #0a0a0a; color: #fff; border: 1px dashed #ff3bd4; border-radius: 12px; padding: 4px; font: 600 12px/1.2 system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+  .proto button { color: #fff; padding: 7px 8px; border-radius: 8px; text-align: left; }
+  .proto button.on { background: #ff3bd4; color: #000; }
+  .proto .hr { height: 1px; background: #333; margin: 2px 0; }
+  .proto.min > :not(.tog) { display: none; }
+</style>
+
+<div id="app"></div>
+<div class="proto" id="proto"></div>
+
+<script>
+const NAMES = { A:"Pages", B:"Tiles", C:"Summary", D:"Tiles + review" };
+const P = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+const svg = (d, cls="ico") => `<svg class="${cls}" viewBox="0 0 24 24" ${P}>${d}</svg>`;
+// Rough stand-ins drawn on Tabler's grid (24x24, 2px round stroke), per the image research.
+const IC = {
+  back:'<path d="M15 5l-7 7 7 7"/>',
+  chev:'<path d="M9 5l7 7-7 7"/>',
+  check:'<path d="M5 12l5 5 9-10"/>',
+  barbell:'<path d="M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8"/>',
+  dumbbell:'<rect x="4" y="8" width="4" height="8" rx="1"/><rect x="16" y="8" width="4" height="8" rx="1"/><path d="M8 12h8M2 11v2M22 11v2"/>',
+  ezbar:'<path d="M2 12h3l2-2 2.5 4 2.5-4 2.5 4 2.5-4 2 2h3M5 8v8M19 8v8"/>',
+  cable:'<path d="M4 3v18M4 3h9"/><circle cx="13" cy="5" r="2"/><path d="M15 5v10M12 18h6M15 15v3"/>',
+  machine:'<path d="M5 3v18M19 3v18M5 3h14M12 3v7"/><rect x="8" y="10" width="8" height="3"/><rect x="8" y="14" width="8" height="3"/><rect x="8" y="18" width="8" height="3"/>',
+  kettle:'<circle cx="12" cy="15" r="6"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+  bands:'<path d="M5 6c4 3 10 3 14 0M5 18c4-3 10-3 14 0M5 6c-2 4-2 8 0 12M19 6c2 4 2 8 0 12"/>',
+  medball:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.5 3 3.5 15 0 18M12 3c-3.5 3-3.5 15 0 18"/>',
+  swissball:'<circle cx="12" cy="11" r="8"/><path d="M7 5.5c3 3 3 8 0 11.5M8 21h8"/>',
+  foam:'<ellipse cx="6" cy="12" rx="2.5" ry="5"/><path d="M6 7h12a2.5 5 0 0 1 0 10H6M11 7v10M15 7v10"/>',
+  treadmill:'<circle cx="11" cy="4" r="1.5"/><path d="M8 13l2-4 3 2 2-1M10 9l-1 4 2 2"/><path d="M3 19h14l3-9h-2M5 21h12"/>',
+  bike:'<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-7h6l2 7M10 10l2 7M8 7h3M15 7h2l-1 3"/>',
+  rower:'<path d="M3 19h18M5 19v-3M19 19v-3"/><circle cx="18" cy="12" r="3"/><path d="M6 15h4M15 12l-7-3"/>',
+  elliptical:'<ellipse cx="9" cy="17" rx="5" ry="2.5"/><path d="M14 17l3-11M17 6h3M17 6l-4 4M4 21h16"/>',
+  stairs:'<path d="M3 20h4v-4h4v-4h4v-4h4V4h2"/>',
+  outdoor:'<circle cx="17" cy="6" r="2"/><path d="M3 20l6-9 4 6 3-4 5 7z"/>',
+  body:'<circle cx="12" cy="4.5" r="2"/><path d="M12 7v7M7 10l5-1 5 1M12 14l-3 7M12 14l3 7"/>',
+  muscle:'<path d="M4 16c1-6 3-10 7-11l2 3-3 2c2 1 4 1 6-1 3 1 4 4 3 7-2 3-8 4-15 0z"/>',
+  strength:'<path d="M6 20V10M18 20V10M3 14h18M9 7v10M15 7v10"/>',
+  stamina:'<path d="M3 12h4l2-5 4 10 2-5h6"/>',
+  heavy:'<rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/><path d="M9 12h6M2 12h3M19 12h3"/>',
+  mid:'<rect x="6" y="7" width="3" height="10" rx="1"/><rect x="15" y="7" width="3" height="10" rx="1"/><path d="M9 12h6M3 12h3M18 12h3"/>',
+  light:'<rect x="7" y="9" width="2" height="6" rx="1"/><rect x="15" y="9" width="2" height="6" rx="1"/><path d="M9 12h6M3 12h4M17 12h4"/>',
+  none:'<circle cx="12" cy="12" r="9"/><path d="M6 18L18 6"/>',
+  ownday:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 15h8"/>',
+  after:'<path d="M5 12h10M11 7l5 5-5 5"/><path d="M19 5v14"/>',
+  gym:'<path d="M3 21V9l9-5 9 5v12M8 21v-7h8v7"/>',
+  home:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+};
+
+// ---------------------------------------------------------------- the questions
+const LIFTING = [
+  ["barbell","Barbells","barbell"], ["dumbbell","Dumbbells","dumbbell"], ["cable","Cables","cable"],
+  ["machine","Machines","machine"], ["e-z curl bar","EZ bars","ezbar"], ["kettlebells","Kettlebells","kettle"],
+  ["bands","Bands","bands"], ["medicine ball","Medicine balls","medball"], ["exercise ball","Exercise balls","swissball"],
+  ["foam roll","Foam rollers","foam"],
+];
+const CARDIO = [
+  ["treadmill","Treadmills","treadmill"], ["stationary bike","Exercise bikes","bike"], ["rower","Rowers","rower"],
+  ["elliptical","Ellipticals","elliptical"], ["stair climber","Stair climbers","stairs"], ["outdoor","Outdoors","outdoor"],
+];
+const PRESETS = {
+  gym:  { name:"Gym",  icon:"gym",  items:[...LIFTING.map(e=>e[0]), ...CARDIO.map(e=>e[0])] },
+  home: { name:"Home", icon:"home", items:["dumbbell","kettlebells","bands","exercise ball","outdoor"] },
+  none: { name:"None", icon:"body", items:["outdoor"] },
+};
+const SHAPES = [
+  ["full-body-1","Full body",["Full"]],
+  ["full-body-2","Full body A/B",["Full A","Full B"]],
+  ["full-body-3","Full body A/B/C",["Full A","Full B","Full C"]],
+  ["upper-lower-2","Upper / Lower",["Upper","Lower"]],
+  ["upper-lower-4","Upper / Lower ×2",["Up A","Low A","Up B","Low B"]],
+  ["upper-lower-6","Upper / Lower ×3",["Up","Low","Up","Low","Up","Low"]],
+  ["ulf-5","Upper / Lower + Full",["Up","Low","Up","Low","Full"]],
+  ["ppl-3","Push / Pull / Legs",["Push","Pull","Legs"]],
+  ["ppl-6","Push / Pull / Legs ×2",["Push","Pull","Legs","Push","Pull","Legs"]],
+  ["bp-5","Body part",["Chest","Back","Shldr","Arms","Legs"]],
+  ["ula-3","Upper / Lower / Arms",["Upper","Lower","Arms"]],
+  ["fulf-4","Full / Upper / Full / Lower",["Full A","Upper","Full B","Lower"]],
+  ["pplul-5","Push / Pull / Legs / Up / Low",["Push","Pull","Legs","Up","Low"]],
+];
+// Every shape offered, likeliest for their week first (splitShapesFor).
+const shapesFor = days => SHAPES.map((s,i)=>[s,i]).sort((a,b)=>
+  (Math.abs(a[0][2].length-days)-Math.abs(b[0][2].length-days)) || (a[0][2].length-b[0][2].length) || (a[1]-b[1])).map(x=>x[0]);
+
+const Q = {
+  unit:  { q:"Kilos or pounds?", c:"Units", usual:"kg", opts:[["kg","Kilos","kg","heavy"],["lb","Pounds","lb","heavy"]] },
+  goal:  { q:"What's your goal?", c:"Goal", usual:"muscle", opts:[["muscle","Build muscle","","muscle"],["strength","Get stronger","","strength"],["endurance","Build stamina","","stamina"]] },
+  reps:  { q:"How do you like to lift?", c:"Lifting", usual:"mid", opts:[["heavy","Heavy","fewer reps","heavy"],["mid","In between","","mid"],["light","Light","more reps","light"]] },
+  days:  { q:"Days a week?", c:"Days a week", usual:3 },
+  shape: { q:"Pick a split", c:"Split" },
+  cardio:{ q:"Any cardio?", c:"Cardio", usual:"none", opts:[["none","No cardio","","none"],["own","Its own day","","ownday"],["after","After lifting","","after"]] },
+  equip: { q:"What do you have?", c:"Equipment" },
+};
+const STEPS = Object.keys(Q);
+
+// ---------------------------------------------------------------- state
+const S = { v:"A", screen:"welcome", i:0, pick:null, edit:false, moreShapes:false, minP:false, a:{} };
+function freshAnswers(v) {
+  // A: nothing chosen. B and C: the usual answer is already in.
+  if (v === "A") return { equip:new Set() };
+  return { unit:"kg", goal:"muscle", reps:"mid", days:3, shape:null, cardio:"none", equip:new Set(PRESETS.gym.items) };
+}
+S.a = freshAnswers(S.v);
+try { const p = JSON.parse(localStorage.getItem("setup-proto")||"{}"); if (NAMES[p.v]) { S.v = p.v; S.a = freshAnswers(S.v); } if (p.theme) document.documentElement.dataset.theme = p.theme; } catch (e) {}
+
+const days = () => S.a.days ?? 3;
+const cardio = () => S.a.cardio ?? "none";
+const shape = () => SHAPES.find(s => s[0] === S.a.shape) || shapesFor(days())[0];
+const optLabel = (k, val) => (Q[k].opts.find(o => o[0] === val) || [])[1];
+function equipOffered() { return cardio() === "none" ? LIFTING : [...LIFTING, ...CARDIO]; }
+function equipSummary() {
+  const have = [...S.a.equip].filter(e => equipOffered().some(x => x[0] === e));
+  for (const [k,p] of Object.entries(PRESETS)) {
+    const want = p.items.filter(e => equipOffered().some(x => x[0] === e));
+    if (want.length === have.length && want.every(e => have.includes(e))) return k === "none" ? "Bodyweight only" : p.name === "Gym" ? "Full gym" : "Home";
+  }
+  return have.length ? `${have.length} things` : "Bodyweight only";
+}
+function conflict() {
+  if ((S.a.reps ?? "mid") !== "heavy") return "";
+  const heavy = ["barbell","dumbbell","machine"].some(e => S.a.equip.has(e));
+  return heavy ? "" : "Heavy lifting needs barbells, dumbbells or machines.";
+}
+
+// ---------------------------------------------------------------- navigation (real history, so Back works)
+let hist = true;
+function nav(patch) {
+  Object.assign(S, patch);
+  try { history.pushState({ screen:S.screen, i:S.i, pick:S.pick, edit:S.edit }, ""); } catch (e) { hist = false; }
+  render();
+}
+function back() {
+  if (hist) return history.back();
+  if (S.pick) S.pick = null; else if (S.screen === "q" && S.i > 0) S.i--; else S.screen = "welcome";
+  render();
+}
+addEventListener("popstate", e => { const s = e.state || { screen:"welcome", i:0, pick:null, edit:false }; Object.assign(S, s); S.moreShapes = false; render(); });
+function next() { if (S.i < STEPS.length - 1) nav({ i:S.i+1, moreShapes:false }); else nav({ screen: S.v === "D" ? "review" : "ready" }); }
+
+// ---------------------------------------------------------------- shared pages
+function welcome() {
+  return `<div class="hello">
+    <div class="mark">Train<br><span>Tracks</span></div>
+    <p>Let's build your routine.</p>
+    <button class="btn primary big" data-go="start">${S.v === "C" ? "Build my routine" : "Get started"}</button>
+    <button class="btn quiet" data-toast="Build it yourself: the routine builder (its own prototype)">I'll build it myself</button>
+    <button class="btn quiet" data-toast="Import from FitNotes">Import from FitNotes</button>
+  </div>`;
+}
+function ready() {
+  const sh = shape(), dz = [...sh[2]]; if (cardio() === "own") dz.push("Cardio");
+  return `<div class="topbar"><h1>Today</h1></div>
+  <div class="scroll">
+    <div class="card hero">
+      <span class="label">Next up · day 1 of ${dz.length}</span>
+      <div class="name">${dz[0]}</div>
+      <div class="pills">${dz.map((d,i)=>`<span class="pill ${d==="Cardio"?"cardio":""}" style="${i===0?"outline:2px solid var(--accent)":""}">${d}</span>`).join("")}</div>
+      <button class="btn primary big" data-toast="Start → the workout prototype">Start workout</button>
+    </div>
+    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+      <span class="label">What you picked</span>
+      <div class="dim" style="font-size:15px;line-height:1.6">${[
+        (S.a.unit ?? "kg").toUpperCase(), optLabel("goal", S.a.goal ?? "muscle"), optLabel("reps", S.a.reps ?? "mid"),
+        `${days()} days a week`, sh[1], optLabel("cardio", cardio()), equipSummary()].join(" · ")}</div>
+    </div>
+    <button class="btn quiet" data-restart>↺ Start setup again</button>
+  </div>`;
+}
+
+// ---------------------------------------------------------------- A: Pages
+function aPage() {
+  const k = STEPS[S.i], q = Q[k], last = k === "equip";
+  let body = "";
+  if (q.opts) body = q.opts.map(([v,l,sub]) => `<button class="opt ${S.a[k]===v?"on":""}" data-set="${k}" data-val="${v}">
+      <span class="t"><b>${l}</b>${sub?`<small>${sub}</small>`:""}</span><span class="tick">${S.a[k]===v?svg(IC.check,"ico\" style=\"width:18px;height:18px"):""}</span></button>`).join("");
+  if (k === "days") body = `<div class="numgrid">${[1,2,3,4,5,6,7].map(n=>`<button class="num ${S.a.days===n?"on":""}" data-set="days" data-val="${n}">${n}</button>`).join("")}</div>`;
+  if (k === "shape") {
+    const list = shapesFor(days()), shown = S.moreShapes ? list : list.slice(0,3);
+    body = shown.map(s => `<button class="opt ${S.a.shape===s[0]?"on":""}" data-set="shape" data-val="${s[0]}">
+      <span class="t"><b>${s[1]}</b><span class="pills">${s[2].map(d=>`<span class="pill">${d}</span>`).join("")}${cardio()==="own"?'<span class="pill cardio">Cardio</span>':""}</span></span>
+      <span class="tick">${S.a.shape===s[0]?svg(IC.check,"ico\" style=\"width:18px;height:18px"):""}</span></button>`).join("")
+      + (S.moreShapes ? "" : `<button class="more" data-moreshapes>More splits (${list.length-3})</button>`);
+  }
+  if (last) body = eqList() + (conflict() ? `<div class="note">${conflict()}</div>` : "");
+  return `<div class="topbar">
+      <button class="back" data-back aria-label="Back">${svg(IC.back)}</button>
+      <div class="segs">${STEPS.map((_,j)=>`<i class="${j<=S.i?"on":""}"></i>`).join("")}</div>
+      ${last ? "" : `<button class="skip" data-skip>Skip</button>`}
+    </div>
+    <div class="scroll"><h2 class="q">${q.q}</h2>${body}</div>
+    ${last ? `<div class="foot"><button class="btn primary big" data-build>Build my routine</button></div>` : ""}`;
+}
+function eqList() {
+  const row = ([v,l,ic]) => `<button class="eq ${S.a.equip.has(v)?"on":""}" data-eq="${v}">${svg(IC[ic])}<b>${l}</b><span class="box">${S.a.equip.has(v)?svg(IC.check,"ico\" style=\"width:20px;height:20px"):""}</span></button>`;
+  return LIFTING.map(row).join("") + (cardio()==="none" ? "" : `<div class="label sect">Cardio</div>` + CARDIO.map(row).join(""));
+}
+
+// ---------------------------------------------------------------- B: Tiles
+function bPage() {
+  const k = STEPS[S.i], q = Q[k], last = k === "equip";
+  const usual = v => q.usual === v ? `<span class="usual">Usual</span>` : "";
+  let body = "";
+  if (q.opts) body = `<div class="tiles">${q.opts.map(([v,l,sub,ic],j) => `<button class="tile ${S.a[k]===v?"on":""} ${q.opts.length===3&&j===2?"wide":""}" data-set="${k}" data-val="${v}">
+      ${usual(v)}<span class="ck">${svg(IC.check,"ico\" style=\"width:14px;height:14px")}</span>
+      ${k==="unit" ? `<b style="font-size:64px">${sub}</b>` : svg(IC[ic])}<span><b>${l}</b>${sub&&k!=="unit"?`<small style="display:block;margin-top:4px">${sub}</small>`:""}</span></button>`).join("")}</div>`;
+  if (k === "days") body = `<div class="tiles four">${[1,2,3,4,5,6,7].map(n=>`<button class="tile num2 ${S.a.days===n?"on":""}" data-set="days" data-val="${n}">${usual(n)}<b>${n}</b></button>`).join("")}</div>`;
+  if (k === "shape") {
+    const list = shapesFor(days()), shown = S.moreShapes ? list : list.slice(0,4), cur = shape()[0];
+    body = shown.map((s,j) => `<button class="split ${cur===s[0]?"on":""}" data-set="shape" data-val="${s[0]}">
+      <span style="display:flex;justify-content:space-between;align-items:center"><b>${s[1]}</b>${j===0?'<span class="label">Best fit</span>':""}</span>
+      <span class="blocks">${s[2].map(d=>`<i>${d}</i>`).join("")}${cardio()==="own"?'<i class="cardio">Cardio</i>':""}</span></button>`).join("")
+      + (S.moreShapes ? "" : `<button class="more" data-moreshapes>More splits (${list.length-4})</button>`);
+  }
+  if (last) {
+    const tile = ([v,l,ic]) => `<button class="tile ${S.a.equip.has(v)?"on":""}" data-eq="${v}"><span class="ck">${svg(IC.check,"ico\" style=\"width:14px;height:14px")}</span>${svg(IC[ic])}<b>${l}</b></button>`;
+    body = `<div class="tools"><button data-eqall>All</button><button data-eqnone>None</button></div>
+      <div class="tiles three eqt">
+        ${S.v === "D" ? "" : `<div class="tile locked"><span class="ck">${svg(IC.check,"ico\" style=\"width:14px;height:14px")}</span>${svg(IC.body)}<b>Body&shy;weight</b></div>`}
+        ${LIFTING.map(tile).join("")}</div>
+      ${cardio()==="none" ? "" : `<div class="label sect">Cardio</div><div class="tiles three eqt">${CARDIO.map(tile).join("")}</div>`}
+      ${conflict() ? `<div class="note">${conflict()}</div>` : ""}`;
+  }
+  return `<div class="topbar">
+      <button class="back" data-back aria-label="Back">${svg(IC.back)}</button>
+      ${S.edit ? `<h1 style="padding-left:0">${q.c}</h1>` : `<div class="bhead" style="flex:1"><b>${S.i+1}</b>/ ${STEPS.length}</div>`}
+    </div>
+    ${S.edit ? "" : `<div class="bar"><i style="width:${(S.i+1)/STEPS.length*100}%"></i></div>`}
+    <div class="scroll"><h2 class="q" style="margin-top:14px">${q.q}</h2>${body}</div>
+    <div class="foot">${S.edit ? `<button class="btn primary big" data-back>Done</button>`
+      : `<button class="btn primary big" data-next>${last ? (S.v === "D" ? "Review" : "Build my routine") : "Next"}</button>`}</div>`;
+}
+
+// ---------------------------------------------------------------- C: Summary
+function cSummary() {
+  const sh = shape();
+  const row = (k, val, sub="") => `<button class="srow" data-pick="${k}"><span class="t"><span class="label">${Q[k].c}</span><b>${val}</b>${sub?`<small>${sub}</small>`:""}</span>${svg(IC.chev)}</button>`;
+  return `<div class="topbar"><button class="back" data-back aria-label="Back">${svg(IC.back)}</button><h1 style="padding-left:0">Your routine</h1></div>
+    <div class="scroll">
+      <div class="rowlist">
+        ${row("goal", optLabel("goal", S.a.goal))}
+        ${row("reps", optLabel("reps", S.a.reps))}
+        ${row("days", `${S.a.days} a week`)}
+        ${row("shape", sh[1], [...sh[2], ...(cardio()==="own"?["Cardio"]:[])].join(" · "))}
+        ${row("cardio", optLabel("cardio", S.a.cardio))}
+        ${row("equip", equipSummary())}
+        ${row("unit", S.a.unit === "kg" ? "Kilos" : "Pounds")}
+      </div>
+      ${conflict() ? `<div class="note">${conflict()}</div>` : ""}
+    </div>
+    <div class="foot"><button class="btn primary big" data-build>Build my routine</button></div>`;
+}
+function cPick() {
+  const k = S.pick, q = Q[k];
+  let body = "", done = false;
+  if (q.opts) body = q.opts.map(([v,l,sub]) => `<button class="opt ${S.a[k]===v?"on":""}" data-set="${k}" data-val="${v}">
+      <span class="t"><b>${l}</b>${sub?`<small>${sub}</small>`:""}</span><span class="tick">${S.a[k]===v?svg(IC.check,"ico\" style=\"width:18px;height:18px"):""}</span></button>`).join("");
+  if (k === "days") body = `<div class="numgrid">${[1,2,3,4,5,6,7].map(n=>`<button class="num ${S.a.days===n?"on":""}" data-set="days" data-val="${n}">${n}</button>`).join("")}</div>`;
+  if (k === "shape") {
+    const cur = shape()[0];
+    body = shapesFor(days()).map(s => `<button class="opt ${cur===s[0]?"on":""}" data-set="shape" data-val="${s[0]}">
+      <span class="t"><b>${s[1]}</b><span class="pills">${s[2].map(d=>`<span class="pill">${d}</span>`).join("")}${cardio()==="own"?'<span class="pill cardio">Cardio</span>':""}</span></span>
+      <span class="tick">${cur===s[0]?svg(IC.check,"ico\" style=\"width:18px;height:18px"):""}</span></button>`).join("");
+  }
+  if (k === "equip") {
+    done = true;
+    const sum = equipSummary();
+    body = `<div class="presets">${Object.entries(PRESETS).map(([pk,p]) => {
+        const on = (pk==="gym"&&sum==="Full gym")||(pk==="home"&&sum==="Home")||(pk==="none"&&sum==="Bodyweight only");
+        return `<button class="preset ${on?"on":""}" data-preset="${pk}">${svg(IC[p.icon])}<b>${p.name}</b></button>`; }).join("")}</div>
+      <div class="label sect">Or pick</div>${eqList()}`;
+  }
+  return `<div class="topbar"><button class="back" data-back aria-label="Back">${svg(IC.back)}</button><h1 style="padding-left:0">${q.c}</h1></div>
+    <div class="scroll">${k==="equip"?"":`<h2 class="q">${q.q}</h2>`}${body}</div>
+    ${done ? `<div class="foot"><button class="btn primary big" data-back>Done</button></div>` : ""}`;
+}
+
+// ---------------------------------------------------------------- render + input
+let toastT;
+function toast(msg) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0a0a0a;color:#fff;padding:10px 14px;border-radius:8px;font:600 14px system-ui;z-index:100;border:1px dashed #ff3bd4;max-width:90vw"; document.body.append(t); }
+  t.textContent = "Prototype: " + msg; t.style.display = "block"; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = "none", 2200);
+}
+function render() {
+  const app = document.getElementById("app");
+  if (S.screen === "welcome") app.innerHTML = welcome();
+  else if (S.screen === "ready") app.innerHTML = ready();
+  else if (S.screen === "review") app.innerHTML = cSummary();
+  else if (S.v === "C") app.innerHTML = S.pick ? cPick() : cSummary();
+  else app.innerHTML = S.v === "A" ? aPage() : bPage();
+  renderProto();
+}
+function renderProto() {
+  const p = document.getElementById("proto"), th = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  p.className = "proto" + (S.minP ? " min" : "");
+  p.innerHTML = `<button class="tog" data-pmin>${S.minP ? "◀ proto" : "▶ hide"}</button>` +
+    Object.keys(NAMES).map(k=>`<button data-v="${k}" class="${S.v===k?'on':''}">${k} ${NAMES[k]}</button>`).join("") +
+    `<div class="hr"></div>` + ["dark","light"].map(k=>`<button data-theme="${k}" class="${th===k?'on':''}">${k[0].toUpperCase()+k.slice(1)}</button>`).join("");
+  try { localStorage.setItem("setup-proto", JSON.stringify({ v:S.v, theme:document.documentElement.dataset.theme })); } catch (e) {}
+}
+function restart(v) {
+  S.v = v; S.a = freshAnswers(v); S.screen = "welcome"; S.i = 0; S.pick = null; S.edit = false; S.moreShapes = false;
+  try { history.replaceState({ screen:"welcome", i:0, pick:null, edit:false }, ""); } catch (e) {}
+  render();
+}
+
+let advancing = false;
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("button"); if (!t) return;
+  const d = t.dataset;
+  if (d.v) return restart(d.v);
+  if (d.theme) { document.documentElement.dataset.theme = d.theme; return renderProto(); }
+  if ("pmin" in d) { S.minP = !S.minP; return renderProto(); }
+  if (d.toast) return toast(d.toast);
+  if ("restart" in d) return restart(S.v);
+  if ("back" in d) return back();
+  if (d.go === "start") return S.v === "C" ? nav({ screen:"q", pick:null }) : nav({ screen:"q", i:0 });
+  if ("moreshapes" in d) { S.moreShapes = true; return render(); }
+  if (d.set) {
+    if (advancing) return;
+    const k = d.set, val = k === "days" ? +d.val : d.val;
+    S.a[k] = val;
+    if (k === "days" && S.v !== "A") S.a.shape = null;   // the best fit follows the week
+    if (k === "cardio" && val === "none") CARDIO.forEach(c => S.a.equip.delete(c[0]));
+    if (k === "cardio" && val !== "none" && S.v !== "A") CARDIO.forEach(c => S.a.equip.add(c[0]));
+    render();
+    // A moves on by itself; C goes back to the summary; B waits for Next.
+    if (S.v === "A") { advancing = true; setTimeout(() => { advancing = false; next(); }, 260); }
+    if (S.v === "C") { advancing = true; setTimeout(() => { advancing = false; back(); }, 260); }
+    return;
+  }
+  if (d.eq) { S.a.equip.has(d.eq) ? S.a.equip.delete(d.eq) : S.a.equip.add(d.eq); return render(); }
+  if ("eqall" in d) { equipOffered().forEach(e => S.a.equip.add(e[0])); return render(); }
+  if ("eqnone" in d) { S.a.equip.clear(); return render(); }
+  if (d.preset) { S.a.equip = new Set(PRESETS[d.preset].items); return render(); }
+  if (d.pick) return S.v === "D" ? nav({ screen:"q", i:STEPS.indexOf(d.pick), edit:true, moreShapes:false }) : nav({ pick:d.pick });
+  if ("skip" in d) { delete S.a[STEPS[S.i]]; return next(); }
+  if ("next" in d) return next();
+  if ("build" in d) return nav({ screen:"ready", pick:null, edit:false });
+});
+document.addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  const ks = Object.keys(NAMES), j = ks.indexOf(S.v);
+  restart(ks[(j + (e.key === "ArrowRight" ? 1 : ks.length - 1)) % ks.length]);
+});
+
+try { history.replaceState({ screen:"welcome", i:0, pick:null }, ""); } catch (e) { hist = false; }
+render();
+</script>
