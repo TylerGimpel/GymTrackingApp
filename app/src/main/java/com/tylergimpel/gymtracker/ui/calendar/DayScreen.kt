@@ -80,9 +80,10 @@ data class Corrections(
 )
 
 /**
- * What was done on one day, read-only: every session on it, each exercise and each set (#118).
+ * What was done on one day: every session on it, each exercise and each set (#118), any of which
+ * can be corrected, removed or added to after the fact (#120).
  *
- * **In the shape it was logged in** (#119): a superset as a group, drops beneath their set, both
+ * **In the shape it was logged in** (#119): a **Superset** as a group, drops beneath their set, both
  * sides of a per-side set together, and an imported session saying which source it came from.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -151,9 +152,9 @@ private fun PastSession(
         )
         // Where the data came from, by name, so an imported session is never mistaken for one
         // logged here (#119).
-        session.importBatchId?.let { batch ->
+        if (session.isImported) {
             Text(
-                text = state.importedFrom[batch]?.let { stringResource(R.string.day_imported_from, it.name) }
+                text = state.importedFrom[session.importBatchId]?.let { stringResource(R.string.day_imported_from, it.name) }
                     ?: stringResource(R.string.day_imported),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

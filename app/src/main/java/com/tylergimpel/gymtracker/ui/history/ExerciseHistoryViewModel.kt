@@ -33,7 +33,7 @@ data class ExerciseHistoryUiState(
     val reachedEnd: Boolean = false,
     /** Each session's best and the **Anchor** after it, across the whole history (#122). */
     val strength: List<StrengthPoint> = emptyList(),
-    /** The best set at each rep count, recomputed from the log (#123). */
+    /** The **Personal records**: the best set at each rep count, recomputed from the log (#123). */
     val records: List<PersonalRecord> = emptyList(),
     /** Counted sets per session, from where set types became known (#125). */
     val volume: VolumeSeries = VolumeSeries(emptyList(), startsAfterHistory = false),

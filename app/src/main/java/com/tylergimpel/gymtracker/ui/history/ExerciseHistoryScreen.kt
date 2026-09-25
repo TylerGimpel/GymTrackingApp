@@ -129,7 +129,7 @@ internal fun LoggedSetLines(
     sets: List<PerformedSet>,
     displayUnit: WeightUnit,
     lifterUnit: WeightUnit,
-    /** Where a set can be corrected (#120), what tapping one of its efforts opens; null to only read. */
+    /** Where a set can be corrected (#120), what tapping one of its **Efforts** opens; null to only read. */
     onEdit: ((PerformedSet, Effort) -> Unit)? = null,
 ) {
     fun Modifier.editing(set: PerformedSet, effort: Effort) =
@@ -144,6 +144,7 @@ internal fun LoggedSetLines(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.fillMaxWidth().editing(set, single),
             )
+            Drops(single, displayUnit)
         } else {
             val number = stringResource(R.string.history_set_number, index + 1)
             Text(text = kind?.let { "$number · $it" } ?: number, style = MaterialTheme.typography.bodyLarge)
@@ -155,11 +156,18 @@ internal fun LoggedSetLines(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.fillMaxWidth().editing(set, effort).padding(start = 16.dp),
                 )
+                // Beneath the side they continue: a drop on the left is not a drop on the right.
+                Drops(effort, displayUnit)
             }
         }
-        set.efforts.flatMap(Effort::drops).forEach { drop ->
-            Row(modifier = Modifier.padding(start = 16.dp)) { DropRow(drop, displayUnit) }
-        }
+    }
+}
+
+/** The **Drops** continuing one **Effort**, beneath it. */
+@Composable
+private fun Drops(effort: Effort, displayUnit: WeightUnit) {
+    effort.drops.forEach { drop ->
+        Row(modifier = Modifier.padding(start = 16.dp)) { DropRow(drop, displayUnit) }
     }
 }
 

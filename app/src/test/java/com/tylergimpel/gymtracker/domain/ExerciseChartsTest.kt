@@ -26,10 +26,16 @@ class ExerciseChartsTest {
         assertEquals(3, series.size)
         // The best set, not the first or the last: the heavy five, not the back-off.
         assertEquals(epley(Kilograms(100.0), 5).value, series[0].best.value, TOLERANCE)
-        // The line is exactly what the engine prescribes from, at every point along it.
-        series.forEachIndexed { index, point ->
-            assertEquals(Anchor.from(history.sessions.take(index + 1))!!.estimated1rm.value, point.anchor.value, TOLERANCE)
+        // The line is the engine's smoothing, worked by hand: the first session taken at its word,
+        // and each later one moving the estimate a third of the way toward it.
+        val first = epley(Kilograms(100.0), 5).value
+        val second = first + Anchor.SMOOTHING * (epley(Kilograms(102.5), 5).value - first)
+        val third = second + Anchor.SMOOTHING * (epley(Kilograms(105.0), 5).value - second)
+        series.zip(listOf(first, second, third)).forEach { (point, expected) ->
+            assertEquals(expected, point.anchor.value, TOLERANCE)
         }
+        // And it is the same number the engine prescribes from.
+        assertEquals(third, Anchor.from(history.sessions)!!.estimated1rm.value, TOLERANCE)
     }
 
     @Test

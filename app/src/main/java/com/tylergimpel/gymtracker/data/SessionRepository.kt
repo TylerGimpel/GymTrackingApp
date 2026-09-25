@@ -78,12 +78,17 @@ class SessionRepository(
     ).map(ExerciseHistoryRow::toEntry)
 
     /**
-     * Everything [exerciseId] has ever been trained in, as the engine reads it — what its charts
-     * and records are drawn from (#122, #123, #125). Read once when they are opened, per ADR 0010:
-     * low hundreds of rows for a heavily trained lift after years.
+     * Every session [exerciseId] has been trained in, as the engine reads it — the **Training
+     * history** its charts and **Personal records** are drawn from (#122, #123, #125).
+     *
+     * **Apart from the session being logged into**, exactly as the engine leaves it out (ADR 0010):
+     * the line is the number the app prescribes from, and a chart opened mid-workout that folded in
+     * tonight's half-finished sets would show a different number from the one being prescribed.
+     * Read once when the screen is opened: low hundreds of rows for a heavily trained lift.
      */
     suspend fun trainingHistoryOf(exerciseId: String): TrainingHistory =
-        sessions.trainedSetsFor(exerciseId, SessionDao.NO_SESSION).toTrainingHistory()
+        sessions.trainedSetsFor(exerciseId, sessions.activeSession()?.id ?: SessionDao.NO_SESSION)
+            .toTrainingHistory()
 
     /** Every session on [date], with everything logged in it, in the order they were started (#118). */
     fun observeOnDate(date: LocalDate): Flow<List<LoggedSession>> =

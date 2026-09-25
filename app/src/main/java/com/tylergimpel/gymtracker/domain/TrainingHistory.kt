@@ -76,7 +76,7 @@ data class TrainedSession(
     val date: LocalDate,
     val sets: List<TrainedSet>,
     /**
-     * Whether this session's set types can be trusted for counting volume: false for one imported
+     * Whether this session's **Set types** can be trusted for counting volume: false for one imported
      * from a source that never recorded them (#96), where a warm-up and a working set look alike.
      * Strength reads top sets and does not care; volume counts sets and does (#125).
      */
