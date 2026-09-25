@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import com.tylergimpel.gymtracker.domain.MuscleLastTrained
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -131,7 +132,7 @@ private fun DayHeading(day: RoutineDay, isNext: Boolean) {
         text = if (isNext) stringResource(R.string.drawer_day_next, day.name) else day.name,
         style = MaterialTheme.typography.labelLarge,
         color = if (isNext) {
-            MaterialTheme.colorScheme.primary
+            LocalGymColors.current.accentText
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },

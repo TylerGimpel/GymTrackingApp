@@ -18,8 +18,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,8 +73,8 @@ fun CalendarScreen(
     val locale = LocalConfiguration.current.locales[0]
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.calendar_title)) },
+            AppTopBar(
+                title = stringResource(R.string.calendar_title),
                 actions = { TextButton(onClick = onBack) { Text(stringResource(R.string.settings_done)) } },
             )
         },

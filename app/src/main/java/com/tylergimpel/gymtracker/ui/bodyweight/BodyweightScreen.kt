@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.bodyweight
 
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import com.tylergimpel.gymtracker.ui.chart.ChartSeries
 import com.tylergimpel.gymtracker.ui.chart.ChartValue
 import com.tylergimpel.gymtracker.ui.chart.Mark
@@ -16,16 +17,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.tylergimpel.gymtracker.ui.theme.AppButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,8 +97,8 @@ fun BodyweightScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.bodyweight_title)) },
+            AppTopBar(
+                title = stringResource(R.string.bodyweight_title),
                 actions = {
                     TextButton(onClick = onBack) { Text(stringResource(R.string.bodyweight_done)) }
                 },
@@ -185,9 +186,11 @@ private fun WeighInControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             WeighInField(draft, onChange, modifier = Modifier.weight(1f))
-            Button(onClick = onRecord, enabled = draft.isRecordable) {
-                Text(stringResource(R.string.bodyweight_record))
-            }
+            AppButton(
+                text = stringResource(R.string.bodyweight_record),
+                onClick = onRecord,
+                enabled = draft.isRecordable,
+            )
         }
         WeightUnitChips(selected = draft.displayUnit, onReadIn = onReadIn)
         DayButton(draft.date) { onChange(draft.copy(date = it)) }
@@ -220,9 +223,10 @@ private fun WeighInField(
 private fun DayButton(date: LocalDate, onPick: (LocalDate) -> Unit) {
     var picking by rememberSaveable { mutableStateOf(false) }
 
-    OutlinedButton(onClick = { picking = true }) {
-        Text(stringResource(R.string.bodyweight_on, date.toString()))
-    }
+    AppOutlinedButton(
+        text = stringResource(R.string.bodyweight_on, date.toString()),
+        onClick = { picking = true },
+    )
 
     if (picking) {
         DayPickerDialog(
@@ -330,7 +334,7 @@ private fun WeighInChart(state: BodyweightUiState) {
             ChartSeries(
                 state.history.map { ChartValue(it.date, unit.fromKilograms(it.weight)) },
                 setOf(Mark.LINE, Mark.POINTS),
-                MaterialTheme.colorScheme.primary,
+                LocalGymColors.current.accentText,
             ),
         ),
         valueText = { "${it.asAmountText()} $unitLabel" },

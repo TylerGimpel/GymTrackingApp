@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.routine
 
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.material3.LinearProgressIndicator
@@ -18,7 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.tylergimpel.gymtracker.ui.theme.AppButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -26,8 +27,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -81,8 +82,8 @@ fun RoutineScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.routine_title)) },
+            AppTopBar(
+                title = stringResource(R.string.routine_title),
                 actions = {
                     TextButton(onClick = onBack) { Text(stringResource(R.string.routine_done)) }
                 },
@@ -137,7 +138,7 @@ fun RoutineScreen(
                             },
                         ),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = LocalGymColors.current.accentText,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -552,14 +553,16 @@ private fun EmptyRoutine(
                 TextButton(onClick = { answers = answers.skip() }) {
                     Text(stringResource(R.string.setup_skip))
                 }
-                Button(onClick = { answers = answers.next() }) {
-                    Text(stringResource(R.string.setup_next))
-                }
+                AppButton(
+                    text = stringResource(R.string.setup_next),
+                    onClick = { answers = answers.next() },
+                )
             } else {
                 // The payoff for answering: a routine to train from, landed on straight away.
-                Button(onClick = { onCreateFromShape(answers.shapeToBuild(), setup) }) {
-                    Text(stringResource(R.string.setup_build))
-                }
+                AppButton(
+                    text = stringResource(R.string.setup_build),
+                    onClick = { onCreateFromShape(answers.shapeToBuild(), setup) },
+                )
             }
         }
 
@@ -891,7 +894,7 @@ private fun RoutineDayRow(
                 Text(
                     text = stringResource(R.string.routine_next_up),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = LocalGymColors.current.accentText,
                     modifier = Modifier.padding(end = 8.dp),
                 )
             }
@@ -1048,7 +1051,8 @@ private fun AddDay(onAdd: (String, RoutineDayKind) -> Unit) {
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
-            Button(
+            AppButton(
+                text = stringResource(R.string.routine_add),
                 onClick = {
                     onAdd(
                         name.trim(),
@@ -1058,9 +1062,7 @@ private fun AddDay(onAdd: (String, RoutineDayKind) -> Unit) {
                     isCardio = false
                 },
                 enabled = name.isNotBlank(),
-            ) {
-                Text(stringResource(R.string.routine_add))
-            }
+            )
         }
         // Said when the day is made rather than afterwards: what a day is for decides how it is
         // counted, and a cardio day added as a lifting one is wrong from its first cycle.

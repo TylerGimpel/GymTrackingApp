@@ -15,8 +15,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -48,8 +48,8 @@ fun PlatesScreen(onBack: () -> Unit, viewModel: PlatesViewModel = viewModel()) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.plates_title)) },
+            AppTopBar(
+                title = stringResource(R.string.plates_title),
                 actions = {
                     TextButton(onClick = onBack) { Text(stringResource(R.string.plates_done)) }
                 },

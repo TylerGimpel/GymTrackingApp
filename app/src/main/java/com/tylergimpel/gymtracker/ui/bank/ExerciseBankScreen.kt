@@ -21,8 +21,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -70,22 +70,21 @@ fun ExerciseBankScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(stringResource(R.string.exercise_bank_title))
-                        if (state.total > 0) {
-                            Text(
-                                text = stringResource(
-                                    R.string.exercise_bank_count,
-                                    state.exercises.size,
-                                    state.total,
-                                ),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+            AppTopBar(
+                title = stringResource(R.string.exercise_bank_title),
+                subtitle = if (state.total > 0) {
+                    {
+                        Text(
+                            text = stringResource(
+                                R.string.exercise_bank_count,
+                                state.exercises.size,
+                                state.total,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
+                } else {
+                    null
                 },
                 actions = {
                     TextButton(onClick = onStartAdding) {
