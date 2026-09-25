@@ -1,5 +1,14 @@
 package com.tylergimpel.gymtracker.ui.calendar
 
+import com.tylergimpel.gymtracker.domain.Effort
+import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.SessionExercise
+import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.ui.session.EditingEffort
+import com.tylergimpel.gymtracker.ui.session.editingOf
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import com.tylergimpel.gymtracker.domain.ImportSource
 import com.tylergimpel.gymtracker.domain.importSourceWithId
 import android.app.Application
@@ -27,7 +36,14 @@ data class DayUiState(
     val lifterUnit: WeightUnit = WeightUnit.DEFAULT,
     /** Where each import behind these sessions came from, by batch (#119). */
     val importedFrom: Map<Long, ImportSource?> = emptyMap(),
+    /** A logged set open for correction (#120). */
+    val editing: EditingEffort? = null,
+    /** A missed set being added (#120). */
+    val adding: AddingSet? = null,
 )
+
+/** A set the lifter missed, being added to [sessionExerciseId] after the fact (#120). */
+data class AddingSet(val sessionExerciseId: Long, val exerciseUnit: WeightUnit, val draft: SetDraft)
 
 /** One day from the calendar, read back (#118). */
 class DayViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,9 +55,11 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
     private val sessions = database.sessionRepository()
 
     private val date = MutableStateFlow<LocalDate?>(null)
+    private val editing = MutableStateFlow<EditingEffort?>(null)
+    private val adding = MutableStateFlow<AddingSet?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<DayUiState> = date.filterNotNull()
+    private val day: Flow<DayUiState> = date.filterNotNull()
         .flatMapLatest { day ->
             combine(sessions.observeOnDate(day), profile.observeDisplayUnit()) { onThatDay, unit ->
                 val batches = onThatDay.mapNotNull { it.session.importBatchId }.toSet()
@@ -54,10 +72,73 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
                 DayUiState(day, onThatDay, unit, sources)
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), DayUiState())
+
+    val state: StateFlow<DayUiState> = combine(day, editing, adding) { read, correcting, missed ->
+        read.copy(editing = correcting, adding = missed)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), DayUiState())
 
     fun open(day: LocalDate) {
         date.value = day
+        editing.value = null
+        adding.value = null
+    }
+
+    /**
+     * Opens a logged set for correction. Records and the **Anchor** are read from the log, so
+     * whatever is saved here is what they follow, with nothing else to update (ADR 0010).
+     */
+    fun startEditing(performed: SessionExercise, set: PerformedSet, effort: Effort) {
+        editing.value = editingOf(performed, set, effort, state.value.lifterUnit)
+    }
+
+    fun changeEditingDraft(draft: SetDraft) = editing.update { it?.copy(draft = draft) }
+
+    fun cancelEditing() {
+        editing.value = null
+    }
+
+    fun saveEditing() {
+        val open = editing.value ?: return
+        viewModelScope.launch {
+            sessions.editSet(open.effortId, open.draft, open.exerciseUnit)
+            editing.value = null
+        }
+    }
+
+    /** Removes the whole set, both rows if it has two: half a per-side set is not a set. */
+    fun deleteEditing() {
+        val open = editing.value ?: return
+        viewModelScope.launch {
+            sessions.deleteSet(open.sessionExerciseId, open.setIndex)
+            editing.value = null
+        }
+    }
+
+    /** Starts a set the lifter missed on [performed], in its exercise's own terms. */
+    fun startAdding(performed: SessionExercise) {
+        val exercise = performed.exercise
+        adding.value = AddingSet(
+            sessionExerciseId = performed.id,
+            exerciseUnit = exercise.displayUnit,
+            draft = SetDraft(
+                loggingType = exercise.loggingType,
+                displayUnit = exercise.displayUnit,
+                lifterUnit = state.value.lifterUnit,
+            ),
+        )
+    }
+
+    fun changeAddingDraft(draft: SetDraft) = adding.update { it?.copy(draft = draft) }
+
+    fun cancelAdding() {
+        adding.value = null
+    }
+
+    fun saveAdding() {
+        val open = adding.value ?: return
+        viewModelScope.launch {
+            if (sessions.addSetTo(open.sessionExerciseId, open.draft, open.exerciseUnit)) adding.value = null
+        }
     }
 
     private companion object {

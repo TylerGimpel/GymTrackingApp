@@ -1,5 +1,11 @@
 package com.tylergimpel.gymtracker.ui.calendar
 
+import androidx.compose.material3.AlertDialog
+import com.tylergimpel.gymtracker.domain.Effort
+import com.tylergimpel.gymtracker.domain.PerformedSet
+import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.ui.session.EditSetDialog
+import com.tylergimpel.gymtracker.ui.session.SetDraftFields
 import androidx.compose.foundation.border
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SessionPosition
@@ -42,8 +48,36 @@ fun DayScreen(
 ) {
     LaunchedEffect(date) { viewModel.open(date) }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    DayScreen(state = state, onBack = onBack, onOpenHistory = onOpenHistory)
+    DayScreen(
+        state = state,
+        onBack = onBack,
+        onOpenHistory = onOpenHistory,
+        correcting = Corrections(
+            onEdit = viewModel::startEditing,
+            onEditingChange = viewModel::changeEditingDraft,
+            onSaveEditing = viewModel::saveEditing,
+            onDeleteEditing = viewModel::deleteEditing,
+            onCancelEditing = viewModel::cancelEditing,
+            onAdd = viewModel::startAdding,
+            onAddingChange = viewModel::changeAddingDraft,
+            onSaveAdding = viewModel::saveAdding,
+            onCancelAdding = viewModel::cancelAdding,
+        ),
+    )
 }
+
+/** What correcting a past session can do (#120). */
+data class Corrections(
+    val onEdit: (SessionExercise, PerformedSet, Effort) -> Unit = { _, _, _ -> },
+    val onEditingChange: (SetDraft) -> Unit = {},
+    val onSaveEditing: () -> Unit = {},
+    val onDeleteEditing: () -> Unit = {},
+    val onCancelEditing: () -> Unit = {},
+    val onAdd: (SessionExercise) -> Unit = {},
+    val onAddingChange: (SetDraft) -> Unit = {},
+    val onSaveAdding: () -> Unit = {},
+    val onCancelAdding: () -> Unit = {},
+)
 
 /**
  * What was done on one day, read-only: every session on it, each exercise and each set (#118).
@@ -53,7 +87,12 @@ fun DayScreen(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DayScreen(state: DayUiState, onBack: () -> Unit = {}, onOpenHistory: (Exercise) -> Unit = {}) {
+fun DayScreen(
+    state: DayUiState,
+    onBack: () -> Unit = {},
+    onOpenHistory: (Exercise) -> Unit = {},
+    correcting: Corrections = Corrections(),
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -64,15 +103,46 @@ fun DayScreen(state: DayUiState, onBack: () -> Unit = {}, onOpenHistory: (Exerci
     ) { insets ->
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
             items(state.sessions, key = { it.session.id }) { logged ->
-                PastSession(logged, state, onOpenHistory)
+                PastSession(logged, state, onOpenHistory, correcting)
                 HorizontalDivider()
             }
         }
     }
+
+    // A mistyped number stays fixable after the fact (#120): the same correction as mid-session.
+    state.editing?.let {
+        EditSetDialog(
+            editing = it,
+            onChange = correcting.onEditingChange,
+            onSave = correcting.onSaveEditing,
+            onDelete = correcting.onDeleteEditing,
+            onCancel = correcting.onCancelEditing,
+        )
+    }
+    state.adding?.let { adding ->
+        AlertDialog(
+            onDismissRequest = correcting.onCancelAdding,
+            title = { Text(stringResource(R.string.day_add_set_title)) },
+            text = { SetDraftFields(adding.draft, correcting.onAddingChange) },
+            confirmButton = {
+                TextButton(onClick = correcting.onSaveAdding, enabled = adding.draft.isLoggable) {
+                    Text(stringResource(R.string.session_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = correcting.onCancelAdding) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }
 
 @Composable
-private fun PastSession(logged: LoggedSession, state: DayUiState, onOpenHistory: (Exercise) -> Unit) {
+private fun PastSession(
+    logged: LoggedSession,
+    state: DayUiState,
+    onOpenHistory: (Exercise) -> Unit,
+    correcting: Corrections,
+) {
     Column(modifier = Modifier.padding(16.dp)) {
         val session = logged.session
         Text(
@@ -92,11 +162,16 @@ private fun PastSession(logged: LoggedSession, state: DayUiState, onOpenHistory:
         session.note?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Text(
+            text = stringResource(R.string.day_edit_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         logged.positions.forEach { position ->
             val performed = position.exercises.filter { it.sets.isNotEmpty() }
             if (performed.isEmpty()) return@forEach
             when (position) {
-                is SessionPosition.Alone -> performed.forEach { PerformedExercise(it, state.lifterUnit, onOpenHistory) }
+                is SessionPosition.Alone -> performed.forEach { PerformedExercise(it, state.lifterUnit, onOpenHistory, correcting) }
                 // Together, as they were trained: a superset is neighbouring exercises done in turn.
                 is SessionPosition.Grouped -> Column(
                     modifier = Modifier
@@ -110,7 +185,7 @@ private fun PastSession(logged: LoggedSession, state: DayUiState, onOpenHistory:
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    performed.forEach { PerformedExercise(it, state.lifterUnit, onOpenHistory) }
+                    performed.forEach { PerformedExercise(it, state.lifterUnit, onOpenHistory, correcting) }
                 }
             }
         }
@@ -118,10 +193,21 @@ private fun PastSession(logged: LoggedSession, state: DayUiState, onOpenHistory:
 }
 
 @Composable
-private fun PerformedExercise(performed: SessionExercise, lifterUnit: WeightUnit, onOpenHistory: (Exercise) -> Unit) {
+private fun PerformedExercise(
+    performed: SessionExercise,
+    lifterUnit: WeightUnit,
+    onOpenHistory: (Exercise) -> Unit,
+    correcting: Corrections,
+) {
     // The exercise's whole history is a tap away from any one day of it (#121).
     TextButton(onClick = { onOpenHistory(performed.exercise) }, modifier = Modifier.padding(top = 4.dp)) {
         Text(text = performed.exercise.name, style = MaterialTheme.typography.titleSmall)
     }
-    LoggedSetLines(performed.sets, performed.exercise.displayUnit, lifterUnit)
+    LoggedSetLines(
+        sets = performed.sets,
+        displayUnit = performed.exercise.displayUnit,
+        lifterUnit = lifterUnit,
+        onEdit = { set, effort -> correcting.onEdit(performed, set, effort) },
+    )
+    TextButton(onClick = { correcting.onAdd(performed) }) { Text(stringResource(R.string.day_add_set)) }
 }

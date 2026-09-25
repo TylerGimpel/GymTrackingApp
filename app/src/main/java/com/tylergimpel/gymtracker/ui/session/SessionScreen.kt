@@ -1692,7 +1692,7 @@ private fun WheelFooting(
  * default. The entry controls pass their own, because a unit chosen while entering is a statement
  * about the machine and is remembered for the exercise.
  */
-private data class UnitChoice(
+internal data class UnitChoice(
     val onReadIn: (WeightUnit) -> Unit,
     /** Whether the entry controls are departing for one set; null where there is nothing to settle. */
     val overriding: Boolean? = null,
@@ -1887,7 +1887,7 @@ private fun SetDetailFields(
 
 /** The numbers and the rest of it together, which is what a dialog editing one set wants. */
 @Composable
-private fun SetDraftFields(
+internal fun SetDraftFields(
     draft: SetDraft,
     onChange: (SetDraft) -> Unit,
     showType: Boolean = true,
@@ -2212,7 +2212,7 @@ private fun SessionNote(sessionId: Long, stored: String?, onChange: (String) -> 
 }
 
 @Composable
-private fun EditSetDialog(
+internal fun EditSetDialog(
     editing: EditingEffort,
     onChange: (SetDraft) -> Unit,
     onSave: () -> Unit,

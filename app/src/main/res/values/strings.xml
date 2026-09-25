@@ -35,6 +35,9 @@
     <string name="day_imported_from">Imported from %1$s</string>
     <string name="day_imported">Imported</string>
     <string name="day_superset">Superset</string>
+    <string name="day_edit_hint">Tap a set to correct it.</string>
+    <string name="day_add_set">Add a set</string>
+    <string name="day_add_set_title">Add a missed set</string>
     <string name="history_set_number">%1$d.</string>
     <string name="history_side">%1$s: %2$s</string>
     <string name="bodyweight_chart">Bodyweight over time</string>

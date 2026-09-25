@@ -379,6 +379,22 @@ class FitNotesImportTest {
     }
 
     @Test
+    fun aCorrectedImportedSessionIsStillTheImportsAndGoesWithIt() = runBlocking {
+        val batch = importFixture().batchId
+        val bench = importedSessions().flatMap { it.exercises }.first { it.exercise.id == BENCH }
+
+        // A set FitNotes never had, added to a session it did (#120).
+        sessions().addSetTo(bench.id, SetDraft("70", "5"))
+
+        // Still the import's: correcting a session does not make it the lifter's own logging.
+        val corrected = importedSessions().flatMap { it.exercises }.single { it.id == bench.id }
+        assertEquals(bench.sets.size + 1, corrected.sets.size)
+        // So undoing the import takes the added set with it, and leaves nothing behind.
+        imports().undo(batch)
+        assertTrue(sessions().observeRecent(limit = 100).first().isEmpty())
+    }
+
+    @Test
     fun importsAreListedWithWhatEachBroughtIn() = runBlocking {
         importFixture()
 

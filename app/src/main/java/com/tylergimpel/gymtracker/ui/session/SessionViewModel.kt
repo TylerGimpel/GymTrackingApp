@@ -804,37 +804,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun endRest() = restTimer.end()
 
     fun startEditing(performed: SessionExercise, set: PerformedSet, effort: Effort) = screen.update {
-        val displayUnit = performed.displayUnitFor(set)
-        val lifterUnit = state.value.lifterUnit
-        it.copy(
-            editing = EditingEffort(
-                effortId = effort.id,
-                sessionExerciseId = performed.id,
-                setIndex = set.setIndex,
-                draft = SetDraft(
-                    // What the row recorded rather than what its exercise records today: an
-                    // exercise retagged since it was logged would otherwise open its old sets with
-                    // every field blank and no way to correct them in place.
-                    loggingType = effort.performance.correctedAs(performed.exercise.loggingType),
-                    // Seeded in the unit the set is shown in, so opening one for correction does
-                    // not change the number the lifter was reading a moment ago.
-                    weightText = effort.performance.weightOrNull?.asTextIn(displayUnit).orEmpty(),
-                    repsText = effort.performance.repsOrNull?.toString().orEmpty(),
-                    durationText = effort.performance.durationOrNull?.seconds?.toString().orEmpty(),
-                    addedWeightText = effort.performance.beltOrAssistanceText(displayUnit),
-                    distanceText = effort.performance.distanceOrNull
-                        ?.asTextIn(DistanceUnit.alongside(lifterUnit)).orEmpty(),
-                    lifterUnit = lifterUnit,
-                    note = effort.note,
-                    rpeText = set.measurements.rpe?.asAmountText().orEmpty(),
-                    heartRateText = set.measurements.heartRate?.toString().orEmpty(),
-                    restTakenText = set.measurements.restTaken?.seconds?.toString().orEmpty(),
-                    type = set.type,
-                    displayUnit = displayUnit,
-                ),
-                exerciseUnit = performed.exercise.displayUnit,
-            ),
-        )
+        it.copy(editing = editingOf(performed, set, effort, state.value.lifterUnit))
     }
 
     fun changeEditingDraft(draft: SetDraft) =
@@ -1166,32 +1136,69 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun Performance.beltOrAssistanceText(displayUnit: WeightUnit): String = when (this) {
-        // Both are typed as a plain magnitude: the field says whether it is help or load, and the
-        // sign belongs to storage rather than to anything a lifter types.
-        is Performance.BodyweightReps -> addedWeight?.asTextIn(displayUnit).orEmpty()
-        is Performance.Assisted -> assistance.asTextIn(displayUnit)
-        is Performance.WeightAndReps, is Performance.Timed, is Performance.DistanceAndTime -> ""
-    }
-
-    /**
-     * The logging type whose fields can restate this performance.
-     *
-     * [recorded] is preferred where it already matches, so that correcting a pull-up stays a
-     * pull-up rather than becoming a plain weight-and-reps set.
-     */
-    private fun Performance.correctedAs(recorded: LoggingType): LoggingType = when (this) {
-        is Performance.WeightAndReps ->
-            recorded.takeIf { it.recordsWeight && it.recordsReps } ?: LoggingType.WEIGHT_REPS
-
-        is Performance.BodyweightReps -> LoggingType.BODYWEIGHT_REPS
-        is Performance.Assisted -> LoggingType.ASSISTED
-        is Performance.Timed -> LoggingType.TIME
-        is Performance.DistanceAndTime -> LoggingType.DISTANCE_TIME
-    }
-
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
 
     }
+}
+
+/**
+ * A logged set opened for correction, its fields seeded with exactly what it recorded (#120).
+ *
+ * One way to open one, for the session being logged and for a past session alike, so a correction
+ * made days later starts from the same numbers in the same unit as one made a minute later.
+ */
+internal fun editingOf(performed: SessionExercise, set: PerformedSet, effort: Effort, lifterUnit: WeightUnit): EditingEffort {
+    val displayUnit = performed.displayUnitFor(set)
+    return EditingEffort(
+        effortId = effort.id,
+        sessionExerciseId = performed.id,
+        setIndex = set.setIndex,
+        draft = SetDraft(
+            // What the row recorded rather than what its exercise records today: an
+            // exercise retagged since it was logged would otherwise open its old sets with
+            // every field blank and no way to correct them in place.
+            loggingType = effort.performance.correctedAs(performed.exercise.loggingType),
+            // Seeded in the unit the set is shown in, so opening one for correction does
+            // not change the number the lifter was reading a moment ago.
+            weightText = effort.performance.weightOrNull?.asTextIn(displayUnit).orEmpty(),
+            repsText = effort.performance.repsOrNull?.toString().orEmpty(),
+            durationText = effort.performance.durationOrNull?.seconds?.toString().orEmpty(),
+            addedWeightText = effort.performance.beltOrAssistanceText(displayUnit),
+            distanceText = effort.performance.distanceOrNull
+                ?.asTextIn(DistanceUnit.alongside(lifterUnit)).orEmpty(),
+            lifterUnit = lifterUnit,
+            note = effort.note,
+            rpeText = set.measurements.rpe?.asAmountText().orEmpty(),
+            heartRateText = set.measurements.heartRate?.toString().orEmpty(),
+            restTakenText = set.measurements.restTaken?.seconds?.toString().orEmpty(),
+            type = set.type,
+            displayUnit = displayUnit,
+        ),
+        exerciseUnit = performed.exercise.displayUnit,
+    )
+}
+
+private fun Performance.beltOrAssistanceText(displayUnit: WeightUnit): String = when (this) {
+    // Both are typed as a plain magnitude: the field says whether it is help or load, and the
+    // sign belongs to storage rather than to anything a lifter types.
+    is Performance.BodyweightReps -> addedWeight?.asTextIn(displayUnit).orEmpty()
+    is Performance.Assisted -> assistance.asTextIn(displayUnit)
+    is Performance.WeightAndReps, is Performance.Timed, is Performance.DistanceAndTime -> ""
+}
+
+/**
+ * The logging type whose fields can restate this performance.
+ *
+ * [recorded] is preferred where it already matches, so that correcting a pull-up stays a
+ * pull-up rather than becoming a plain weight-and-reps set.
+ */
+private fun Performance.correctedAs(recorded: LoggingType): LoggingType = when (this) {
+    is Performance.WeightAndReps ->
+        recorded.takeIf { it.recordsWeight && it.recordsReps } ?: LoggingType.WEIGHT_REPS
+
+    is Performance.BodyweightReps -> LoggingType.BODYWEIGHT_REPS
+    is Performance.Assisted -> LoggingType.ASSISTED
+    is Performance.Timed -> LoggingType.TIME
+    is Performance.DistanceAndTime -> LoggingType.DISTANCE_TIME
 }

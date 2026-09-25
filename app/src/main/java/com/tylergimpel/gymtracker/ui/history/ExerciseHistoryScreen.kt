@@ -1,5 +1,7 @@
 package com.tylergimpel.gymtracker.ui.history
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.ui.session.DropRow
@@ -123,13 +125,25 @@ private fun HistoryEntry(entry: ExerciseHistoryEntry, displayUnit: WeightUnit, l
  * kind it was.
  */
 @Composable
-internal fun LoggedSetLines(sets: List<PerformedSet>, displayUnit: WeightUnit, lifterUnit: WeightUnit) {
+internal fun LoggedSetLines(
+    sets: List<PerformedSet>,
+    displayUnit: WeightUnit,
+    lifterUnit: WeightUnit,
+    /** Where a set can be corrected (#120), what tapping one of its efforts opens; null to only read. */
+    onEdit: ((PerformedSet, Effort) -> Unit)? = null,
+) {
+    fun Modifier.editing(set: PerformedSet, effort: Effort) =
+        onEdit?.let { edit -> clickable { edit(set, effort) } } ?: this
     sets.forEachIndexed { index, set ->
         val kind = if (set.type == SetType.WORKING) null else stringResource(set.type.label)
         val single = set.efforts.singleOrNull()
         if (single != null && single.side == null) {
             val line = stringResource(R.string.history_set, index + 1, single.summary(displayUnit, lifterUnit))
-            Text(text = kind?.let { "$line · $it" } ?: line, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = kind?.let { "$line · $it" } ?: line,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.fillMaxWidth().editing(set, single),
+            )
         } else {
             val number = stringResource(R.string.history_set_number, index + 1)
             Text(text = kind?.let { "$number · $it" } ?: number, style = MaterialTheme.typography.bodyLarge)
@@ -139,7 +153,7 @@ internal fun LoggedSetLines(sets: List<PerformedSet>, displayUnit: WeightUnit, l
                 Text(
                     text = side?.let { stringResource(R.string.history_side, it, done) } ?: done,
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(start = 16.dp),
+                    modifier = Modifier.fillMaxWidth().editing(set, effort).padding(start = 16.dp),
                 )
             }
         }

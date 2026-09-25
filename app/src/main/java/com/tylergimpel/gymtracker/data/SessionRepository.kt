@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.Performance
 import com.tylergimpel.gymtracker.domain.TrainingHistory
 import com.tylergimpel.gymtracker.domain.ExerciseHistoryEntry
 import com.tylergimpel.gymtracker.domain.HISTORY_PAGE
@@ -179,20 +180,52 @@ class SessionRepository(
             val session = currentSession()
             val performed = sessions.latestSessionExerciseFor(session.id, exerciseId)
                 ?: openSessionExercise(session.id, exerciseId)
-            sessions.insert(
-                SetEntryEntity(
-                    sessionExerciseId = performed.id,
-                    setIndex = nextSetIndexFor(performed.id),
-                    type = draft.type.stored,
-                    note = draft.note,
-                    side = null,
-                    displayUnit = displayUnit?.stored,
-                ).recording(performance)
-                    .measured(draft.measurements)
-                    .prescribed(prescription),
-            )
+            insertSet(performed.id, draft, performance, displayUnit, prescription)
         }
         return true
+    }
+
+    /**
+     * Adds a set the lifter missed to [sessionExerciseId], after the sets already there (#120).
+     *
+     * Any session, finished or imported, as readily as the open one: a mistake stays fixable after
+     * the fact. Nothing about the session moves, so an imported one stays its import's and undoing
+     * that import takes this set with it. Nothing was prescribed for a set added afterwards.
+     *
+     * Returns false if the draft does not yet read as a set.
+     */
+    suspend fun addSetTo(
+        sessionExerciseId: Long,
+        draft: SetDraft,
+        exerciseUnit: WeightUnit = WeightUnit.DEFAULT,
+    ): Boolean {
+        val performance = draft.performance ?: return false
+        database.withTransaction {
+            insertSet(sessionExerciseId, draft, performance, draft.displayUnit.overriding(exerciseUnit), Prescription())
+        }
+        return true
+    }
+
+    /** One set, as one row, after the sets [sessionExerciseId] already has. */
+    private suspend fun insertSet(
+        sessionExerciseId: Long,
+        draft: SetDraft,
+        performance: Performance,
+        displayUnit: WeightUnit?,
+        prescription: Prescription,
+    ) {
+        sessions.insert(
+            SetEntryEntity(
+                sessionExerciseId = sessionExerciseId,
+                setIndex = nextSetIndexFor(sessionExerciseId),
+                type = draft.type.stored,
+                note = draft.note,
+                side = null,
+                displayUnit = displayUnit?.stored,
+            ).recording(performance)
+                .measured(draft.measurements)
+                .prescribed(prescription),
+        )
     }
 
     /**

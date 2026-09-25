@@ -1,5 +1,9 @@
 package com.tylergimpel.gymtracker.data
 
+import com.tylergimpel.gymtracker.domain.Anchor
+import com.tylergimpel.gymtracker.domain.PersonalRecord
+import com.tylergimpel.gymtracker.domain.epley
+import com.tylergimpel.gymtracker.domain.personalRecords
 import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -250,6 +254,32 @@ class SessionPersistenceTest {
         val legs = repository.observeLastTrained().first().single { it.muscle == "quadriceps" }
 
         assertEquals(6L, legs.daysAgo)
+    }
+
+    @Test
+    fun aFinishedSessionCorrectedAfterTheFactIsWhatRecordsAndTheEstimateRead() = runBlocking {
+        clock.moveTo(at("2026-09-14T18:00"))
+        repository.logSet(SQUAT, SetDraft("1000", "5"))
+        repository.logSet(SQUAT, SetDraft("100", "5"))
+        val squat = currentSession().exercises.single()
+        repository.finishSession(repository.observeActiveSession().first()!!.id)
+        clock.moveTo(at("2026-09-17T18:00"))
+
+        // A fat-fingered thousand fixed, a missed set added, a duplicate taken out — days later (#120).
+        repository.editSet(squat.sets.first().efforts.single().id, SetDraft("105", "5"))
+        repository.addSetTo(squat.id, SetDraft("110", "3"))
+        repository.deleteSet(squat.id, setIndex = 2)
+
+        // Nothing else to update: records and the estimate are read from the log as it now stands.
+        val history = repository.trainingHistoryOf(SQUAT)
+        assertEquals(
+            listOf(PersonalRecord(3, Kilograms(110.0)), PersonalRecord(5, Kilograms(105.0))),
+            personalRecords(history),
+        )
+        // The corrected 105 for five is the session's best set now, not the thousand it was typed as.
+        assertEquals(epley(Kilograms(105.0), 5).value, Anchor.from(history.sessions)!!.estimated1rm.value, 0.0001)
+        // And the correction stayed in the session it corrects.
+        assertEquals(1, countOf("session"))
     }
 
     @Test
