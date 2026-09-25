@@ -67,7 +67,7 @@ class ImportRepository(
     private val database: GymDatabase,
     private val clock: Clock = Clock.systemDefaultZone(),
     private val zone: ZoneId = ZoneId.systemDefault(),
-    /** What the lifter reads in, which decides whether an imported unit is a choice at all. */
+    /** What the lifter reads in, which an exercise with no unit of its own follows. */
     private val profile: ProfileRepository = database.profileRepository(),
 ) {
     private val sessions = database.sessionDao()
@@ -241,13 +241,15 @@ class ImportRepository(
      * import does not overwrite it: the source is filling gaps, not having the last word.
      */
     private suspend fun applyExerciseSettings(records: NeutralImport, matches: Map<String, Exercise?>) {
-        val lifterUnit = profile.displayUnit()
         records.exercises.forEach { (name, kept) ->
             val exercise = matches[name] ?: return@forEach
             if (kept.note != null && exercise.note.isNullOrBlank()) exercises.note(exercise.id, kept.note)
-            if (kept.displayUnit != null && exercise.displayUnit == lifterUnit) {
-                exercises.setDisplayUnit(exercise.id, kept.displayUnit)
-            }
+            // Only where the lifter has not chosen a unit for it here: a stored choice is theirs, and
+            // an exercise merely following their default has no choice to overwrite (ADR 0009).
+            // Read from what is stored rather than the exercise in hand, which for one created a
+            // moment ago carries the built-in default rather than the lifter's.
+            val chosenUnit = database.exerciseDao().byId(exercise.id)?.preference?.displayUnit
+            if (kept.displayUnit != null && chosenUnit == null) exercises.setDisplayUnit(exercise.id, kept.displayUnit)
             if (kept.increment != null && exercise.chosenIncrement == null) exercises.setIncrement(exercise.id, kept.increment)
             if (kept.rest != null && exercise.chosenRest == null) exercises.setRest(exercise.id, kept.rest)
         }

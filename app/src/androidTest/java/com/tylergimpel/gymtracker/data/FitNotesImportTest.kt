@@ -224,6 +224,62 @@ class FitNotesImportTest {
     }
 
     @Test
+    fun anExerciseAtFitNotesDefaultUnitReadsInTheUnitFitNotesWasSetTo() {
+        // The author's file: every exercise at "default", and FitNotes itself set to metric.
+        fitNotesSettings(metric = 1)
+        onFixture { it.execSQL("UPDATE exercise SET weight_unit_id = 0 WHERE _id = 2") }
+
+        assertEquals(WeightUnit.KILOGRAMS, FitNotesParser.parse(fixture).exercises[BENCH_NAME]?.displayUnit)
+
+        onFixture { it.execSQL("UPDATE settings SET metric = 0") }
+        assertEquals(WeightUnit.POUNDS, FitNotesParser.parse(fixture).exercises[BENCH_NAME]?.displayUnit)
+        // An exercise FitNotes gave a unit of its own keeps it, whatever the app-wide setting (#129).
+        assertEquals(WeightUnit.POUNDS, FitNotesParser.parse(fixture).exercises["Dumbbell Bicep Curl"]?.displayUnit)
+    }
+
+    @Test
+    fun aFileWithNoFitNotesSettingsLeavesADefaultUnitUnsaid() {
+        onFixture { it.execSQL("UPDATE exercise SET weight_unit_id = 0 WHERE _id = 2") }
+
+        assertEquals(null, FitNotesParser.parse(fixture).exercises[BENCH_NAME]?.displayUnit)
+    }
+
+    @Test
+    fun kilogramsLoggedInFitNotesReadInKilogramsOnAPhoneThatDefaultsToPounds() = runBlocking {
+        fitNotesSettings(metric = 1)
+        onFixture { it.execSQL("UPDATE exercise SET weight_unit_id = 0") }
+        val pounds = ProfileRepository(database.profileDao(), WeightUnit.POUNDS)
+        val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), pounds)
+
+        ImportRepository(database, clock, zone, pounds).import(
+            FitNotesParser.parse(fixture),
+            exercises.observeBank().first(),
+            decisions = mapOf("Hammer Strength Row" to NameDecision.CreateOwn),
+        )
+
+        // Not "51.81 lb" for a 23.5 kg pulldown: the numbers read as they were lifted (#129) —
+        // on a bank exercise, and on one created for a name FitNotes used, which is most of them.
+        val bank = exercises.observeBank().first()
+        assertEquals(WeightUnit.KILOGRAMS, bank.single { it.id == BENCH }.displayUnit)
+        assertEquals(WeightUnit.KILOGRAMS, bank.single { it.name == "Hammer Strength Row" }.displayUnit)
+    }
+
+    @Test
+    fun aUnitTheLifterChoseForAnExerciseIsNotOverwrittenByFitNotesDefault() = runBlocking {
+        // FitNotes set to pounds, on a phone that reads in pounds, where the lifter has said the
+        // squat rack is labelled in kilograms: a choice, and theirs (ADR 0009).
+        fitNotesSettings(metric = 0)
+        onFixture { it.execSQL("UPDATE exercise SET weight_unit_id = 0") }
+        val pounds = ProfileRepository(database.profileDao(), WeightUnit.POUNDS)
+        val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), pounds)
+        exercises.setDisplayUnit(SQUAT_ID, WeightUnit.KILOGRAMS)
+
+        ImportRepository(database, clock, zone, pounds).import(FitNotesParser.parse(fixture), exercises.observeBank().first())
+
+        assertEquals(WeightUnit.KILOGRAMS, exercises.observeBank().first().single { it.id == SQUAT_ID }.displayUnit)
+    }
+
+    @Test
     fun anUnmatchedNameBecomesAnExerciseOfTheLiftersOwnByDefault() = runBlocking {
         val result = (
             imports().import(
@@ -443,6 +499,15 @@ class FitNotesImportTest {
     private suspend fun importFixture(): ImportResult =
         (imports().import(FitNotesParser.parse(fixture), bank()) as ImportOutcome.Imported).result
 
+    /** FitNotes' own app-wide settings, as its `settings` table keeps them. */
+    private fun fitNotesSettings(metric: Int) = onFixture {
+        it.execSQL("CREATE TABLE settings (_id INTEGER PRIMARY KEY, metric INTEGER)")
+        it.execSQL("INSERT INTO settings (_id, metric) VALUES (1, $metric)")
+    }
+
+    private fun onFixture(change: (SQLiteDatabase) -> Unit) =
+        SQLiteDatabase.openDatabase(fixture.path, null, SQLiteDatabase.OPEN_READWRITE).use(change)
+
     private fun imports() =
         ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS))
 
@@ -564,6 +629,7 @@ class FitNotesImportTest {
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val SQUAT_ID = "Barbell_Squat"
         const val BENT_OVER_ROW = "Bent_Over_Barbell_Row"
+        const val BENCH_NAME = "Barbell Bench Press - Medium Grip"
         val MARCH_2: LocalDate = LocalDate.parse("2026-03-02")
         val MARCH_5: LocalDate = LocalDate.parse("2026-03-05")
     }

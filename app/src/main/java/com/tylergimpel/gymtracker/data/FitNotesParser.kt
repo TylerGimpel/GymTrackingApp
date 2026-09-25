@@ -49,8 +49,12 @@ import java.time.LocalDate
  *   Legs name no single muscle, and guessing one would put a hamstring curl's volume on the
  *   quadriceps. Read only for an exercise the lifter chooses to create (#99).
  * - **Per-exercise settings** are read defensively: the author's file never set one, so the unit
- *   ids and the rest-time unit are unverified. Unit 1 is read as kilograms and 2 as pounds, with 0
- *   as "no choice"; rest as seconds, as FitNotes' own rest timer counts; increment as kilograms.
+ *   ids and the rest-time unit are unverified. Unit 1 is read as kilograms and 2 as pounds; rest as
+ *   seconds, as FitNotes' own rest timer counts; increment as kilograms.
+ * - **Unit 0 is FitNotes' default, not "no unit"** (#129): the exercise reads in whatever FitNotes
+ *   itself was set to, which is `settings.metric` — 1 in the author's file, and every exercise at
+ *   0. Left unread, a history logged in kilograms reads as "51.81 lb" on a phone that defaults to
+ *   pounds. A file with no such setting leaves the unit unsaid, as before.
  */
 object FitNotesParser {
 
@@ -143,6 +147,7 @@ object FitNotesParser {
     /** What FitNotes kept about each exercise the lifter set anything on, by its name there. */
     private fun exercisesIn(db: SQLiteDatabase): Map<String, ImportedExercise> = buildMap {
         val categories = categoriesIn(db)
+        val fitNotesDefault = defaultUnitIn(db)
         db.rawQuery(
             "SELECT name, notes, weight_unit_id, weight_increment, default_rest_time, category_id FROM exercise",
             null,
@@ -155,6 +160,7 @@ object FitNotesParser {
                     displayUnit = when (rows.intOrNull(2)) {
                         KILOGRAMS_UNIT -> WeightUnit.KILOGRAMS
                         POUNDS_UNIT -> WeightUnit.POUNDS
+                        FITNOTES_DEFAULT_UNIT, null -> fitNotesDefault
                         else -> null
                     },
                     increment = if (rows.isNull(3)) null else rows.getDouble(3).takeIf { it > 0.0 }?.let(::Kilograms),
@@ -163,6 +169,18 @@ object FitNotesParser {
                 if (kept != ImportedExercise()) put(rows.getString(0), kept)
             }
         }
+    }
+
+    /** The unit FitNotes itself was set to, from its own settings, or null where the file does not say. */
+    private fun defaultUnitIn(db: SQLiteDatabase): WeightUnit? {
+        if (!db.hasTable("settings")) return null
+        return runCatching {
+            db.rawQuery("SELECT metric FROM settings LIMIT 1", null).use { rows ->
+                if (!rows.moveToFirst() || rows.isNull(0)) null
+                else if (rows.getInt(0) == METRIC) WeightUnit.KILOGRAMS
+                else WeightUnit.POUNDS
+            }
+        }.getOrNull()
     }
 
     /** FitNotes' categories, id to name. */
@@ -218,6 +236,12 @@ object FitNotesParser {
     /** `exercise.weight_unit_id` values read as an explicit choice; unverified, see above. */
     private const val KILOGRAMS_UNIT = 1
     private const val POUNDS_UNIT = 2
+
+    /** `exercise.weight_unit_id` for "whatever FitNotes is set to": every exercise in the author's file. */
+    private const val FITNOTES_DEFAULT_UNIT = 0
+
+    /** `settings.metric` for kilograms; verified against the author's file, which reads 1. */
+    private const val METRIC = 1
 
     /** What FitNotes stores for "no load", which the current format writes as zero, not one. */
     private const val BODYWEIGHT_SENTINEL = 0.0
