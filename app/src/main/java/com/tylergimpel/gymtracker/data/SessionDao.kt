@@ -254,6 +254,33 @@ interface SessionDao {
     suspend fun trainedSetsFor(exerciseId: String, excludingSession: Long): List<TrainedSetRow>
 
     /**
+     * Every session between [from] and [to], each with the exercises it logged a set against (#118).
+     *
+     * Exercises only where a set was logged, so an exercise opened and abandoned — or a session
+     * started for a routine day and then skipped — trains nothing on the calendar.
+     */
+    @Query(
+        """
+        SELECT session.id AS calendar_session_id, session.date AS calendar_date, exercise.*
+        FROM session
+        LEFT JOIN session_exercise ON session_exercise.session_id = session.id
+          AND EXISTS (SELECT 1 FROM set_entry WHERE set_entry.session_exercise_id = session_exercise.id)
+        LEFT JOIN exercise ON exercise.id = session_exercise.exercise_id
+        WHERE session.date BETWEEN :from AND :to
+        """,
+    )
+    fun observeCalendar(from: LocalDate, to: LocalDate): Flow<List<CalendarRow>>
+
+    /** The day of the first session there is, or null with none. */
+    @Query("SELECT MIN(date) FROM session")
+    suspend fun firstDay(): LocalDate?
+
+    /** Every session on [date], in the order they were started, with everything logged in them (#118). */
+    @Transaction
+    @Query("SELECT * FROM session WHERE date = :date ORDER BY started_at")
+    fun observeOnDate(date: LocalDate): Flow<List<SessionWithContent>>
+
+    /**
      * A page of [exerciseId]'s history, newest first, strictly before a cursor (#121).
      *
      * **Bounded however long the history grows.** Keyed on the day and the row rather than an

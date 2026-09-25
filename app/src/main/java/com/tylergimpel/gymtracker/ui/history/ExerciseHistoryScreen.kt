@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.history
 
+import com.tylergimpel.gymtracker.domain.PerformedSet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -105,15 +106,24 @@ private fun HistoryEntry(entry: ExerciseHistoryEntry, displayUnit: WeightUnit, l
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        entry.sets.forEachIndexed { index, set ->
-            // Both sides of a per-side set on one line: it is one set, however many rows record it.
-            val done = set.efforts.map { it.summary(displayUnit, lifterUnit) }.joinToString(" / ")
-            val line = stringResource(R.string.history_set, index + 1, done)
-            Text(
-                text = if (set.type == SetType.WORKING) line else "$line · ${stringResource(set.type.label)}",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
+        LoggedSetLines(entry.sets, displayUnit, lifterUnit)
+    }
+}
+
+/**
+ * Sets as they were logged, one line each, numbered: the plain reading of a past set wherever
+ * one is read back (#121, #118). Anything but a working set says what kind it was.
+ */
+@Composable
+internal fun LoggedSetLines(sets: List<PerformedSet>, displayUnit: WeightUnit, lifterUnit: WeightUnit) {
+    sets.forEachIndexed { index, set ->
+        // Both sides of a per-side set on one line: it is one set, however many rows record it.
+        val done = set.efforts.map { it.summary(displayUnit, lifterUnit) }.joinToString(" / ")
+        val line = stringResource(R.string.history_set, index + 1, done)
+        Text(
+            text = if (set.type == SetType.WORKING) line else "$line · ${stringResource(set.type.label)}",
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 

@@ -39,12 +39,21 @@ fun RoutineDrawer(
     performed: Map<String, Int>,
     onJumpTo: (Exercise) -> Unit,
     lastTrained: List<MuscleLastTrained> = emptyList(),
+    onOpenCalendar: () -> Unit = {},
 ) {
     ModalDrawerSheet(modifier = Modifier.testTag(DRAWER)) {
         Text(
             text = progress?.routine?.name ?: stringResource(R.string.session_no_routine),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(16.dp),
+        )
+        // Looking back, beside what is coming (#118): the top bar has no room left for it, and the
+        // drawer is where a lifter already goes to see where they are.
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.calendar_open)) },
+            selected = false,
+            onClick = onOpenCalendar,
+            modifier = Modifier.padding(horizontal = 12.dp),
         )
         HorizontalDivider()
 

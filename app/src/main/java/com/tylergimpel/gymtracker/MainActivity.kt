@@ -1,5 +1,8 @@
 package com.tylergimpel.gymtracker
 
+import com.tylergimpel.gymtracker.ui.calendar.CalendarScreen
+import com.tylergimpel.gymtracker.ui.calendar.DayScreen
+import java.time.LocalDate
 import com.tylergimpel.gymtracker.ui.history.ExerciseHistoryScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -55,6 +58,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Destination {
     SESSION, EXERCISE_PICKER, ROUTINE, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED, EXERCISE_HISTORY,
+    CALENDAR, DAY,
 }
 
 /**
@@ -97,6 +101,9 @@ private fun GymTracker(
         open(Destination.EXERCISE_HISTORY)
     }
 
+    // Which day the calendar opened (#118), as ISO text a Bundle holds without question.
+    var dayOpen by rememberSaveable { mutableStateOf<String?>(null) }
+
     // Whether Settings was opened to import, from the first screen, rather than to look around.
     var importOnArrival by rememberSaveable { mutableStateOf(false) }
 
@@ -129,6 +136,7 @@ private fun GymTracker(
                 open(Destination.SETTINGS)
             },
             onOpenHistory = ::openHistory,
+            onOpenCalendar = { open(Destination.CALENDAR) },
             viewModel = viewModel,
         )
 
@@ -162,6 +170,16 @@ private fun GymTracker(
         Destination.EXCLUDED -> ExcludedScreen(onBack = ::back, onOpenHistory = { openHistory(it.id) })
 
         Destination.EXERCISE_HISTORY -> historyOf?.let { ExerciseHistoryScreen(exerciseId = it, onBack = ::back) }
+
+        Destination.CALENDAR -> CalendarScreen(
+            onBack = ::back,
+            onOpenDay = { day ->
+                dayOpen = day.toString()
+                open(Destination.DAY)
+            },
+        )
+
+        Destination.DAY -> dayOpen?.let { DayScreen(date = LocalDate.parse(it), onBack = ::back) }
 
         Destination.ROUTINE -> RoutineScreen(
             onBack = ::back,

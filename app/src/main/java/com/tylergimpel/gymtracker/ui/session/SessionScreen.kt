@@ -137,6 +137,7 @@ fun SessionScreen(
     onLetTheAppBuild: () -> Unit = {},
     onImportFitNotes: () -> Unit = {},
     onOpenHistory: (String) -> Unit = {},
+    onOpenCalendar: () -> Unit = {},
     viewModel: SessionViewModel = viewModel(),
 ) {
     val loaded by viewModel.state.collectAsStateWithLifecycle()
@@ -241,6 +242,7 @@ fun SessionScreen(
             onSessionNoteChange = viewModel::noteSession,
             onOpenRoutine = onOpenRoutine,
             onOpenBodyweight = onOpenBodyweight,
+            onOpenCalendar = onOpenCalendar,
             onOpenSettings = onOpenSettings,
             onBuildRoutine = onBuildRoutine,
             onLetTheAppBuild = onLetTheAppBuild,
@@ -337,6 +339,7 @@ data class SessionActions(
     val onOpenRoutine: () -> Unit = {},
     val onOpenBodyweight: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
+    val onOpenCalendar: () -> Unit = {},
     /** Starts a routine from nothing, built by hand (#85). */
     val onBuildRoutine: () -> Unit = {},
     /** Starts setup, where the app builds a routine from a few answers (#85). */
@@ -394,6 +397,10 @@ fun SessionScreen(
                 progress = state.routine,
                 performed = state.exercises.associate { it.exercise.id to it.sets.size },
                 lastTrained = state.lastTrained,
+                onOpenCalendar = {
+                    scope.launch { drawer.close() }
+                    wholeSession.onOpenCalendar()
+                },
                 onJumpTo = { exercise ->
                     exercises.onJumpTo(exercise)
                     scope.launch { drawer.close() }

@@ -81,6 +81,10 @@ class SessionRepository(
         limit = size,
     ).map(ExerciseHistoryRow::toEntry)
 
+    /** Every session on [date], with everything logged in it, in the order they were started (#118). */
+    fun observeOnDate(date: LocalDate): Flow<List<LoggedSession>> =
+        sessions.observeOnDate(date).withLifterUnit { onThatDay, unit -> onThatDay.map { it.toLoggedSession(unit) } }
+
     /** How long since each muscle was trained, longest ago first (#127). */
     fun observeLastTrained(): Flow<List<MuscleLastTrained>> = sessions.observeLastTrained().map { rows ->
         lastTrainedByMuscle(

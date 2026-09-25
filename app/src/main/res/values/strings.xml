@@ -24,6 +24,14 @@
     <string name="exercise_progression_model">Progression</string>
     <string name="progression_double">Reps, then weight</string>
     <string name="progression_none">Do not coach this</string>
+    <string name="calendar_open">Calendar</string>
+    <string name="calendar_title">Calendar</string>
+    <string name="calendar_previous">Previous</string>
+    <string name="calendar_next">Next</string>
+    <string name="calendar_lifting">Lifting</string>
+    <string name="calendar_cardio">Cardio only</string>
+    <string name="calendar_weigh_in">Weigh-in</string>
+    <string name="day_session">Session</string>
     <string name="history_open">History</string>
     <string name="history_none">Nothing logged on this yet. Every set you log will show here, back to the first.</string>
     <string name="history_imported">%1$s · imported</string>

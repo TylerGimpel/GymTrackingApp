@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.data
 
+import java.time.LocalDate
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
@@ -19,6 +20,14 @@ interface BodyweightDao {
      */
     @Query("SELECT * FROM bodyweight_entry")
     fun observeAll(): Flow<List<BodyweightEntryEntity>>
+
+    /** The days between [from] and [to] with a weigh-in on them, for the calendar (#118). */
+    @Query("SELECT DISTINCT date FROM bodyweight_entry WHERE date BETWEEN :from AND :to")
+    fun observeDaysBetween(from: LocalDate, to: LocalDate): Flow<List<LocalDate>>
+
+    /** The day of the first weigh-in there is, or null with none. */
+    @Query("SELECT MIN(date) FROM bodyweight_entry")
+    suspend fun firstDay(): LocalDate?
 
     @Query("SELECT * FROM bodyweight_entry")
     suspend fun all(): List<BodyweightEntryEntity>
