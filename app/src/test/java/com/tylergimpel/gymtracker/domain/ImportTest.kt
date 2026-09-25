@@ -125,9 +125,40 @@ class ImportTest {
                 sets = 4,
                 unreadable = 3,
                 unmatched = listOf(Unmatched("Hammer Strength Row", sets = 1)),
+                alreadyHere = 0,
             ),
             previewOf(records, listOf(squat, bench)),
         )
+    }
+
+    @Test
+    fun `dates an earlier import from the same source brought in are counted, not brought in again`() {
+        val records = NeutralImport(
+            source = FITNOTES,
+            fingerprint = "a newer backup",
+            sets = listOf(
+                importedSet("Barbell Squat").copy(date = LocalDate.parse("2024-01-08")),
+                importedSet("Hammer Strength Row").copy(date = LocalDate.parse("2024-01-08")),
+                importedSet("Bench Press").copy(date = LocalDate.parse("2025-06-10")),
+                importedSet("Bench Press").copy(date = LocalDate.parse("2026-03-02")),
+            ),
+        )
+
+        val preview = previewOf(
+            records,
+            listOf(squat, bench),
+            alreadyHere = setOf(LocalDate.parse("2024-01-08"), LocalDate.parse("2026-03-02")),
+        )
+
+        // A newer backup of the same history is mostly the same history (#116): only what is new
+        // is counted as coming in, and what is already here is said so.
+        assertEquals(1, preview.sessions)
+        assertEquals(1, preview.sets)
+        assertEquals(2, preview.alreadyHere)
+        assertEquals(LocalDate.parse("2025-06-10"), preview.from)
+        assertEquals(LocalDate.parse("2025-06-10"), preview.to)
+        // A name used only on a date already here needs no decision: nothing of it is coming in.
+        assertTrue(preview.unmatched.isEmpty())
     }
 
     @Test

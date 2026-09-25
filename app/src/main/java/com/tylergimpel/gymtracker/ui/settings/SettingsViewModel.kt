@@ -278,7 +278,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 // A file already in is said so at once, rather than previewed and decided for nothing.
                 importer.importedAt(records.fingerprint)?.let { DataMessage.AlreadyImported(it) } ?: run {
                     // Nothing is written until the lifter has seen what will be and gone ahead (#103).
-                    val preview = previewOf(records, bank)
+                    val preview = previewOf(records, bank, importer.alreadyHere(records.source))
                     previewing.value = Previewing(
                         records = records,
                         preview = preview,

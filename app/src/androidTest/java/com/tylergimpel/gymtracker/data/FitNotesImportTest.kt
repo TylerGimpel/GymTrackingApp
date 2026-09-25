@@ -341,6 +341,44 @@ class FitNotesImportTest {
     }
 
     @Test
+    fun aNewerBackupOfTheSameHistoryBringsInOnlyWhatIsNew() = runBlocking {
+        val newer = FitNotesParser.parse(fixture)
+        val older = newer.copy(fingerprint = "an older backup", sets = newer.sets.filter { it.date == MARCH_2 })
+        val first = (imports().import(older, bank()) as ImportOutcome.Imported).result
+
+        val second = (imports().import(newer, bank()) as ImportOutcome.Imported).result
+
+        // The second of March came in with the older backup; only the fifth is new (#116).
+        assertEquals(1, second.alreadyHere)
+        assertEquals(1, second.sessions)
+        assertEquals(listOf(MARCH_2, MARCH_5), importedSessions().map { it.session.date }.sorted())
+
+        // Each is its own import, undone on its own.
+        imports().undo(second.batchId)
+        assertEquals(listOf(MARCH_2), importedSessions().map { it.session.date })
+        val again = (imports().import(newer, bank()) as ImportOutcome.Imported).result
+        imports().undo(first.batchId)
+        assertEquals(listOf(MARCH_5), importedSessions().map { it.session.date })
+        assertEquals(1, again.alreadyHere)
+    }
+
+    @Test
+    fun aDateTheLifterLoggedThemselvesIsStillImported() = runBlocking {
+        sessions().logSet(BENCH, SetDraft("60", "8"))
+        sessions().finishSession(sessions().observeActiveSession().first()!!.id)
+        val today = LocalDate.now(clock)
+        val parsed = FitNotesParser.parse(fixture)
+        val records = parsed.copy(sets = parsed.sets + parsed.sets.first().copy(date = today))
+
+        val result = (imports().import(records, bank()) as ImportOutcome.Imported).result
+
+        // Only an earlier import of the same source means "already here", never the lifter's own
+        // logging: two sessions on one day is a thing that happens.
+        assertEquals(0, result.alreadyHere)
+        assertTrue(importedSessions().any { it.session.date == today })
+    }
+
+    @Test
     fun importsAreListedWithWhatEachBroughtIn() = runBlocking {
         importFixture()
 
@@ -510,5 +548,7 @@ class FitNotesImportTest {
         const val BENCH = "Barbell_Bench_Press_-_Medium_Grip"
         const val SQUAT_ID = "Barbell_Squat"
         const val BENT_OVER_ROW = "Bent_Over_Barbell_Row"
+        val MARCH_2: LocalDate = LocalDate.parse("2026-03-02")
+        val MARCH_5: LocalDate = LocalDate.parse("2026-03-05")
     }
 }

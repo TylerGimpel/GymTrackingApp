@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.ColumnInfo
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 import java.time.Instant
 
 /** The record of each import, which every session it brought in points at. */
@@ -26,6 +27,13 @@ interface ImportBatchDao {
             "LEFT JOIN session s ON s.import_batch_id = b.id GROUP BY b.id ORDER BY b.imported_at DESC",
     )
     fun observeListed(): Flow<List<ListedImport>>
+
+    /** Every date a still-standing import from [source] filed a session on (#116). */
+    @Query(
+        "SELECT DISTINCT s.date FROM session s JOIN import_batch b ON b.id = s.import_batch_id " +
+            "WHERE b.source = :source",
+    )
+    suspend fun datesImportedFrom(source: String): List<LocalDate>
 
     /** Everything the import brought in: its sessions, and all that hangs off them by cascade. */
     @Query("DELETE FROM session WHERE import_batch_id = :batchId")

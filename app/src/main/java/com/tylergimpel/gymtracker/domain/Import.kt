@@ -168,19 +168,42 @@ data class ImportPreview(
     val unreadable: Int,
     /** The names needing a decision, as [unmatchedIn] lists them. */
     val unmatched: List<Unmatched>,
+    /** Sessions an earlier import from the same source already brought in, which this one skips (#116). */
+    val alreadyHere: Int = 0,
 )
 
-fun previewOf(records: NeutralImport, bank: List<Exercise>): ImportPreview {
-    val dates = records.sets.map(ImportedSet::date)
+/**
+ * What going ahead would bring in, less the dates an earlier import of the same source already
+ * did ([alreadyHere]): a newer backup of the same history is mostly the same history.
+ */
+fun previewOf(records: NeutralImport, bank: List<Exercise>, alreadyHere: Set<LocalDate> = emptySet()): ImportPreview {
+    val fresh = records.without(alreadyHere)
+    val dates = fresh.sets.map(ImportedSet::date)
     return ImportPreview(
         from = dates.minOrNull(),
         to = dates.maxOrNull(),
         sessions = dates.toSet().size,
-        sets = records.sets.size,
+        sets = fresh.sets.size,
         unreadable = records.notYetSupported.values.sum(),
-        unmatched = unmatchedIn(records, bank),
+        unmatched = unmatchedIn(fresh, bank),
+        alreadyHere = records.sessionsOn(alreadyHere),
     )
 }
+
+/**
+ * These records less every set on one of [dates] — the dates an earlier, still-standing import of
+ * the same source filed a session on (#116).
+ *
+ * **Only the same source's history counts as already here.** A session the lifter logged in the
+ * app on the same day is not the same session arriving twice; two sessions on one day happen.
+ * Matched by date because a FitNotes session is a date and nothing else: it keeps no time and no
+ * id that would survive into a second backup.
+ */
+fun NeutralImport.without(dates: Set<LocalDate>): NeutralImport =
+    if (dates.isEmpty()) this else copy(sets = sets.filterNot { it.date in dates })
+
+/** How many of [dates] these records have a session on. */
+fun NeutralImport.sessionsOn(dates: Set<LocalDate>): Int = sets.map(ImportedSet::date).toSet().count(dates::contains)
 
 /** The **Logging type** a set like this one is recorded in, for an exercise created to hold it. */
 fun loggingTypeOf(performance: Performance): LoggingType = when (performance) {

@@ -82,6 +82,12 @@ fun ImportPreviewScreen(
                 },
                 style = MaterialTheme.typography.titleMedium,
             )
+            if (preview.alreadyHere > 0) {
+                Text(
+                    text = stringResource(R.string.preview_already_here, preview.alreadyHere),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             if (preview.unreadable > 0) {
                 Text(
                     text = stringResource(R.string.preview_unreadable, preview.unreadable),

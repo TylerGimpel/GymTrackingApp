@@ -410,6 +410,7 @@ private fun Instant.asLocalDay(): String =
 @Composable
 private fun importedText(result: ImportResult): String = buildList {
     add(stringResource(R.string.import_done, result.sessions, result.sets))
+    if (result.alreadyHere > 0) add(stringResource(R.string.import_already_here, result.alreadyHere))
     if (result.created.isNotEmpty()) add(stringResource(R.string.import_created, result.created.size))
     if (result.createdWithoutMuscles.isNotEmpty()) {
         add(

@@ -10,6 +10,10 @@ import com.tylergimpel.gymtracker.domain.LoggingType
 import com.tylergimpel.gymtracker.domain.NameDecision
 import com.tylergimpel.gymtracker.domain.NewExerciseDraft
 import com.tylergimpel.gymtracker.domain.loggingTypeOf
+import com.tylergimpel.gymtracker.domain.ImportSource
+import com.tylergimpel.gymtracker.domain.sessionsOn
+import com.tylergimpel.gymtracker.domain.without
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import java.time.Instant
@@ -38,6 +42,8 @@ data class ImportResult(
      * is approximate, while strength history is as reliable as the log (#96, #103).
      */
     val volumeReliable: Boolean = true,
+    /** Sessions skipped because an earlier import from the same source already brought them in (#116). */
+    val alreadyHere: Int = 0,
     /** Exercises of the lifter's own created for unmatched names (#99). */
     val created: List<String> = emptyList(),
     /**
@@ -86,8 +92,13 @@ class ImportRepository(
         database.importBatchDao().withFingerprint(records.fingerprint)?.let {
             return@withTransaction ImportOutcome.AlreadyImported(it.importedAt)
         }
-        ImportOutcome.Imported(write(records, bank, decisions))
+        val here = alreadyHere(records.source)
+        ImportOutcome.Imported(write(records.without(here), bank, decisions).copy(alreadyHere = records.sessionsOn(here)))
     }
+
+    /** The dates a still-standing import from [source] already brought in (#116). */
+    suspend fun alreadyHere(source: ImportSource): Set<LocalDate> =
+        database.importBatchDao().datesImportedFrom(source.id).toSet()
 
     /**
      * Removes what the import [batchId] brought in, and nothing the lifter logged (#102).
