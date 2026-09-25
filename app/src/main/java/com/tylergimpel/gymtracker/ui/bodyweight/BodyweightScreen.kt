@@ -1,5 +1,10 @@
 package com.tylergimpel.gymtracker.ui.bodyweight
 
+import com.tylergimpel.gymtracker.ui.chart.ChartSeries
+import com.tylergimpel.gymtracker.ui.chart.ChartValue
+import com.tylergimpel.gymtracker.ui.chart.Mark
+import com.tylergimpel.gymtracker.ui.chart.TimeChart
+import com.tylergimpel.gymtracker.domain.asAmountText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -109,6 +114,15 @@ fun BodyweightScreen(
                 )
             }
             item { HorizontalDivider() }
+
+            // Over time, above the list (#126): the trend behind what they weigh now. The same chart
+            // as strength, in the unit this screen reads in; nothing drawn until there is a reading.
+            if (state.history.isNotEmpty()) {
+                item {
+                    WeighInChart(state)
+                    HorizontalDivider()
+                }
+            }
 
             if (state.history.isEmpty()) {
                 item {
@@ -306,3 +320,21 @@ private fun EditWeighInDialog(
 private fun Instant.asLocalTimeText(): String =
     DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
         .format(atZone(ZoneId.systemDefault()).toLocalTime())
+
+@Composable
+private fun WeighInChart(state: BodyweightUiState) {
+    val unit = state.displayUnit
+    val unitLabel = stringResource(unit.label)
+    TimeChart(
+        series = listOf(
+            ChartSeries(
+                state.history.map { ChartValue(it.date, unit.fromKilograms(it.weight)) },
+                setOf(Mark.LINE, Mark.POINTS),
+                MaterialTheme.colorScheme.primary,
+            ),
+        ),
+        valueText = { "${it.asAmountText()} $unitLabel" },
+        description = stringResource(R.string.bodyweight_chart),
+        modifier = Modifier.padding(16.dp),
+    )
+}
