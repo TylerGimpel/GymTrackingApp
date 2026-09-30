@@ -28,6 +28,9 @@ data class GymColors(
     // The accent where it is read rather than filled: words and lines. Dark keeps the yellow; on the
     // light page the yellow is too pale to read, so the text colour stands in for it.
     val accentText: Color,
+    // The app guessing: the calibrating badge and its line, apart from every other colour so it
+    // never reads as a selection or a warning.
+    val calib: Color,
 )
 
 internal val DarkGymColors = GymColors(
@@ -41,6 +44,7 @@ internal val DarkGymColors = GymColors(
     onAccent = Color(0xFF1A1600),
     good = Color(0xFF6FCF7F),
     accentText = Color(0xFFF5C518),
+    calib = Color(0xFFC9A7FF),
 )
 
 internal val LightGymColors = GymColors(
@@ -54,6 +58,7 @@ internal val LightGymColors = GymColors(
     onAccent = Color(0xFF1A1600),
     good = Color(0xFF2E8B3E),
     accentText = Color(0xFF1A1813),
+    calib = Color(0xFF6D3FC4),
 )
 
 /**

@@ -9,11 +9,13 @@ import com.tylergimpel.gymtracker.data.RoutineRepository
 import com.tylergimpel.gymtracker.data.sessionRepository
 import com.tylergimpel.gymtracker.domain.LoggedSession
 import com.tylergimpel.gymtracker.domain.RoutineDay
-import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.estimatedLengthOf
 import com.tylergimpel.gymtracker.ui.MuscleGroup
 import com.tylergimpel.gymtracker.ui.muscleGroupsOf
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -44,7 +46,7 @@ data class TodayUiState(
     val progress: RoutineProgress? = null,
     val next: NextDay? = null,
     /** A session still open today, which Today offers to go back to rather than start another. */
-    val running: Session? = null,
+    val running: LoggedSession? = null,
     /** Monday to Sunday of this week. */
     val week: List<LocalDate> = emptyList(),
     /** The days of [week] something was trained on. */
@@ -78,9 +80,12 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     private val trained = database.sessionDao().observeCalendar(week.first(), week.last())
         .map { rows -> rows.filter { it.exercise != null }.map { it.date }.toSet() }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<TodayUiState> = combine(
         routines.observeProgress(),
-        sessions.observeActiveSession(),
+        sessions.observeActiveSession().flatMapLatest { active ->
+            if (active == null || !active.accepts(clock.instant(), zone)) flowOf(null) else sessions.observeSession(active.id)
+        },
         sessions.observeLastFinished(),
         trained,
         skipping,
@@ -89,7 +94,7 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
             loaded = true,
             progress = progress,
             next = progress?.let(::nextOf),
-            running = active?.takeIf { it.accepts(clock.instant(), zone) },
+            running = active,
             week = week,
             trained = trained,
             today = today,

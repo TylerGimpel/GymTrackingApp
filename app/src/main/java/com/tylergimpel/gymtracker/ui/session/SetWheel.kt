@@ -1,9 +1,13 @@
 package com.tylergimpel.gymtracker.ui.session
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,20 +19,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tylergimpel.gymtracker.R
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.Recommendation
+import com.tylergimpel.gymtracker.domain.SetDraft
+import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
-import kotlinx.coroutines.flow.distinctUntilChanged
+import com.tylergimpel.gymtracker.domain.asTimeText
+import com.tylergimpel.gymtracker.ui.label
+import com.tylergimpel.gymtracker.ui.theme.ControlShape
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import kotlin.math.abs
 
 /**
@@ -45,136 +54,221 @@ sealed interface WheelSet {
 }
 
 /**
- * The logging screen's centrepiece: a vertical wheel of sets, read at arm's length.
+ * The logging screen's centrepiece: a vertical wheel of sets, read at arm's length
+ * (`docs/design/logging-screen.md`, restyled in #142).
  *
- * Settled by prototype against three rejected layouts — a single big card with no context, a dense
- * list with no focus, and horizontal value pickers. The wheel is the only one that gives both the
- * zoomed prescription and the sets around it at once (`docs/design/logging-screen.md`).
+ * Each rung reads top to bottom as what kind of set it is, the band, **one big number** and what
+ * that set was last time. The focused rung is large and its neighbours tilt, shrink and fade. It
+ * sits on the set about to be done, and logging moves it on, so the common path never scrolls.
+ * A set already down is corrected by tapping it.
  *
- * **The focused set is large and its neighbours recede**, so what is coming is visible without
- * navigating anywhere, and the wheel sits on the set about to be done — on opening an exercise
- * with four sets behind it, and again the moment a fifth goes down. That is what "logging
- * advances focus" amounts to in a list, and it is what keeps the common path free of scrolling.
- *
- * Scrolling back to read a set that is already down is a look rather than a move: the controls
- * are fixed below and go on acting on the pending set, which is where the wheel returns to.
- *
- * The falloff is drawn rather than recomposed. Each item reads the scroll position inside its
- * [graphicsLayer] block, which defers the read to the draw phase: recomposing the list every
- * scroll frame fights the scroll position and feels broken, which is the one implementation note
- * the prototype left behind.
+ * The falloff is drawn rather than recomposed: each rung reads the scroll position inside its
+ * [graphicsLayer] block, so scrolling never recomposes the list.
  */
 @Composable
 fun SetWheel(
     exercise: Exercise,
     sets: List<WheelSet>,
     lifterUnit: WeightUnit,
+    draft: SetDraft,
     modifier: Modifier = Modifier,
+    previous: List<PerformedSet> = emptyList(),
+    onEdit: (WheelSet.Logged) -> Unit = {},
+    onReadIn: (WeightUnit) -> Unit = {},
+    /** Offered after the last set once the plan is met; null hides it. */
+    onAddSet: (() -> Unit)? = null,
     state: LazyListState = rememberLazyListState(),
 ) {
-    // The pending set is the last rung, and where the lifter is. Anything else would have
-    // somebody with four sets behind them scrolling down to find out what to do next.
-    LaunchedEffect(sets.size) {
-        if (sets.isNotEmpty()) state.animateScrollToItem(sets.lastIndex)
+    val last = if (onAddSet != null) sets.size else sets.lastIndex
+    LaunchedEffect(sets.size, onAddSet != null) {
+        if (last >= 0) state.animateScrollToItem(last)
     }
 
-    LazyColumn(
-        state = state,
-        modifier = modifier.fillMaxWidth().testTag(WHEEL),
-        // One set's worth of padding at each end — a third of a wheel that stands three sets
-        // tall — so the first and last can both reach the middle. A wheel whose last rung cannot
-        // be centred is a wheel with a set on it nobody can log.
-        contentPadding = PaddingValues(vertical = WHEEL_HEIGHT / 3),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        flingBehavior = rememberSnapFlingBehavior(state),
-    ) {
-        itemsIndexed(sets) { index, set ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer {
-                        val fall = state.falloffAt(index)
-                        scaleX = FAR_SCALE + (1f - FAR_SCALE) * fall
-                        scaleY = scaleX
-                        alpha = FAR_ALPHA + (1f - FAR_ALPHA) * fall
+    BoxWithConstraints(modifier.testTag(WHEEL)) {
+        val pad = ((maxHeight - RUNG) / 2).coerceAtLeast(0.dp)
+        LazyColumn(
+            state = state,
+            modifier = Modifier.fillMaxWidth(),
+            // Half a wheel at each end, so the first and last rungs can both reach the middle.
+            contentPadding = PaddingValues(vertical = pad),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            flingBehavior = rememberSnapFlingBehavior(state),
+        ) {
+            itemsIndexed(sets) { index, set ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(RUNG)
+                        .falloff(state, index)
+                        .let { if (set is WheelSet.Logged) it.clickable { onEdit(set) } else it },
+                ) {
+                    val before = previous.getOrNull(index)?.leadingEffort?.summary(exercise.displayUnit, lifterUnit)
+                    when (set) {
+                        is WheelSet.Logged -> LoggedRung(set, exercise, lifterUnit, before)
+                        is WheelSet.Pending -> PendingRung(set.recommendation, draft, before, onReadIn)
                     }
-                    .padding(horizontal = 16.dp),
-            ) {
-                when (set) {
-                    is WheelSet.Logged -> LoggedRung(set, exercise, lifterUnit)
-                    is WheelSet.Pending -> PendingRung(set.recommendation, exercise)
+                }
+            }
+            if (onAddSet != null) {
+                item {
+                    Column(
+                        Modifier.height(RUNG).falloff(state, sets.size),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            stringResource(R.string.workout_add_set),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = LocalGymColors.current.dim,
+                            modifier = Modifier
+                                .border(1.dp, LocalGymColors.current.line, ControlShape)
+                                .clickable(onClick = onAddSet)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** A set that happened, written as it was performed. */
+private fun Modifier.falloff(state: LazyListState, index: Int) = graphicsLayer {
+    val offset = state.offsetFromCentre(index)
+    val distance = abs(offset)
+    val scale = (1f - distance * 0.6f).coerceAtLeast(FAR_SCALE)
+    scaleX = scale
+    scaleY = scale
+    alpha = (1f - distance * 0.3f).coerceAtLeast(FAR_ALPHA)
+    rotationX = (-offset * 24f).coerceIn(-50f, 50f)
+}
+
+/** The type of a set, small and above everything else on its rung. */
 @Composable
-private fun LoggedRung(rung: WheelSet.Logged, exercise: Exercise, lifterUnit: WeightUnit) {
+private fun TypeLine(type: SetType?) {
+    val text = when (type) {
+        null, SetType.WORKING -> stringResource(R.string.set_type_working)
+        else -> stringResource(type.label)
+    }
+    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp), color = LocalGymColors.current.dim)
+}
+
+@Composable
+private fun WasLine(before: String?) {
+    Text(
+        before?.let { stringResource(R.string.workout_was, it) } ?: "",
+        fontSize = 16.sp,
+        color = LocalGymColors.current.dim,
+    )
+}
+
+/** A set that happened, written as it was performed, with a tick. */
+@Composable
+private fun LoggedRung(rung: WheelSet.Logged, exercise: Exercise, lifterUnit: WeightUnit, before: String?) {
+    val colors = LocalGymColors.current
     val displayUnit = rung.set.displayUnit ?: exercise.displayUnit
-    Text(
-        text = stringResource(R.string.wheel_set_number, rung.set.setIndex),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Text(
-        text = rung.set.leadingEffort.summary(displayUnit, lifterUnit),
-        style = MaterialTheme.typography.headlineSmall,
-        textAlign = TextAlign.Center,
-    )
+    TypeLine(rung.set.type)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val efforts = rung.set.efforts.map { it.summary(displayUnit, lifterUnit) }
+        Text(
+            efforts.joinToString("  ·  "),
+            style = BIG,
+            color = colors.dim,
+            maxLines = 1,
+        )
+        Text(" ✓", style = BIG.copy(fontSize = 36.sp), color = colors.good)
+    }
+    rung.set.efforts.flatMap { it.drops }.forEach { DropRow(it, displayUnit) }
+    WasLine(before)
 }
 
 /**
- * The set about to be logged, holding whatever the app is asking for.
- *
- * Reads the recommendation and nothing else, so that the plate line, the generated warm-ups and
- * the rests arriving with their own tickets show up here without this being rebuilt.
+ * The set about to be logged: what the controls hold, so the big number is always what the next
+ * tap on Log will record. Tapping the unit reads the exercise in the other one.
  */
 @Composable
-private fun PendingRung(recommendation: Recommendation?, exercise: Exercise) {
-    Text(
-        text = stringResource(R.string.wheel_next_set),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.testTag(PENDING),
-    )
-    if (recommendation == null) {
-        // Nothing to say about this one: an exercise the app does not coach, or a ramp that has
-        // run its course. The controls below still log it.
-        Text(
-            text = stringResource(R.string.wheel_nothing_asked),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    } else {
-        NextSet(recommendation, exercise.loggingType, exercise.displayUnit)
+private fun PendingRung(recommendation: Recommendation?, draft: SetDraft, before: String?, onReadIn: (WeightUnit) -> Unit) {
+    val colors = LocalGymColors.current
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.testTag(PENDING)) {
+        TypeLine(recommendation?.setType ?: draft.type)
+        val range = when (recommendation) {
+            is Recommendation.Prescribing -> recommendation.repRange
+            is Recommendation.CuttingVolume -> recommendation.repRange
+            else -> null
+        }
+        range?.let { Text(stringResource(R.string.wheel_range, it.bottom, it.top), fontSize = 16.sp, color = colors.dim) }
+        val type = draft.loggingType
+        val unit = stringResource(draft.displayUnit.label)
+        Row(verticalAlignment = Alignment.Bottom) {
+            when {
+                type.recordsWeight -> {
+                    Text(draft.weightText.ifBlank { "–" }, style = BIG)
+                    UnitLabel(unit) { onReadIn(draft.displayUnit.other) }
+                    Text(" × ${draft.repsText.ifBlank { "–" }}", style = BIG)
+                }
+                type.recordsAddedWeight || type.recordsAssistance -> {
+                    val sign = if (type.recordsAssistance) "−" else "+"
+                    if (draft.addedWeightText.isNotBlank()) {
+                        Text(sign + draft.addedWeightText, style = BIG)
+                        UnitLabel(unit) { onReadIn(draft.displayUnit.other) }
+                        Text(" × ${draft.repsText.ifBlank { "–" }}", style = BIG)
+                    } else {
+                        Text(stringResource(R.string.workout_reps, draft.repsText.ifBlank { "–" }), style = BIG)
+                    }
+                }
+                type.recordsDistance -> Text(
+                    "${draft.distanceText.ifBlank { "–" }} ${stringResource(draft.distanceUnit.label)} · ${draft.duration?.asTimeText() ?: "–"}",
+                    style = BIG.copy(fontSize = 44.sp),
+                )
+                type.recordsDuration -> Text(draft.duration?.asTimeText() ?: "–", style = BIG)
+                type.recordsReps -> Text(stringResource(R.string.workout_reps, draft.repsText.ifBlank { "–" }), style = BIG)
+            }
+        }
+        WasLine(before)
     }
 }
 
-/** How close item [index] is to the middle, from 0 at the edges to 1 in the centre. */
-private fun LazyListState.falloffAt(index: Int): Float {
-    val info = layoutInfo
-    val centre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-    val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return 0f
-    val distance = abs(item.offset + item.size / 2f - centre)
-    return 1f - (distance / centre.coerceAtLeast(1f)).coerceIn(0f, 1f)
+@Composable
+private fun UnitLabel(text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        fontSize = 26.sp,
+        color = LocalGymColors.current.dim,
+        modifier = Modifier
+            .clickable(onClickLabel = stringResource(R.string.workout_switch_unit), onClick = onClick)
+            .testTag(UNIT_TOGGLE)
+            .padding(start = 2.dp, bottom = 8.dp),
+    )
 }
 
-/** How tall the wheel stands. Three rungs' worth: what is coming, what is now, what just went. */
-val WHEEL_HEIGHT = 200.dp
+private val WeightUnit.other: WeightUnit
+    get() = if (this == WeightUnit.KILOGRAMS) WeightUnit.POUNDS else WeightUnit.KILOGRAMS
 
-/** What a set at the very edge of the wheel shrinks and fades to. */
-private const val FAR_SCALE = 0.7f
-private const val FAR_ALPHA = 0.35f
+/** How far item [index] is from the middle, in rungs: 0 in the centre. */
+private fun LazyListState.offsetFromCentre(index: Int): Float {
+    val info = layoutInfo
+    val centre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return 3f
+    return (item.offset + item.size / 2f - centre) / item.size.coerceAtLeast(1)
+}
+
+/** One rung's height, and the big number on it. */
+private val RUNG = 120.dp
+private val BIG = androidx.compose.ui.text.TextStyle(
+    fontFamily = com.tylergimpel.gymtracker.ui.theme.BarlowCondensed,
+    fontWeight = FontWeight.Bold,
+    fontSize = 60.sp,
+    lineHeight = 62.sp,
+)
+
+/** What a rung away from the middle shrinks and fades to. */
+private const val FAR_SCALE = 0.4f
+private const val FAR_ALPHA = 0.4f
 
 /** Handles for the tests, which care about what the screen does rather than how it looks. */
 const val WHEEL = "set-wheel"
 const val PENDING = "pending-set"
 const val WEIGHT_FIELD = "weight-field"
 const val LOG_SET = "log-set"
-
-/** The session itself, which scrolls — as distinct from the controls, which do not. */
-const val SESSION_LIST = "session-list"
+const val UNIT_TOGGLE = "unit-toggle"

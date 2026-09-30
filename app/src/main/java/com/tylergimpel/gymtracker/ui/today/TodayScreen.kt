@@ -1,5 +1,10 @@
 package com.tylergimpel.gymtracker.ui.today
 
+import kotlinx.coroutines.delay
+import java.time.Instant
+import com.tylergimpel.gymtracker.domain.timeLeftIn
+import com.tylergimpel.gymtracker.domain.asTimeText
+import androidx.compose.runtime.produceState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -80,12 +85,15 @@ fun TodayScreen(
             when {
                 !state.loaded -> Unit
                 state.running != null -> ResumeCard(state, onResume)
+                state.last?.session?.date == state.today -> DoneCard(state.last!!, state.next, onStart)
                 state.next != null -> NextCard(state.next!!, onStart, viewModel::startSkipping)
                 state.progress != null -> EmptyRoutineCard(onJustLog)
                 else -> WaysToStartCard(onLetTheAppBuild, onBuildRoutine, onImportFitNotes, onJustLog)
             }
             ThisWeek(state)
-            state.last?.let { LastWorkout(it, onOpen = { onOpenDay(it.session.date) }) }
+            // Unless the card above is already about it.
+            state.last?.takeIf { it.session.date != state.today || state.running != null }
+                ?.let { LastWorkout(it, onOpen = { onOpenDay(it.session.date) }) }
         }
     }
 
@@ -132,13 +140,28 @@ private fun NextCard(next: NextDay, onStart: () -> Unit, onSkip: () -> Unit) {
 
 @Composable
 private fun ResumeCard(state: TodayUiState, onResume: () -> Unit) {
+    val running = state.running ?: return
+    val colors = LocalGymColors.current
+    // A session started from a routine day carries that day's plan; its name is recorded at the end.
+    val name = running.session.routineDayName
+        ?: state.next?.day?.name?.takeIf { !running.plan.isEmpty }
+        ?: stringResource(R.string.today_workout)
+    val done = running.exercises.sumOf { it.sets.size }
+    val planned = running.plan.exercises.sumOf { it.sets ?: 0 }
     AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            SectionLabel(stringResource(R.string.today_in_progress))
-            UppercaseText(
-                state.running?.routineDayName ?: stringResource(R.string.today_workout),
-                style = MaterialTheme.typography.displayMedium,
+            Text(
+                stringResource(R.string.today_in_progress, clock(running.session.startedAt)).uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.accentText,
             )
+            UppercaseText(name, style = MaterialTheme.typography.displayMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                Meta(value = if (planned > 0) "$done / $planned" else done.toString(), label = stringResource(R.string.workout_sets))
+                if (running.unperformed.isNotEmpty()) {
+                    Meta(value = stringResource(R.string.today_minutes, minutesOf(timeLeftIn(running.unperformed))), label = stringResource(R.string.today_left))
+                }
+            }
             MainButton(
                 text = stringResource(R.string.today_resume),
                 onClick = onResume,
@@ -146,6 +169,43 @@ private fun ResumeCard(state: TodayUiState, onResume: () -> Unit) {
             )
         }
     }
+}
+
+/** Trained today already: how it went, and the next day a tap away for anybody going again. */
+@Composable
+private fun DoneCard(last: LoggedSession, next: NextDay?, onStart: () -> Unit) {
+    val session = last.session
+    val minutes = session.finishedAt?.let { minutesOf(Duration.between(session.startedAt, it)) }
+    AppCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            SectionLabel(stringResource(R.string.today_done))
+            UppercaseText(session.routineDayName ?: stringResource(R.string.today_workout), style = MaterialTheme.typography.displayMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                minutes?.let { Meta(value = stringResource(R.string.today_minutes, it).removePrefix("~"), label = stringResource(R.string.today_time)) }
+                Meta(value = last.exercises.sumOf { it.sets.size }.toString(), label = stringResource(R.string.workout_sets))
+                Meta(value = last.exercises.count { it.sets.isNotEmpty() }.toString(), label = stringResource(R.string.workout_exercises))
+            }
+            next?.let {
+                AppOutlinedButton(
+                    text = stringResource(R.string.today_start_next, it.day.name),
+                    onClick = onStart,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+/** The session clock, `12:04`, ticking. */
+@Composable
+private fun clock(startedAt: Instant): String {
+    val seconds by produceState(Duration.between(startedAt, Instant.now()).seconds, startedAt) {
+        while (true) {
+            delay(1_000)
+            value = Duration.between(startedAt, Instant.now()).seconds
+        }
+    }
+    return Duration.ofSeconds(seconds.coerceAtLeast(0)).asTimeText()
 }
 
 /** A routine with nothing in it yet: nothing to start, and logging still works. */
