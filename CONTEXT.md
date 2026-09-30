@@ -222,6 +222,18 @@ What double progression moves: the weight holds while the reps climb through the
 A hand-authored day structure: the rotation a routine is laid out from, before anything is in it. Thirteen of them, which is what the divisibility rule leaves for cycles up to seven positions. Offered by shape — "alternate upper and lower" — because that is a thing anyone can choose and "a two-position cycle" is not. A shape names, per position, the muscles that position is *for*; what goes in it is the generator's half of the hybrid, because equipment varies at every gym and a template would be wrong at most of them.
 _Avoid_: template, which suggests the exercises come with it.
 
+**Day recipe**:
+How proven programs lay out one kind of day (Push, Pull, Legs, Upper, Full body A…): an ordered list of **Slots**, the first few always filled and the rest only as the day's set budget needs them. The structure comes from real programs, the lifts from the lifter's gym.
+_Avoid_: template, workout plan
+
+**Slot**:
+One place in a **Day recipe**, named by movement pattern (vertical pull, horizontal row, hinge, biceps curl) rather than by exercise, and filled with the best-ranked **Common lift** the gym can do. What a pin keeps and what "build it again" varies.
+_Avoid_: exercise slot, position (a position is a **Routine day**)
+
+**Common lift**:
+An exercise the surveyed programs actually use, ranked by how many of them use it. The generator and the picker both put these first. A second tier, from intermediate programs, is offered only to an advanced lifter. Olympic lifts, plyometrics, strongman, stretches, unstable-surface and specialty lifts are never common lifts, though search still finds them.
+_Avoid_: beginner lift, staple
+
 **Binding constraint**:
 Something a routine cannot satisfy or does not do, paired with what would give if the lifter relaxed it: a day too long for its ceiling, a muscle outside its band, a **Main muscle** nothing in the cycle trains, or a muscle their exclusions emptied. Never an error and never a refusal: an impossible request is a conversation, so the app says what is binding and leaves the decision where it belongs. The time ceiling usually binds before volume does.
 
@@ -230,7 +242,7 @@ One of the twelve every routine should train directly somewhere in its cycle: wh
 _Avoid_: major muscle group
 
 **Experience**:
-How much training a lifter has behind them — novice, trained or advanced. Theirs rather than any routine's, so it sits with their **Preferred unit**. One rule reads it: whether to steer somebody away from high-rep work whose value depends on judging proximity to failure. Trained until they say otherwise, because that is the answer that overrules nothing.
+How much training a lifter has behind them — novice, trained or advanced. Theirs rather than any routine's, so it sits with their **Preferred unit**. Two rules read it: whether to steer somebody away from high-rep work whose value depends on judging proximity to failure, and whether an advanced lifter is offered the second tier of **Common lifts**. It never changes a routine's first picks. Trained until they say otherwise, because that is the answer that overrules nothing.
 
 **Plate inventory**:
 The plates the lifter owns and the bar they go on: one global, editable set, counted in **pairs** because a bar loaded at one end is not a lift. The single thing both the engine and the **Plate line** read, which is what stops the weight and the instructions for building it ever disagreeing.
