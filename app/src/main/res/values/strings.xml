@@ -393,4 +393,45 @@
     <string name="bodyweight_day_at">%1$s at %2$s</string>
     <string name="bodyweight_empty">No weigh-ins yet. A weight here is yours rather than your training: it counts toward no session and no volume.</string>
     <string name="session_open_bodyweight">Bodyweight</string>
+    <!-- The tabs and Today (#141) -->
+    <string name="tab_today">Today</string>
+    <string name="tab_calendar">Calendar</string>
+    <string name="tab_routine">Routine</string>
+    <string name="tab_more">More</string>
+    <string name="today_next_up">Next up · day %1$d of %2$d</string>
+    <string name="today_start">Start workout</string>
+    <string name="today_resume">Resume</string>
+    <string name="today_in_progress">In progress</string>
+    <string name="today_workout">Workout</string>
+    <string name="today_minutes">~%1$d min</string>
+    <string name="today_estimated">estimated</string>
+    <plurals name="today_exercises">
+        <item quantity="one">exercise</item>
+        <item quantity="other">exercises</item>
+    </plurals>
+    <plurals name="today_exercise_count">
+        <item quantity="one">%1$d exercise</item>
+        <item quantity="other">%1$d exercises</item>
+    </plurals>
+    <string name="today_this_week">This week · %1$d done</string>
+    <string name="today_last">Last workout</string>
+    <string name="today_no_routine">No routine yet</string>
+    <string name="today_just_log">Just log a workout</string>
+    <string name="today_routine_empty">Your routine has no lifts yet.</string>
+    <string name="today_skip_explain">Counts as skipped, not trained. It comes back next cycle.</string>
+    <string name="more_exercises">Exercises</string>
+    <string name="more_weigh_ins">Weigh-ins</string>
+    <string name="more_plates">Plates</string>
+    <string name="more_profile">Profile</string>
+    <string name="more_settings">Settings</string>
+    <string name="muscle_chest">Chest</string>
+    <string name="muscle_back">Back</string>
+    <string name="muscle_shoulders">Shoulders</string>
+    <string name="muscle_triceps">Triceps</string>
+    <string name="muscle_biceps">Biceps</string>
+    <string name="muscle_quads">Quads</string>
+    <string name="muscle_hamstrings">Hamstrings</string>
+    <string name="muscle_glutes">Glutes</string>
+    <string name="muscle_calves">Calves</string>
+    <string name="muscle_core">Core</string>
 </resources>
