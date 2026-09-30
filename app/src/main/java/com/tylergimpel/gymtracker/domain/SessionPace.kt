@@ -81,3 +81,15 @@ private val TYPICAL_LIFT: Duration = Duration.ofMinutes(8)
 
 /** How long a piece of cardio takes, where nothing has prescribed a duration for it yet. */
 private val TYPICAL_CARDIO: Duration = Duration.ofMinutes(20)
+
+/**
+ * Roughly how long [day] will take, for the estimate Today shows beside Start.
+ *
+ * The same arithmetic the time ceiling is checked with, where the day says how many sets it asks
+ * for; a day built before set counts existed says nothing, and falls back to an ordinary session's
+ * length per exercise rather than to zero.
+ */
+fun Routine.estimatedLengthOf(day: RoutineDay): Duration {
+    val counted = dayLength(day, cardio, RepRange.DEFAULT)
+    return if (counted > Duration.ZERO) counted else timeLeftIn(day.exercises.map(PlannedExercise::exercise))
+}
