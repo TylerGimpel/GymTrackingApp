@@ -47,6 +47,9 @@ import com.tylergimpel.gymtracker.ui.settings.ExcludedScreen
 import com.tylergimpel.gymtracker.ui.settings.SettingsScreen
 import com.tylergimpel.gymtracker.ui.theme.GymTrackerTheme
 import com.tylergimpel.gymtracker.ui.today.TodayScreen
+import com.tylergimpel.gymtracker.ui.today.TodayViewModel
+import com.tylergimpel.gymtracker.ui.routine.SetupScreen
+import com.tylergimpel.gymtracker.ui.routine.WelcomeScreen
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
@@ -80,7 +83,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Destination {
     TODAY, CALENDAR, ROUTINE, MORE,
-    WORKOUT, EXERCISE_PICKER, EXERCISES, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED, EXERCISE_HISTORY, DAY,
+    WORKOUT, SETUP, EXERCISE_PICKER, EXERCISES, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED, EXERCISE_HISTORY, DAY,
 }
 
 /** The destination each tab opens on. */
@@ -106,6 +109,7 @@ private val Tab.root: Destination
 private fun GymTracker(
     viewModel: SessionViewModel = viewModel(),
     routineViewModel: RoutineViewModel = viewModel(),
+    todayViewModel: TodayViewModel = viewModel(),
 ) {
     // Saved as names, which a Bundle holds without question, and never empty.
     var stack by rememberSaveable { mutableStateOf(listOf(Destination.TODAY.name)) }
@@ -171,7 +175,11 @@ private fun GymTracker(
     val tab = stack.getOrNull(1)?.let(Destination::valueOf)
         ?.let { under -> Tab.entries.firstOrNull { it.root == under } }
         ?: Tab.TODAY
-    val atTabRoot = destination == tab.root
+    // First run: nothing set up and nothing trained, so home is the welcome page (#144).
+    val today by todayViewModel.state.collectAsStateWithLifecycle()
+    val welcome = destination == Destination.TODAY && today.loaded &&
+        today.progress == null && today.last == null && today.running == null
+    val atTabRoot = destination == tab.root && !welcome
 
     if (destination != Destination.TODAY) {
         BackHandler {
@@ -189,7 +197,16 @@ private fun GymTracker(
                 .let { if (atTabRoot) it.consumeWindowInsets(WindowInsets.navigationBars) else it },
         ) {
             when (destination) {
-                Destination.TODAY -> TodayScreen(
+                Destination.TODAY -> if (welcome) {
+                    WelcomeScreen(
+                        onGetStarted = { navigator.open(Destination.SETUP) },
+                        onBuildMyself = {
+                            routineViewModel.createRoutine(defaultRoutineName)
+                            navigator.openTab(Tab.ROUTINE)
+                        },
+                        onImport = navigator::openImport,
+                    )
+                } else TodayScreen(
                     onStart = {
                         viewModel.startCursorDay()
                         navigator.open(Destination.WORKOUT)
@@ -203,12 +220,20 @@ private fun GymTracker(
                         routineViewModel.createRoutine(defaultRoutineName)
                         navigator.openTab(Tab.ROUTINE)
                     },
-                    onLetTheAppBuild = { navigator.openTab(Tab.ROUTINE) },
+                    onLetTheAppBuild = { navigator.open(Destination.SETUP) },
                     // Straight into the file picker, from the same flow Settings offers, so
                     // importing is one tap and its outcome is said where the rest of the lifter's
                     // data is.
                     onImportFitNotes = navigator::openImport,
                     onOpenDay = navigator::openDay,
+                    viewModel = todayViewModel,
+                )
+
+                // Built, the routine's first day is ready on Today.
+                Destination.SETUP -> SetupScreen(
+                    onBuilt = { navigator.openTab(Tab.TODAY) },
+                    onLeave = navigator::back,
+                    viewModel = routineViewModel,
                 )
 
                 Destination.WORKOUT -> SessionScreen(
@@ -281,6 +306,7 @@ private fun GymTracker(
                     // has never heard of, which is the one form in the app that does that. The day
                     // comes with them, so what they add lands where they were putting it.
                     onAddNewExercise = navigator::pickFor,
+                    onStartSetup = { navigator.open(Destination.SETUP) },
                     viewModel = routineViewModel,
                 )
             }

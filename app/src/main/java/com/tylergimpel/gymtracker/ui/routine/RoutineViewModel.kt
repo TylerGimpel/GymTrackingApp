@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.routine
 
+import com.tylergimpel.gymtracker.domain.WeightUnit
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -247,6 +248,31 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 cardio = setup.cardio,
                 // Their exclusions travel on the rows themselves, so the generator reads what
                 // they decided without being told about it separately.
+                bank = exercises.observeBank().first(),
+            )
+        }
+    }
+
+    /** What the lifter reads weights in now, which setup's first page starts on. */
+    suspend fun preferredUnit(): WeightUnit = database.profileRepository().observeDisplayUnit().first()
+
+    /**
+     * Builds the routine setup asked for (#144): kilos or pounds is the lifter's own **Preferred
+     * unit**, written where the setting lives, and the rest is the routine's.
+     */
+    fun buildFromSetup(answers: SetupAnswers) {
+        viewModelScope.launch {
+            database.profileRepository().setDisplayUnit(answers.unit)
+            val shape = answers.shapeToBuild()
+            val setup = answers.toRoutineSetup()
+            repository.createFromShape(
+                name = shape.description,
+                shape = shape,
+                goal = setup.goal,
+                cadence = setup.cadence,
+                equipment = setup.equipment,
+                repPreference = setup.repPreference,
+                cardio = setup.cardio,
                 bank = exercises.observeBank().first(),
             )
         }

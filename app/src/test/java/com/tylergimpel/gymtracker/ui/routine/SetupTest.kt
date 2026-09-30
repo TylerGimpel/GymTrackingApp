@@ -5,14 +5,14 @@ import com.tylergimpel.gymtracker.domain.CardioPlacement
 import com.tylergimpel.gymtracker.domain.RepPreference
 import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.RoutineGoal
+import com.tylergimpel.gymtracker.domain.WeightUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Letting the app build a routine, as a short conversation in the order people finish (#86).
+ * Letting the app build a routine, one question to a page with the usual answer already in (#144).
  *
  * The flow is a value, so what it asks, in what order, and what it builds from the answers can be
  * stated without a screen — which is the only way "setup answers are the routine's properties"
@@ -21,11 +21,10 @@ import org.junit.Test
 class SetupTest {
 
     @Test
-    fun `the questions come in the order people finish them`() {
-        // Goal first because it is the one people want to answer; cardio before equipment because
-        // the cardio machines depend on it; equipment last because it is much the longest.
+    fun `the questions come in the agreed order`() {
         assertEquals(
             listOf(
+                SetupStep.UNIT,
                 SetupStep.GOAL,
                 SetupStep.REP_PREFERENCE,
                 SetupStep.CADENCE,
@@ -35,44 +34,41 @@ class SetupTest {
             ),
             SetupStep.entries,
         )
-        assertEquals(SetupStep.GOAL, SetupAnswers().step)
+        assertEquals(SetupStep.UNIT, SetupAnswers().step)
+        assertEquals(7, SetupAnswers.STEPS)
     }
 
     @Test
-    fun `progress says how far through a finite thing the lifter is`() {
-        val third = SetupAnswers().next().next()
+    fun `every answer starts as the usual one, so Next always works`() {
+        val setup = SetupAnswers().toRoutineSetup()
 
-        assertEquals(3, third.stepNumber)
-        assertEquals(6, SetupAnswers.STEPS)
+        assertEquals(RoutineGoal.HYPERTROPHY, setup.goal)
+        assertEquals(RepPreference.MODERATE, setup.repPreference)
+        assertEquals(3, setup.cadence)
+        assertEquals(CardioPlacement.NONE, setup.cardio)
+        // A full gym, which the rest of the app reads as the whole bank.
+        assertEquals(emptySet<String>(), setup.equipment)
     }
 
     @Test
     fun `going back changes an answer without losing the others`() {
-        val answered = SetupAnswers()
+        val answered = SetupAnswers().next()
             .copy(goal = RoutineGoal.STRENGTH).next()
             .copy(repPreference = RepPreference.LOW).next()
-            .copy(cadence = 4)
+            .withCadence(4)
 
         val back = answered.back().back()
 
         assertEquals(SetupStep.GOAL, back.step)
         assertEquals(RepPreference.LOW, back.repPreference)
         assertEquals(4, back.cadence)
-        // And back at the very start there is nowhere further back to go.
-        assertEquals(SetupStep.GOAL, back.back().step)
-    }
-
-    @Test
-    fun `skipping a question leaves it unanswered and moves on`() {
-        val skipped = SetupAnswers().copy(goal = RoutineGoal.STRENGTH).skip()
-
-        assertEquals(SetupStep.REP_PREFERENCE, skipped.step)
-        assertNull(skipped.goal)
+        assertEquals(SetupStep.UNIT, back.back().back().step)
     }
 
     @Test
     fun `setup answers are the routine's properties`() {
         val answers = SetupAnswers(
+            unit = WeightUnit.POUNDS,
             goal = RoutineGoal.STRENGTH,
             repPreference = RepPreference.LOW,
             cadence = 4,
@@ -80,13 +76,12 @@ class SetupTest {
             equipment = setOf("barbell", "dumbbell", "rower"),
         )
 
-        // The same type every path that makes a routine takes, so answering differently here and
-        // editing a property later are one and the same thing.
+        // Narrowed, so bodyweight goes in with what was ticked.
         assertEquals(
             RoutineSetup(
                 cadence = 4,
                 cardio = CardioPlacement.AFTER_LIFTING,
-                equipment = setOf("barbell", "dumbbell", "rower"),
+                equipment = setOf("barbell", "dumbbell", "rower", "body only"),
                 goal = RoutineGoal.STRENGTH,
                 repPreference = RepPreference.LOW,
             ),
@@ -95,44 +90,19 @@ class SetupTest {
     }
 
     @Test
-    fun `everything skipped is built from what each skipped question says it assumes`() {
-        val setup = SetupAnswers().toRoutineSetup()
+    fun `the split starts as the best fit for the week and follows it until one is picked`() {
+        assertEquals(4, SetupAnswers().withCadence(4).shapeToBuild().liftingPositions)
+        assertEquals(2, SetupAnswers().withCadence(2).shapeToBuild().liftingPositions)
 
-        // The same assumptions each skipped question says out loud on screen.
-        assertEquals(RoutineGoal.HYPERTROPHY, setup.goal)
-        assertEquals(RepPreference.MODERATE, setup.repPreference)
-        assertEquals(3, setup.cadence)
-        assertEquals(CardioPlacement.NONE, setup.cardio)
-        // Nothing ticked is "nobody has described the gym yet", which offers everything rather
-        // than nothing.
-        assertEquals(emptySet<String>(), setup.equipment)
-    }
-
-    @Test
-    fun `a skipped shape is one that comes round about weekly for the week they train`() {
-        // Four sessions a week most often wants a four-position cycle: the likeliest answer, not
-        // a claim that it is the best one.
-        assertEquals(4, SetupAnswers(cadence = 4).shapeToBuild().liftingPositions)
-        assertEquals(2, SetupAnswers(cadence = 2).shapeToBuild().liftingPositions)
-    }
-
-    @Test
-    fun `a shape chosen survives going back to change the week`() {
-        val chosen = SetupAnswers(cadence = 3, shapeId = "push-pull-legs-3")
-
-        val changed = chosen.copy(cadence = 5)
-
-        // Weekly frequency narrows nothing — every shape is offered at every cadence, only in a
-        // different order — so the choice is still on screen, still chosen, and still built.
-        assertTrue(changed.shapesOffered().any { it.id == "push-pull-legs-3" })
-        assertEquals("push-pull-legs-3", changed.shapeToBuild().id)
+        val picked = SetupAnswers(shapeId = "push-pull-legs-3")
+        assertEquals("push-pull-legs-3", picked.shapeToBuild().id)
+        // A new week moves the pick back to the new best fit.
+        assertEquals(4, picked.withCadence(4).shapeToBuild().liftingPositions)
     }
 
     @Test
     fun `cardio on its own day is added to the shape chosen before it was asked`() {
-        val answers = SetupAnswers(shapeId = "upper-lower-2", cardio = CardioPlacement.OWN_DAY)
-
-        val shape = answers.shapeToBuild()
+        val shape = SetupAnswers(shapeId = "upper-lower-2", cardio = CardioPlacement.OWN_DAY).shapeToBuild()
 
         assertEquals(RoutineDayKind.CARDIO, shape.days.last().kind)
         assertEquals(3, shape.days.size)
@@ -140,22 +110,23 @@ class SetupTest {
 
     @Test
     fun `cardio machines are only offered to somebody who does cardio`() {
-        val everything = listOf("barbell", "dumbbell", "treadmill", "rower")
-
-        assertFalse(
-            SetupAnswers(cardio = CardioPlacement.NONE).equipmentOffered(everything)
-                .any { it in CARDIO_EQUIPMENT },
-        )
-        assertTrue(SetupAnswers(cardio = null).equipmentOffered(everything).none { it in CARDIO_EQUIPMENT })
-        assertEquals(everything, SetupAnswers(cardio = CardioPlacement.OWN_DAY).equipmentOffered(everything))
+        assertTrue(SetupAnswers(cardio = CardioPlacement.NONE).equipmentOffered.none { it in CARDIO_EQUIPMENT })
+        assertTrue(SetupAnswers(cardio = CardioPlacement.OWN_DAY).equipmentOffered.containsAll(CARDIO_EQUIPMENT))
     }
 
     @Test
     fun `a cardio machine ticked before cardio was turned off is not built with`() {
-        // Going back and turning cardio off after ticking a rower hides the rower; building with
-        // it anyway would be the app keeping an answer to a question it stopped asking.
         val answers = SetupAnswers(cardio = CardioPlacement.NONE, equipment = setOf("barbell", "rower"))
 
-        assertEquals(setOf("barbell"), answers.toRoutineSetup().equipment)
+        assertEquals(setOf("barbell", "body only"), answers.toRoutineSetup().equipment)
+    }
+
+    @Test
+    fun `all and none work on what is offered`() {
+        val none = SetupAnswers().withNoEquipment()
+        assertFalse(none.fullGym)
+        // Bodyweight only, which is still something to build from.
+        assertEquals(setOf("body only"), none.toRoutineSetup().equipment)
+        assertTrue(none.withAllEquipment().fullGym)
     }
 }
