@@ -31,6 +31,8 @@ data class GymColors(
     // The app guessing: the calibrating badge and its line, apart from every other colour so it
     // never reads as a selection or a warning.
     val calib: Color,
+    // Something the lifter should know before going on: a conflict in what they asked for.
+    val warn: Color,
 )
 
 internal val DarkGymColors = GymColors(
@@ -45,6 +47,7 @@ internal val DarkGymColors = GymColors(
     good = Color(0xFF6FCF7F),
     accentText = Color(0xFFF5C518),
     calib = Color(0xFFC9A7FF),
+    warn = Color(0xFFFFB38A),
 )
 
 internal val LightGymColors = GymColors(
@@ -59,6 +62,7 @@ internal val LightGymColors = GymColors(
     good = Color(0xFF2E8B3E),
     accentText = Color(0xFF1A1813),
     calib = Color(0xFF6D3FC4),
+    warn = Color(0xFFA6461A),
 )
 
 /**

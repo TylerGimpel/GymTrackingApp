@@ -1,5 +1,9 @@
 package com.tylergimpel.gymtracker.ui.routine
 
+import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
+import com.tylergimpel.gymtracker.ui.theme.UppercaseText
+import com.tylergimpel.gymtracker.ui.theme.MainButton
+import com.tylergimpel.gymtracker.ui.theme.AppCard
 import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.saveable.listSaver
@@ -74,6 +78,7 @@ import java.time.format.FormatStyle
 fun RoutineScreen(
     onBack: () -> Unit,
     onAddNewExercise: (Long) -> Unit,
+    onStartSetup: () -> Unit = {},
     viewModel: RoutineViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -93,13 +98,10 @@ fun RoutineScreen(
         if (routine == null) {
             EmptyRoutine(
                 insets = insets,
-                availableEquipment = state.availableEquipment,
-                experience = state.experience,
+                onStartSetup = onStartSetup,
                 onCreate = { viewModel.createRoutine(defaultName) },
-                onRebuildFromLog = viewModel::rebuildFromLog,
-                onCreateFromShape = { shape, setup ->
-                    viewModel.createFromShape(name = shape.description, shape = shape, setup = setup)
-                },
+                // Built against the usual answers; the routine's settings change any of them after.
+                onRebuildFromLog = { viewModel.rebuildFromLog(SetupAnswers().toRoutineSetup()) },
             )
             state.choosingRoutine?.let { choice ->
                 ChooseRoutine(
@@ -395,219 +397,32 @@ private fun Double.asSetsText(): String =
     if (this % 1.0 == 0.0) toInt().toString() else "%.1f".format(this)
 
 /**
- * Letting the app build a routine: six questions, one at a time, in the order people finish (#86).
- *
- * Progress is shown so it reads as finite, every question can be skipped — and says what skipping
- * it assumes — and going back keeps every other answer. What is never asked is a cycle length:
- * "how many days is your routine" reads as both cadence and the number of positions, and
- * conflating them makes sound routines look invalid.
+ * No routine yet: setup, building one by hand, or bringing back what the log shows was trained
+ * before (#144). Setup itself is its own full-screen flow.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EmptyRoutine(
     insets: PaddingValues,
-    availableEquipment: List<String>,
-    /** How much training the lifter has behind them, which one conflict rule reads. */
-    experience: Experience,
+    onStartSetup: () -> Unit,
     onCreate: () -> Unit,
-    onCreateFromShape: (SplitShape, RoutineSetup) -> Unit,
-    onRebuildFromLog: (RoutineSetup) -> Unit,
+    onRebuildFromLog: () -> Unit,
 ) {
-    var answers by rememberSaveable(stateSaver = SetupAnswersSaver) { mutableStateOf(SetupAnswers()) }
-    val setup = answers.toRoutineSetup()
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(insets)
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = stringResource(R.string.setup_progress, answers.stepNumber, SetupAnswers.STEPS),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        LinearProgressIndicator(
-            progress = { answers.stepNumber / SetupAnswers.STEPS.toFloat() },
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        when (answers.step) {
-            SetupStep.GOAL -> SetupQuestion(
-                question = stringResource(R.string.routine_setup_goal),
-                options = RoutineGoal.entries.map { it to it.name.lowercase() },
-                selected = answers.goal,
-                onSelect = { answers = answers.copy(goal = it) },
-                skipped = stringResource(
-                    R.string.routine_setup_goal_skipped,
-                    RoutineSetup.ASSUMED_GOAL.name.lowercase(),
-                ),
-            )
-
-            SetupStep.REP_PREFERENCE -> {
-                SetupQuestion(
-                    question = stringResource(R.string.routine_setup_rep_preference),
-                    options = RepPreference.entries.map { it to it.name.lowercase() },
-                    selected = answers.repPreference,
-                    onSelect = { answers = answers.copy(repPreference = it) },
-                    skipped = stringResource(
-                        R.string.routine_setup_rep_preference_skipped,
-                        RoutineSetup.ASSUMED_REP_PREFERENCE.name.lowercase(),
-                    ),
-                )
-                // Said at the moment the two are chosen, against what setup will actually build
-                // with, so a skipped question that lands in a conflict says so too.
-                Conflicts(setup, experience)
+        AppCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                UppercaseText(stringResource(R.string.today_no_routine), style = MaterialTheme.typography.headlineMedium)
+                MainButton(stringResource(R.string.welcome_get_started), onClick = onStartSetup, modifier = Modifier.fillMaxWidth())
+                AppOutlinedButton(stringResource(R.string.welcome_build_myself), onClick = onCreate, modifier = Modifier.fillMaxWidth())
+                AppOutlinedButton(stringResource(R.string.routine_rebuild_from_log), onClick = onRebuildFromLog, modifier = Modifier.fillMaxWidth())
             }
-
-            SetupStep.CADENCE -> {
-                SetupQuestion(
-                    question = stringResource(R.string.routine_setup_frequency),
-                    options = (1..7).map { it to it.toString() },
-                    selected = answers.cadence,
-                    onSelect = { answers = answers.copy(cadence = it) },
-                    skipped = stringResource(
-                        R.string.setup_cadence_skipped,
-                        SetupAnswers.ASSUMED_CADENCE,
-                    ),
-                )
-                Explanation(stringResource(R.string.routine_setup_frequency_why))
-            }
-
-            SetupStep.SHAPE -> {
-                Text(stringResource(R.string.routine_setup_shape), style = MaterialTheme.typography.titleMedium)
-                // Said out loud, because the honest thing to say about splits is that the evidence
-                // found no difference between them.
-                Explanation(stringResource(R.string.routine_setup_shape_why))
-                // By shape, never by position count: "alternate upper and lower" is a thing anyone
-                // can choose, and "a 2-position cycle" is not. Nothing invalid is here to reject.
-                answers.shapesOffered().forEach { shape ->
-                    FilterChip(
-                        selected = answers.shapeId == shape.id,
-                        onClick = {
-                            answers = answers.copy(
-                                shapeId = if (answers.shapeId == shape.id) null else shape.id,
-                            )
-                        },
-                        label = {
-                            Text(stringResource(R.string.routine_shape_days, shape.description, shape.days.size))
-                        },
-                    )
-                }
-                if (answers.shapeId == null) {
-                    Explanation(
-                        stringResource(R.string.setup_shape_skipped, answers.shapesOffered().first().description),
-                    )
-                }
-            }
-
-            SetupStep.CARDIO -> SetupQuestion(
-                question = stringResource(R.string.routine_cardio),
-                options = listOf(
-                    CardioPlacement.NONE to stringResource(R.string.cardio_none),
-                    CardioPlacement.OWN_DAY to stringResource(R.string.cardio_own_day),
-                    CardioPlacement.AFTER_LIFTING to stringResource(R.string.cardio_after_lifting),
-                ),
-                selected = answers.cardio,
-                onSelect = { answers = answers.copy(cardio = it) },
-                skipped = stringResource(R.string.setup_cardio_skipped),
-            )
-
-            SetupStep.EQUIPMENT -> {
-                Text(stringResource(R.string.routine_equipment), style = MaterialTheme.typography.titleMedium)
-                // Last because it is the longest, and people abandon a long checklist before they
-                // have invested anything. Cardio machines appear only for somebody who does cardio.
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    answers.equipmentOffered(availableEquipment).forEach { item ->
-                        val ticked = item in answers.equipment.orEmpty()
-                        FilterChip(
-                            selected = ticked,
-                            onClick = {
-                                val now = answers.equipment.orEmpty()
-                                answers = answers.copy(equipment = if (ticked) now - item else now + item)
-                            },
-                            label = { Text(item) },
-                        )
-                    }
-                }
-                if (answers.equipment.isNullOrEmpty()) {
-                    Explanation(stringResource(R.string.setup_equipment_skipped))
-                }
-                // The one conflict that can only be known once the gym is: low reps with nothing
-                // heavy to lift.
-                Conflicts(setup, experience)
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (answers.step != SetupStep.entries.first()) {
-                TextButton(onClick = { answers = answers.back() }) {
-                    Text(stringResource(R.string.setup_back))
-                }
-            }
-            if (!answers.isLast) {
-                TextButton(onClick = { answers = answers.skip() }) {
-                    Text(stringResource(R.string.setup_skip))
-                }
-                AppButton(
-                    text = stringResource(R.string.setup_next),
-                    onClick = { answers = answers.next() },
-                )
-            } else {
-                // The payoff for answering: a routine to train from, landed on straight away.
-                AppButton(
-                    text = stringResource(R.string.setup_build),
-                    onClick = { onCreateFromShape(answers.shapeToBuild(), setup) },
-                )
-            }
-        }
-
-        HorizontalDivider()
-        // The same mechanism from an empty start, for somebody who knows exactly what they want.
-        TextButton(onClick = onCreate) { Text(stringResource(R.string.routine_build_by_hand)) }
-        // And the seasonal case: something that worked last spring, read back out of the log, built
-        // against whatever has been answered so far.
-        TextButton(onClick = { onRebuildFromLog(setup) }) {
-            Text(stringResource(R.string.routine_rebuild_from_log))
         }
     }
-}
-
-/** One setup question: its choices, and what skipping it assumes while nothing is chosen. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun <T : Any> SetupQuestion(
-    question: String,
-    options: List<Pair<T, String>>,
-    selected: T?,
-    onSelect: (T?) -> Unit,
-    skipped: String,
-) {
-    Text(question, style = MaterialTheme.typography.titleMedium)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { (value, text) ->
-            // Tapping the chosen one again takes the answer back: skipping stays possible.
-            FilterChip(
-                selected = value == selected,
-                onClick = { onSelect(if (value == selected) null else value) },
-                label = { Text(text) },
-            )
-        }
-    }
-    if (selected == null) Explanation(skipped)
-}
-
-@Composable
-private fun Explanation(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 /** The conflict table, read against what setup will build with. */
@@ -626,33 +441,6 @@ private fun Conflicts(setup: RoutineSetup, experience: Experience) {
         )
     }
 }
-
-/** Keeps the answers through a rotation or the process being reclaimed, as plain values. */
-private val SetupAnswersSaver = listSaver<SetupAnswers, Any?>(
-    save = {
-        listOf(
-            it.goal?.name,
-            it.repPreference?.name,
-            it.cadence,
-            it.shapeId,
-            it.cardio?.name,
-            it.equipment?.let(::ArrayList),
-            it.step.name,
-        )
-    },
-    restore = {
-        @Suppress("UNCHECKED_CAST")
-        SetupAnswers(
-            goal = (it[0] as String?)?.let(RoutineGoal::valueOf),
-            repPreference = (it[1] as String?)?.let(RepPreference::valueOf),
-            cadence = it[2] as Int?,
-            shapeId = it[3] as String?,
-            cardio = (it[4] as String?)?.let(CardioPlacement::valueOf),
-            equipment = (it[5] as List<String>?)?.toSet(),
-            step = SetupStep.valueOf(it[6] as String),
-        )
-    },
-)
 
 /**
  * The routine's properties.
