@@ -1,0 +1,757 @@
+<title>Routine Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<!--
+  THROWAWAY PROTOTYPE - not production code. Wayfinder ticket #136
+  "Prototype: building and editing a routine" (map #130 "Map: UI overhaul").
+
+  Question: how should viewing, building and editing a routine look, including
+  choosing equipment and replacing or adding exercises?
+
+  Shared by every variant:
+    - Sample data: a Push / Pull / Legs routine with plain names (common-routines research).
+      Pull is next up; Squat and Barbell row are kept. The panel can load an empty routine instead.
+    - Exercises show an equipment icon and a plain name. The exercise sheet and the picker
+      show a muscle diagram. Icons and the body are rough stand-ins for Tabler and MuscleMap.
+    - "Replace" changes an exercise for good. (Swap is the session-only word.)
+    - "Keep" is the pin: it stays put when the routine is built again.
+    - Routine settings reuse setup's summary rows and tile pages. Changing the goal, rep style,
+      equipment or split offers to build again; the answer is always the lifter's.
+    - Adding, removing or moving a day restarts the cycle at day 1, and says so.
+    - "Build it again" really reshuffles the unkept exercises here, with Undo.
+    - Back is real browser history, so the phone's Back steps back.
+
+  Three variants disagree about the structure:
+    A  Drill down - day cards on the Routine tab; tap one for its own page. Tap an exercise for
+                    a sheet with the diagram and Replace / Keep / Remove. Settings behind a gear.
+    B  Day tabs   - Days · Muscles · Setup tabs. Day chips across the top; every exercise row has
+                    its own Keep, Replace and Remove buttons. Days are edited on their own page.
+    C  Edit mode  - (CHOSEN, with D's time margin and wording) a clean read-only page: muscles, then every day and its lifts, then settings.
+                    One Edit button turns on every control at once; Done turns them off.
+
+    D  Boxes + days - (round 2, from the lifter's pick) C's top (name, then the muscle diagram),
+                    A's day boxes with Next up. A box opens that day laid out like C's, with its own
+                    Edit. Findings say what they are instead of "N things to look at", and a day
+                    only reads as too long past 10% over the session length.
+
+  Switch with the floating panel (top right) or the arrow keys.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:#14130F; --surface:#1E1C17; --s2:#2A2720; --line:#3E392E; --text:#F5F2EA; --dim:#ABA590;
+    --accent:#F5C518; --on:#1A1600; --at:#F5C518; --good:#6FCF7F; --warn:#FFB38A; --scrim:rgba(0,0,0,.55);
+    --m2:rgba(245,197,24,.4);
+    --disp:"Barlow Condensed","Arial Narrow",sans-serif; --body:"Barlow",system-ui,sans-serif; --r:6px; --rbig:10px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { color-scheme: light;
+      --bg:#F6F4EE; --surface:#FFFFFF; --s2:#ECE8DD; --line:#D6CFBC; --text:#1A1813; --dim:#696350;
+      --accent:#EDB800; --on:#1A1600; --at:#1A1813; --good:#2E8B3E; --warn:#A6461A; --scrim:rgba(20,18,12,.45); --m2:rgba(237,184,0,.45); }
+  }
+  :root[data-theme="light"] { color-scheme: light;
+    --bg:#F6F4EE; --surface:#FFFFFF; --s2:#ECE8DD; --line:#D6CFBC; --text:#1A1813; --dim:#696350;
+    --accent:#EDB800; --on:#1A1600; --at:#1A1813; --good:#2E8B3E; --warn:#A6461A; --scrim:rgba(20,18,12,.45); --m2:rgba(237,184,0,.45); }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 var(--body); -webkit-user-select: none; user-select: none; overflow: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; text-align: inherit; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); height: 56px; padding: 0 14px; width: 100%; -webkit-user-select: text; user-select: text; }
+  #app { max-width: 440px; margin-inline: auto; height: 100%; display: flex; flex-direction: column; position: relative; }
+  .dim { color: var(--dim); }
+  .label { font: 600 13px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 60px; border-radius: var(--r);
+         font: 700 22px/1 var(--disp); letter-spacing: .03em; text-transform: uppercase; text-align: center; }
+  .btn.primary { background: var(--accent); color: var(--on); }
+  .btn.big { min-height: 72px; font-size: 28px; }
+  .btn.ghost { background: var(--s2); }
+  .btn.quiet { min-height: 52px; font-size: 19px; color: var(--dim); }
+  .btn.dashed { border: 2px dashed var(--line); color: var(--dim); min-height: 60px; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .foot { flex: none; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); background: var(--bg); }
+  .q { margin: 8px 0; font: 700 40px/1 var(--disp); text-transform: uppercase; text-wrap: balance; }
+  .ico { width: 28px; height: 28px; flex: none; }
+  .note { font-size: 15px; color: var(--warn); }
+  .sect { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .banner { padding: 12px 14px; border-radius: var(--r); background: var(--s2); border-left: 4px solid var(--accent); font-size: 15px; }
+
+  .topbar { height: 52px; display: flex; align-items: center; gap: 4px; padding: 0 4px; flex: none; }
+  .topbar h1 { margin: 0; font: 700 28px/1 var(--disp); text-transform: uppercase; letter-spacing: .03em; flex: 1; min-width: 0; padding-left: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .back + h1 { padding-left: 0; }
+  .ib { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--r); flex: none; }
+  .tb { height: 44px; padding: 0 14px; border-radius: var(--r); font: 700 18px/1 var(--disp); letter-spacing: .05em; text-transform: uppercase; }
+  .tb.on { background: var(--accent); color: var(--on); }
+
+  nav.bn { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border-top: 1px solid var(--line); flex: none; }
+  nav.bn button { min-height: 68px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--dim); }
+  nav.bn svg { width: 26px; height: 26px; }
+  nav.bn button[aria-current="page"] { color: var(--text); box-shadow: inset 0 3px 0 var(--accent); }
+  nav.bn button[aria-current="page"] svg { color: var(--at); }
+
+  /* routine head */
+  .rhead { display: flex; flex-direction: column; gap: 4px; }
+  .rhead .nm { font: 700 34px/1 var(--disp); text-transform: uppercase; }
+  .rhead .meta { font-size: 15px; color: var(--dim); }
+
+  /* A: day cards */
+  .day { padding: 16px; display: flex; flex-direction: column; gap: 10px; text-align: left; width: 100%; }
+  .day .top { display: flex; align-items: baseline; gap: 10px; }
+  .day .pos { font: 700 20px/1 var(--disp); color: var(--dim); width: 18px; }
+  .day .dn { font: 700 32px/1 var(--disp); text-transform: uppercase; flex: 1; }
+  .day .lifts { font-size: 15px; color: var(--dim); line-height: 1.5; }
+  .day.next { border: 2px solid var(--accent); padding: 15px; }
+  .tag { font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--on); background: var(--accent); padding: 4px 6px; border-radius: 4px; }
+  .tag.plain { background: var(--s2); color: var(--dim); }
+  .meta2 { font-size: 15px; color: var(--dim); display: flex; gap: 14px; }
+  .meta2 b { color: var(--text); font-weight: 600; }
+  .meta2 .over { color: var(--warn); }
+
+  /* exercise rows */
+  .ex { display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 8px 12px 8px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); width: 100%; text-align: left; }
+  .ex .eqi { width: 44px; height: 44px; border-radius: var(--r); background: var(--s2); display: grid; place-items: center; flex: none; color: var(--dim); }
+  .ex .eqi .ico { width: 28px; height: 28px; }
+  .ex .t { flex: 1; min-width: 0; }
+  .ex .t b { display: block; font: 700 22px/1.05 var(--disp); text-transform: uppercase; }
+  .ex .t small { display: block; font-size: 14px; color: var(--dim); margin-top: 3px; }
+  .ex .sets { font: 700 22px/1 var(--disp); white-space: nowrap; }
+  .ex .sets small { font: 500 13px/1 var(--body); color: var(--dim); margin-left: 2px; }
+  .kept { color: var(--at); display: inline-flex; vertical-align: -3px; margin-left: 4px; }
+  .rowbtns { display: flex; gap: 4px; flex: none; }
+  .rowbtns button { width: 44px; height: 44px; border-radius: var(--r); background: var(--s2); display: grid; place-items: center; color: var(--dim); }
+  .rowbtns button.on { background: var(--accent); color: var(--on); }
+  .rowbtns .ico { width: 22px; height: 22px; }
+
+  /* B: tabs + chips */
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); margin: 0 16px 8px; flex: none; }
+  .seg button { height: 44px; border-radius: 4px; font: 700 18px/1 var(--disp); letter-spacing: .05em; text-transform: uppercase; color: var(--dim); text-align: center; }
+  .seg button.on { background: var(--s2); color: var(--text); box-shadow: inset 0 -3px 0 var(--accent); }
+  .dchips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: none; padding: 2px 0; }
+  .dchips::-webkit-scrollbar { display: none; }
+  .dchip { flex: none; min-width: 72px; height: 56px; padding: 0 16px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); font: 700 22px/1 var(--disp); text-transform: uppercase; position: relative; }
+  .dchip.on { background: var(--accent); color: var(--on); border-color: var(--accent); }
+  .dchip .dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+
+  /* C: view / edit */
+  .vday { display: flex; flex-direction: column; gap: 6px; padding: 16px 0; border-top: 1px solid var(--line); }
+  .vday .top { display: flex; align-items: center; gap: 10px; }
+  .vday .dn { font: 700 30px/1 var(--disp); text-transform: uppercase; flex: 1; min-width: 0; }
+  .vex { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+  .vex .ico { width: 24px; height: 24px; color: var(--dim); }
+  .vex b { flex: 1; font-weight: 500; font-size: 18px; }
+  .vex .sets { font: 700 20px/1 var(--disp); color: var(--dim); }
+  .editing .vex { min-height: 60px; }
+  .dname { font: 700 26px/1 var(--disp); text-transform: uppercase; height: 52px; flex: 1; min-width: 0; }
+
+  /* muscles */
+  .bodies { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bodies svg { width: 100%; height: auto; max-height: 260px; }
+  .bodies.small svg { max-height: 150px; }
+  .mrow { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .mrow b { font: 700 22px/1 var(--disp); text-transform: uppercase; }
+  .mrow span { font-size: 15px; color: var(--dim); text-align: right; }
+  .mbar { grid-column: 1 / -1; height: 10px; border-radius: 5px; background: var(--s2); position: relative; overflow: hidden; }
+  .mbar .band { position: absolute; top: 0; bottom: 0; background: var(--line); }
+  .mbar .fill { position: absolute; top: 3px; bottom: 3px; left: 0; border-radius: 2px; background: var(--accent); }
+  .finding { padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .finding p { margin: 0; }
+  .finding small { color: var(--dim); font-size: 15px; }
+
+  /* settings rows (setup's summary) */
+  .rowlist { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); overflow: hidden; }
+  .srow { display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 10px 16px; border-top: 1px solid var(--line); width: 100%; text-align: left; }
+  .srow:first-child { border-top: 0; }
+  .srow .t { flex: 1; min-width: 0; }
+  .srow .t .label { display: block; margin-bottom: 6px; }
+  .srow .t b { display: block; font: 700 24px/1.05 var(--disp); text-transform: uppercase; }
+  .srow .ico { color: var(--dim); }
+
+  /* setup-style tiles */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tiles.three { grid-template-columns: repeat(3, 1fr); }
+  .tiles.four { grid-template-columns: repeat(4, 1fr); }
+  .tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 130px; padding: 14px 8px;
+          background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); text-align: center; }
+  .tile .ico { width: 44px; height: 44px; color: var(--dim); }
+  .tile b { font: 700 22px/1 var(--disp); text-transform: uppercase; }
+  .tile small { font-size: 14px; color: var(--dim); }
+  .tile.wide { grid-column: 1 / -1; min-height: 90px; flex-direction: row; gap: 16px; }
+  .tile.on { border: 2px solid var(--accent); background: var(--s2); }
+  .tile.on .ico { color: var(--at); }
+  .tile .ck { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on); display: none; place-items: center; }
+  .tile.on .ck { display: grid; }
+  .tile.num2 { min-height: 84px; } .tile.num2 b { font-size: 44px; }
+  .tiles.eqt .tile { min-height: 110px; gap: 8px; } .tiles.eqt .tile b { font-size: 17px; }
+  .split { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rbig); width: 100%; text-align: left; }
+  .split b { font: 700 24px/1 var(--disp); text-transform: uppercase; }
+  .split.on { border: 2px solid var(--accent); padding: 13px 15px; background: var(--s2); }
+  .blocks { display: flex; gap: 4px; }
+  .blocks i { flex: 1; height: 36px; border-radius: 4px; background: var(--s2); display: grid; place-items: center; font: 700 14px/1 var(--disp); font-style: normal; text-transform: uppercase; overflow: hidden; }
+  .split.on .blocks i { background: var(--bg); }
+
+  /* picker */
+  .fchips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: none; }
+  .fchips::-webkit-scrollbar { display: none; }
+  .fchip { flex: none; height: 40px; padding: 0 14px; border-radius: 999px; background: var(--s2); font-weight: 600; font-size: 15px; }
+  .fchip.on { background: var(--accent); color: var(--on); }
+  .ex.off { opacity: .5; }
+
+  /* sheets */
+  .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 20; }
+  .sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: 100%; max-width: 440px; max-height: 88%; overflow-y: auto; z-index: 21;
+           background: var(--surface); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; }
+  .sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); align-self: center; margin-bottom: 4px; }
+  .sheet h3 { margin: 0; font: 700 32px/1 var(--disp); text-transform: uppercase; text-wrap: balance; }
+  .act { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 0 14px; border-radius: var(--r); background: var(--s2); font: 700 20px/1 var(--disp); letter-spacing: .03em; text-transform: uppercase; width: 100%; }
+  .act.on { background: var(--accent); color: var(--on); }
+  .act.danger { color: var(--warn); }
+  .act .ico { width: 24px; height: 24px; }
+  .act small { margin-left: auto; font: 500 14px/1 var(--body); text-transform: none; letter-spacing: 0; opacity: .8; }
+
+  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 14px; background: var(--text); color: var(--bg);
+           padding: 0 8px 0 16px; min-height: 52px; border-radius: var(--r); font-weight: 600; font-size: 15px; width: calc(100% - 32px); max-width: 408px; }
+  #toast[hidden] { display: none; }
+  #toast button { margin-left: auto; height: 40px; padding: 0 12px; font: 700 18px/1 var(--disp); text-transform: uppercase; color: var(--accent); }
+  :root[data-theme="light"] #toast button { color: #8A6A00; }
+
+  .proto { position: fixed; z-index: 99; top: calc(env(safe-area-inset-top, 0px) + 60px); right: 6px; display: flex; flex-direction: column; gap: 2px;
+           background: #0a0a0a; color: #fff; border: 1px dashed #ff3bd4; border-radius: 12px; padding: 4px; font: 600 12px/1.2 system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+  .proto button { color: #fff; padding: 7px 8px; border-radius: 8px; text-align: left; }
+  .proto button.on { background: #ff3bd4; color: #000; }
+  .proto .hr { height: 1px; background: #333; margin: 2px 0; }
+  .proto.min > :not(.tog) { display: none; }
+</style>
+
+<div id="app"></div>
+<div id="layers"></div>
+<div id="toast" hidden></div>
+<div class="proto" id="proto"></div>
+
+<script>
+const NAMES = { A:"Drill down", B:"Day tabs", C:"Edit mode", D:"Boxes + days" };
+const P = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+const svg = (d, st="") => `<svg class="ico" ${st?`style="${st}"`:""} viewBox="0 0 24 24" ${P}>${d}</svg>`;
+// Rough stand-ins on Tabler's grid (24x24, 2px round stroke).
+const IC = {
+  back:'<path d="M15 5l-7 7 7 7"/>', chev:'<path d="M9 5l7 7-7 7"/>', check:'<path d="M5 12l5 5 9-10"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  pin:'<path d="M15 4.5l-4 4-4 1.5-1.5 1.5 7 7 1.5-1.5 1.5-4 4-4M9 15l-4.5 4.5M14.5 4l5.5 5.5"/>',
+  swap:'<path d="M7 4L3 8l4 4"/><path d="M3 8h14"/><path d="M17 20l4-4-4-4"/><path d="M21 16H7"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>', trash:'<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>', up:'<path d="M12 19V5M6 11l6-6 6 6"/>', down:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+  edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>', search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  refresh:'<path d="M20 11A8 8 0 0 0 5.3 7M4 4v4h4M4 13a8 8 0 0 0 14.7 4M20 20v-4h-4"/>',
+  today:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  routine:'<path d="M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8"/>',
+  more:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+  barbell:'<path d="M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8"/>',
+  dumbbell:'<rect x="4" y="8" width="4" height="8" rx="1"/><rect x="16" y="8" width="4" height="8" rx="1"/><path d="M8 12h8M2 11v2M22 11v2"/>',
+  ezbar:'<path d="M2 12h3l2-2 2.5 4 2.5-4 2.5 4 2.5-4 2 2h3M5 8v8M19 8v8"/>',
+  cable:'<path d="M4 3v18M4 3h9"/><circle cx="13" cy="5" r="2"/><path d="M15 5v10M12 18h6M15 15v3"/>',
+  machine:'<path d="M5 3v18M19 3v18M5 3h14M12 3v7"/><rect x="8" y="10" width="8" height="3"/><rect x="8" y="14" width="8" height="3"/><rect x="8" y="18" width="8" height="3"/>',
+  kettle:'<circle cx="12" cy="15" r="6"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+  bands:'<path d="M5 6c4 3 10 3 14 0M5 18c4-3 10-3 14 0M5 6c-2 4-2 8 0 12M19 6c2 4 2 8 0 12"/>',
+  medball:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.5 3 3.5 15 0 18M12 3c-3.5 3-3.5 15 0 18"/>',
+  swissball:'<circle cx="12" cy="11" r="8"/><path d="M7 5.5c3 3 3 8 0 11.5M8 21h8"/>',
+  foam:'<ellipse cx="6" cy="12" rx="2.5" ry="5"/><path d="M6 7h12a2.5 5 0 0 1 0 10H6M11 7v10M15 7v10"/>',
+  body:'<circle cx="12" cy="4.5" r="2"/><path d="M12 7v7M7 10l5-1 5 1M12 14l-3 7M12 14l3 7"/>',
+  treadmill:'<circle cx="11" cy="4" r="1.5"/><path d="M8 13l2-4 3 2 2-1M10 9l-1 4 2 2"/><path d="M3 19h14l3-9h-2M5 21h12"/>',
+  bike:'<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-7h6l2 7M10 10l2 7M8 7h3M15 7h2l-1 3"/>',
+  rower:'<path d="M3 19h18M5 19v-3M19 19v-3"/><circle cx="18" cy="12" r="3"/><path d="M6 15h4M15 12l-7-3"/>',
+  elliptical:'<ellipse cx="9" cy="17" rx="5" ry="2.5"/><path d="M14 17l3-11M17 6h3M17 6l-4 4M4 21h16"/>',
+  stairs:'<path d="M3 20h4v-4h4v-4h4v-4h4V4h2"/>', outdoor:'<circle cx="17" cy="6" r="2"/><path d="M3 20l6-9 4 6 3-4 5 7z"/>',
+  muscle:'<path d="M4 16c1-6 3-10 7-11l2 3-3 2c2 1 4 1 6-1 3 1 4 4 3 7-2 3-8 4-15 0z"/>',
+  strength:'<path d="M6 20V10M18 20V10M3 14h18M9 7v10M15 7v10"/>', stamina:'<path d="M3 12h4l2-5 4 10 2-5h6"/>',
+  heavy:'<rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/><path d="M9 12h6M2 12h3M19 12h3"/>',
+  mid:'<rect x="6" y="7" width="3" height="10" rx="1"/><rect x="15" y="7" width="3" height="10" rx="1"/><path d="M9 12h6M3 12h3M18 12h3"/>',
+  light:'<rect x="7" y="9" width="2" height="6" rx="1"/><rect x="15" y="9" width="2" height="6" rx="1"/><path d="M9 12h6M3 12h4M17 12h4"/>',
+  none:'<circle cx="12" cy="12" r="9"/><path d="M6 18L18 6"/>', ownday:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 15h8"/>',
+  after:'<path d="M5 12h10M11 7l5 5-5 5"/><path d="M19 5v14"/>',
+};
+const EQ = {
+  barbell:["Barbells","barbell"], dumbbell:["Dumbbells","dumbbell"], cable:["Cables","cable"], machine:["Machines","machine"],
+  "e-z curl bar":["EZ bars","ezbar"], kettlebells:["Kettlebells","kettle"], bands:["Bands","bands"], "medicine ball":["Medicine balls","medball"],
+  "exercise ball":["Exercise balls","swissball"], "foam roll":["Foam rollers","foam"], "body only":["Bodyweight","body"],
+};
+const CARDIO_EQ = { treadmill:["Treadmills","treadmill"], "stationary bike":["Exercise bikes","bike"], rower:["Rowers","rower"], elliptical:["Ellipticals","elliptical"], "stair climber":["Stair climbers","stairs"], outdoor:["Outdoors","outdoor"] };
+const LIFT_EQ = Object.keys(EQ).filter(k => k !== "body only");
+
+// ---------------------------------------------------------------- the bank (plain names, per the routines research)
+const BANK = [
+  ["bench","Bench press","barbell",["chest"],["shoulders","triceps"]],
+  ["incline-db","Incline dumbbell press","dumbbell",["chest"],["shoulders","triceps"]],
+  ["db-bench","Dumbbell bench press","dumbbell",["chest"],["shoulders","triceps"]],
+  ["machine-chest","Machine chest press","machine",["chest"],["triceps"]],
+  ["cable-fly","Cable fly","cable",["chest"],[]],
+  ["pushup","Push-up","body only",["chest"],["triceps","shoulders"]],
+  ["dips","Dips","body only",["triceps"],["chest","shoulders"]],
+  ["ohp","Overhead press","barbell",["shoulders"],["triceps"]],
+  ["db-shoulder","Dumbbell shoulder press","dumbbell",["shoulders"],["triceps"]],
+  ["machine-shoulder","Machine shoulder press","machine",["shoulders"],["triceps"]],
+  ["lateral","Lateral raise","dumbbell",["shoulders"],[]],
+  ["face-pull","Face pull","cable",["shoulders"],["traps"]],
+  ["rev-pec","Reverse pec deck","machine",["shoulders"],["traps"]],
+  ["pushdown","Triceps pushdown","cable",["triceps"],[]],
+  ["oh-ext","Overhead cable extension","cable",["triceps"],[]],
+  ["skull","Skull crusher","e-z curl bar",["triceps"],[]],
+  ["row","Barbell row","barbell",["middle back"],["lats","biceps"]],
+  ["db-row","Dumbbell row","dumbbell",["middle back"],["lats","biceps"]],
+  ["cable-row","Seated cable row","cable",["middle back"],["lats","biceps"]],
+  ["cs-row","Chest-supported row","machine",["middle back"],["lats"]],
+  ["pulldown","Lat pulldown","cable",["lats"],["biceps"]],
+  ["pullup","Pull-up","body only",["lats"],["biceps"]],
+  ["chinup","Chin-up","body only",["lats"],["biceps"]],
+  ["shrug","Dumbbell shrug","dumbbell",["traps"],[]],
+  ["curl","Dumbbell curl","dumbbell",["biceps"],[]],
+  ["hammer","Hammer curl","dumbbell",["biceps"],["forearms"]],
+  ["ez-curl","EZ-bar curl","e-z curl bar",["biceps"],[]],
+  ["squat","Squat","barbell",["quadriceps"],["glutes","hamstrings"]],
+  ["leg-press","Leg press","machine",["quadriceps"],["glutes"]],
+  ["leg-ext","Leg extension","machine",["quadriceps"],[]],
+  ["goblet","Goblet squat","dumbbell",["quadriceps"],["glutes"]],
+  ["bss","Bulgarian split squat","dumbbell",["quadriceps"],["glutes","hamstrings"]],
+  ["lunge","Walking lunge","dumbbell",["quadriceps"],["glutes"]],
+  ["rdl","Romanian deadlift","barbell",["hamstrings"],["glutes","lower back"]],
+  ["deadlift","Deadlift","barbell",["lower back"],["hamstrings","glutes","traps"]],
+  ["leg-curl","Leg curl","machine",["hamstrings"],[]],
+  ["back-ext","Back extension","body only",["lower back"],["glutes","hamstrings"]],
+  ["hip-thrust","Hip thrust","barbell",["glutes"],["hamstrings"]],
+  ["calf","Standing calf raise","machine",["calves"],[]],
+  ["seated-calf","Seated calf raise","machine",["calves"],[]],
+  ["plank","Plank","body only",["abdominals"],[]],
+  ["cable-crunch","Cable crunch","cable",["abdominals"],[]],
+  ["leg-raise","Hanging leg raise","body only",["abdominals"],[]],
+  ["kb-swing","Kettlebell swing","kettlebells",["glutes"],["hamstrings"]],
+  ["band-pull","Band pull-apart","bands",["shoulders"],["traps"]],
+].map(([id,name,eq,p,s]) => ({ id, name, eq, p, s }));
+const BY = Object.fromEntries(BANK.map(e => [e.id, e]));
+const MAIN = ["chest","shoulders","triceps","lats","middle back","traps","biceps","quadriceps","hamstrings","glutes","calves","lower back"];
+
+// ---------------------------------------------------------------- state
+let uid = 100;
+const ex = (id, sets, kept=false) => ({ k: uid++, id, sets, kept });
+function sample() {
+  return {
+    name: "Push / Pull / Legs", goal:"muscle", reps:"mid", days:3, shape:"ppl-3", cardio:"none", minutes:50,
+    equip: new Set(["barbell","dumbbell","cable","machine","e-z curl bar"]),
+    rot: [
+      { id:"d1", name:"Push", cardio:false, ex:[ex("bench",3), ex("ohp",3), ex("incline-db",3), ex("lateral",3), ex("pushdown",3)] },
+      { id:"d2", name:"Pull", cardio:false, ex:[ex("row",3,true), ex("pulldown",3), ex("cable-row",3), ex("face-pull",2), ex("curl",3)] },
+      { id:"d3", name:"Legs", cardio:false, ex:[ex("squat",5,true), ex("rdl",3), ex("leg-press",3), ex("leg-curl",3), ex("calf",4)] },
+    ],
+    cursor:"d2",
+  };
+}
+function empty() {
+  return { name:"My routine", goal:"muscle", reps:"mid", days:3, shape:null, cardio:"none", minutes:50,
+    equip: new Set(["barbell","dumbbell","cable","machine","e-z curl bar"]), rot:[{ id:"d1", name:"Day 1", cardio:false, ex:[] }], cursor:"d1" };
+}
+const S = { v:"A", data:"sample", R:sample(), stack:[{ p:"root" }], tab:"days", bDay:"d2", editing:false, revised:"", undo:null, minP:false, pickFilter:"gym", q:"" };
+try { const p = JSON.parse(localStorage.getItem("routine-proto")||"{}"); if (NAMES[p.v]) S.v = p.v; if (p.theme) document.documentElement.dataset.theme = p.theme; } catch (e) {}
+
+const R = () => S.R;
+const dayOf = id => R().rot.find(d => d.id === id);
+const topE = () => S.stack[S.stack.length - 1];
+const page = () => [...S.stack].reverse().find(e => !e.sheet);
+const sheet = () => topE().sheet ? topE() : null;
+const liftingDays = () => R().rot.filter(d => !d.cardio).length || 1;
+const overTime = d => !d.cardio && minutesOf(d) > R().minutes * 1.1;
+const minutesOf = d => d.cardio ? 30 : Math.round(d.ex.reduce((n, e) => n + e.sets, 0) * 2.6 + 5);
+const setsOf = d => d.ex.reduce((n, e) => n + e.sets, 0);
+const TARGET = { muscle:[10,20], strength:[6,12], endurance:[8,16] };
+
+// muscle load: direct sets count 1, indirect count a half, per cycle, turned into per week through the cadence
+function load() {
+  const m = {};
+  const per = R().days / liftingDays();
+  R().rot.forEach(d => { const hit = new Set(); d.ex.forEach(e => { const b = BY[e.id];
+    b.p.forEach(x => { (m[x] ??= { direct:0, sets:0, days:new Set() }); m[x].sets += e.sets; m[x].direct += e.sets; m[x].days.add(d.id); });
+    b.s.forEach(x => { (m[x] ??= { direct:0, sets:0, days:new Set() }); m[x].sets += e.sets / 2; }); }); });
+  return MAIN.map(x => ({ muscle:x, week: (m[x]?.sets ?? 0) * per, direct: (m[x]?.direct ?? 0), days: m[x]?.days.size ?? 0 }));
+}
+function findings() {
+  const out = [];
+  R().rot.forEach(d => { const m = minutesOf(d); if ("CD".includes(S.v) ? overTime(d) : (!d.cardio && m > R().minutes)) out.push({ kind:"long", day:d.name, m, said:`${d.name} runs about ${m} minutes, past the ${R().minutes} you have.`, relax:["Take a set off something", "Allow longer sessions"] }); });
+  load().forEach(l => { if (l.direct === 0) out.push({ kind:"nolift", muscle:l.muscle, week:l.week, said: l.week ? `Nothing here is for ${l.muscle}. It gets ${fmt(l.week)} sets a week from other lifts.` : `Nothing in this cycle trains ${l.muscle}.`, relax:[`Add a ${l.muscle} lift to a day`] }); });
+  return out;
+}
+const fmt = n => (n % 1 === 0 ? n : n.toFixed(1)).toString();
+
+// ---------------------------------------------------------------- muscle diagram (stand-in for MuscleMap)
+const FRONT = { shoulders:[[30,44,7,6],[70,44,7,6]], chest:[[41,52,9,7],[59,52,9,7]], biceps:[[24,64,4.5,9],[76,64,4.5,9]], forearms:[[20,86,4,10],[80,86,4,10]],
+  abdominals:[[50,76,7,15]], quadriceps:[[42,122,7,20],[58,122,7,20]], calves:[[41,166,4.5,13],[59,166,4.5,13]] };
+const BACK = { traps:[[50,40,13,6]], shoulders:[[30,44,7,6],[70,44,7,6]], lats:[[38,64,7,13],[62,64,7,13]], "middle back":[[50,56,5,9]], "lower back":[[50,84,8,6]],
+  triceps:[[24,64,4.5,9],[76,64,4.5,9]], forearms:[[20,86,4,10],[80,86,4,10]], glutes:[[42,102,8,8],[58,102,8,8]], hamstrings:[[42,130,6,16],[58,130,6,16]], calves:[[41,166,5,13],[59,166,5,13]] };
+function body(map, lvl, label) {
+  const sil = `<circle cx="50" cy="18" r="10"/><rect x="31" y="32" width="38" height="62" rx="12"/><rect x="16" y="40" width="12" height="58" rx="6"/><rect x="72" y="40" width="12" height="58" rx="6"/>
+    <rect x="34" y="92" width="15" height="92" rx="7"/><rect x="51" y="92" width="15" height="92" rx="7"/>`;
+  const ms = Object.entries(map).map(([m, es]) => es.map(([x,y,rx,ry]) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${lvl(m)}"/>`).join("")).join("");
+  return `<svg viewBox="0 0 100 200" role="img" aria-label="${label}"><g fill="var(--s2)" stroke="var(--line)" stroke-width="1">${sil}</g>${ms}</svg>`;
+}
+function bodies(lvl, small) { return `<div class="bodies ${small?"small":""}">${body(FRONT, lvl, "Front")}${body(BACK, lvl, "Back")}</div>`; }
+const exLvl = b => m => b.p.includes(m) ? "var(--accent)" : b.s.includes(m) ? "var(--m2)" : "var(--line)";
+function loadLvl() { const L = Object.fromEntries(load().map(l => [l.muscle, l])); const lo = TARGET[R().goal][0];
+  return m => { const l = L[m]; if (!l || !l.week) return "var(--line)"; return l.week >= lo ? "var(--accent)" : "var(--m2)"; }; }
+
+// ---------------------------------------------------------------- navigation (real history)
+let hist = true;
+function push(e) { S.stack.push(e); try { history.pushState({ d:S.stack.length }, ""); } catch (x) { hist = false; } render(); }
+function swapTop(e) { S.stack[S.stack.length - 1] = e; try { history.replaceState({ d:S.stack.length }, ""); } catch (x) {} render(); }
+function back() { if (S.stack.length <= 1) return; if (hist) history.back(); else { S.stack.pop(); render(); } }
+function backN(n) { n = Math.min(n, S.stack.length - 1); if (n <= 0) return; if (hist) history.go(-n); else { S.stack.length -= n; render(); } }
+addEventListener("popstate", e => { const d = (e.state && e.state.d) || 1; S.stack.length = Math.max(1, Math.min(d, S.stack.length)); render(); });
+
+let toastT;
+function toast(msg, undo) {
+  const t = document.getElementById("toast");
+  t.innerHTML = `<span>${msg}</span>${undo ? `<button data-undo>Undo</button>` : ""}`; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, undo ? 6000 : 2400);
+}
+function revise(msg) { R().cursor = R().rot[0]?.id; S.revised = msg; }
+
+// ---------------------------------------------------------------- shared pieces
+const nav = () => `<nav class="bn">${[["today","Today"],["cal","Calendar"],["routine","Routine"],["more","More"]].map(([k,l]) =>
+  `<button ${k==="routine"?'aria-current="page"':`data-toast="${l}: its own prototype"`}>${svg(IC[k])}${l}</button>`).join("")}</nav>`;
+const bar = (title, right="", backBtn=true) => `<div class="topbar">${backBtn?`<button class="ib back" data-back aria-label="Back">${svg(IC.back)}</button>`:""}<h1>${title}</h1>${right}</div>`;
+const eqIcon = id => svg(IC[(EQ[id]||CARDIO_EQ[id]||["","body"])[1]]);
+function exRow(d, e, mode) {
+  const b = BY[e.id], kept = e.kept ? `<span class="kept" title="Kept">${svg(IC.pin,"width:18px;height:18px")}</span>` : "";
+  const right = mode === "buttons"
+    ? `<span class="rowbtns"><button class="${e.kept?"on":""}" data-keep="${d.id}:${e.k}" aria-label="Keep">${svg(IC.pin)}</button><button data-replace="${d.id}:${e.k}" aria-label="Replace">${svg(IC.swap)}</button><button data-remove="${d.id}:${e.k}" aria-label="Remove">${svg(IC.x)}</button></span>`
+    : `<span class="sets">${e.sets}<small>sets</small></span>`;
+  const t = `<span class="eqi">${eqIcon(b.eq)}</span><span class="t"><b>${b.name}${kept}</b><small>${mode==="buttons"?`${e.sets} sets · `:""}${b.p.join(", ")}</small></span>${right}`;
+  return mode === "buttons" ? `<div class="ex">${t}</div>` : `<button class="ex" data-exsheet="${d.id}:${e.k}">${t}</button>`;
+}
+function dayMeta(d) {
+  if (d.cardio) return `<div class="meta2"><span>Cardio · ~30 min</span></div>`;
+  const m = minutesOf(d);
+  return `<div class="meta2"><span><b>${d.ex.length}</b> lifts</span><span><b>${setsOf(d)}</b> sets</span><span class="${("CD".includes(S.v) ? overTime(d) : m>R().minutes)?"over":""}">~<b>${m}</b> min</span></div>`;
+}
+const revisedBanner = () => S.revised ? `<div class="banner">${S.revised} Back to day 1: the cycle starts again.</div>` : "";
+
+// settings = setup's summary rows
+const OPTS = {
+  goal:{ c:"Goal", q:"What's your goal?", o:[["muscle","Build muscle","muscle"],["strength","Get stronger","strength"],["endurance","Build stamina","stamina"]] },
+  reps:{ c:"Lifting", q:"How do you like to lift?", o:[["heavy","Heavy","heavy","fewer reps"],["mid","In between","mid"],["light","Light","light","more reps"]] },
+  cardio:{ c:"Cardio", q:"Any cardio?", o:[["none","No cardio","none"],["own","Its own day","ownday"],["after","After lifting","after"]] },
+  days:{ c:"Days a week", q:"Days a week?" }, shape:{ c:"Split", q:"Pick a split" }, equip:{ c:"Equipment", q:"What do you have?" },
+  minutes:{ c:"Session length", q:"How long can you train?" },
+};
+const SHAPES = [["ppl-3","Push / Pull / Legs",["Push","Pull","Legs"]],["upper-lower-2","Upper / Lower",["Upper","Lower"]],["full-body-3","Full body A/B/C",["Full A","Full B","Full C"]],
+  ["ula-3","Upper / Lower / Arms",["Upper","Lower","Arms"]],["upper-lower-4","Upper / Lower ×2",["Up A","Low A","Up B","Low B"]],["full-body-2","Full body A/B",["Full A","Full B"]]];
+const lab = (k, v) => (OPTS[k].o.find(o => o[0] === v) || [])[1];
+function equipSummary() { const n = [...R().equip].filter(e => LIFT_EQ.includes(e)).length; return n === LIFT_EQ.length ? "Full gym" : n ? `${n} kinds` : "Bodyweight only"; }
+function settingsRows() {
+  const row = (k, v) => `<button class="srow" data-set="${k}"><span class="t"><span class="label">${OPTS[k].c}</span><b>${v}</b></span>${svg(IC.chev)}</button>`;
+  const sh = SHAPES.find(s => s[0] === R().shape);
+  return `<div class="rowlist">${row("goal", lab("goal", R().goal))}${row("reps", lab("reps", R().reps))}${row("days", `${R().days} a week`)}
+    ${row("shape", sh ? sh[1] : "Built by hand")}${row("cardio", lab("cardio", R().cardio))}${row("equip", equipSummary())}${row("minutes", `${R().minutes} min`)}</div>`;
+}
+function settingQ(k) {
+  const q = OPTS[k], r = R(); let body = "";
+  const ck = `<span class="ck">${svg(IC.check,"width:14px;height:14px")}</span>`;
+  if (q.o) body = `<div class="tiles">${q.o.map(([v,l,ic,sub],j) => `<button class="tile ${r[k]===v?"on":""} ${j===2?"wide":""}" data-val="${k}:${v}">${ck}${svg(IC[ic])}<span><b>${l}</b>${sub?`<small style="display:block;margin-top:4px">${sub}</small>`:""}</span></button>`).join("")}</div>`;
+  if (k === "days") body = `<div class="tiles four">${[1,2,3,4,5,6,7].map(n => `<button class="tile num2 ${r.days===n?"on":""}" data-val="days:${n}">${ck}<b>${n}</b></button>`).join("")}</div>`;
+  if (k === "minutes") body = `<div class="tiles three">${[30,45,50,60,75,90].map(n => `<button class="tile num2 ${r.minutes===n?"on":""}" data-val="minutes:${n}">${ck}<b>${n}</b><small>min</small></button>`).join("")}</div>`;
+  if (k === "shape") body = SHAPES.map(s => `<button class="split ${r.shape===s[0]?"on":""}" data-val="shape:${s[0]}"><b>${s[1]}</b><span class="blocks">${s[2].map(x=>`<i>${x}</i>`).join("")}</span></button>`).join("");
+  if (k === "equip") {
+    const tile = ([id,[l,ic]]) => `<button class="tile ${r.equip.has(id)?"on":""}" data-eqt="${id}">${ck}${svg(IC[ic])}<b>${l}</b></button>`;
+    body = `<div class="tiles three eqt">${Object.entries(EQ).filter(([id]) => id !== "body only").map(tile).join("")}</div>
+      ${r.cardio === "none" ? "" : `<div class="label sect">Cardio</div><div class="tiles three eqt">${Object.entries(CARDIO_EQ).map(tile).join("")}</div>`}`;
+  }
+  return bar(q.c) + `<div class="scroll"><h2 class="q">${q.q}</h2>${body}</div><div class="foot"><button class="btn primary big" data-setdone="${k}">Done</button></div>`;
+}
+function musclesBody(full) {
+  const lo = TARGET[R().goal][0], hi = TARGET[R().goal][1], max = hi * 1.5, L = load(), F = findings();
+  return `${bodies(loadLvl(), !full)}
+    <div class="dim" style="font-size:15px">Sets a week, aiming for ${lo}–${hi}.</div>
+    ${(full ? L : L.slice(0, 0)).map(l => `<div class="mrow"><b>${l.muscle}</b><span>${fmt(l.week)} sets · ${l.days}× a cycle</span>
+      <div class="mbar"><i class="band" style="left:${lo/max*100}%;width:${(hi-lo)/max*100}%"></i><i class="fill" style="width:${Math.min(100, l.week/max*100)}%"></i></div></div>`).join("")}
+    ${F.length ? `<div class="label sect">Getting in the way</div>` + F.map(f => `<div class="card finding"><p>${f.said}</p>${f.relax.map(x => `<small>· ${x}</small>`).join("")}</div>`).join("") : ""}`;
+}
+
+// ---------------------------------------------------------------- A: Drill down
+function aRoot() {
+  const r = R(), F = findings().length;
+  return bar("Routine", `<button class="ib" data-go="settings" aria-label="Settings">${svg(IC.gear)}</button>`, false) + `<div class="scroll">
+    <div class="rhead"><div class="nm">${r.name}</div><div class="meta">${r.rot.length} days · ${r.days} a week</div></div>
+    ${revisedBanner()}
+    ${r.rot.map((d, i) => `<button class="card day ${r.cursor===d.id?"next":""}" data-go="day:${d.id}">
+      <span class="top"><span class="pos">${i+1}</span><span class="dn">${d.name}</span>${r.cursor===d.id?'<span class="tag">Next up</span>':""}</span>
+      ${dayMeta(d)}<span class="lifts">${d.cardio ? "Cardio" : d.ex.map(e => BY[e.id].name).join(" · ") || "No lifts yet"}</span></button>`).join("")}
+    <button class="btn dashed" data-sheet="addday">+ Add day</button>
+    <button class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;text-align:left;width:100%" data-go="muscles">
+      <span class="sect" style="margin:0;width:100%"><span class="label">What it trains</span>${F?`<span class="tag plain">${F} to look at</span>`:""}</span>${bodies(loadLvl(), true)}</button>
+    ${r.shape ? `<button class="btn ghost" data-rebuild>${svg(IC.refresh)} Build it again</button>` : ""}
+  </div>` + nav();
+}
+function aDay(id) {
+  const d = dayOf(id);
+  return bar(d.name, `<button class="ib" data-sheet="daymenu:${id}" aria-label="Day options">${svg(IC.dots)}</button>`) + `<div class="scroll">
+    ${dayMeta(d)}${R().cursor === id ? '<div><span class="tag">Next up</span></div>' : ""}
+    ${d.cardio ? `<div class="card dim" style="padding:16px">A cardio day. It takes its turn like any other day.</div>` :
+      d.ex.map(e => exRow(d, e)).join("") + `<button class="btn dashed" data-pick="add:${id}">+ Add exercise</button>`}
+  </div>`;
+}
+function exSheet(did, k) {
+  const d = dayOf(did), e = d.ex.find(x => x.k === +k), b = BY[e.id];
+  return `<div class="grab"></div><h3>${b.name}</h3>
+    <div class="meta2"><span style="display:flex;align-items:center;gap:6px">${eqIcon(b.eq)} ${(EQ[b.eq]||["Bodyweight"])[0]}</span><span><b>${e.sets}</b> sets</span></div>
+    ${bodies(exLvl(b), true)}
+    <div class="dim" style="font-size:15px">${b.p.join(", ")}${b.s.length?` · also ${b.s.join(", ")}`:""}</div>
+    <button class="act" data-replace="${did}:${k}">${svg(IC.swap)} Replace</button>
+    <button class="act ${e.kept?"on":""}" data-keep="${did}:${k}">${svg(IC.pin)} ${e.kept?"Kept":"Keep"}<small>stays when built again</small></button>
+    <button class="act danger" data-remove="${did}:${k}">${svg(IC.x)} Remove</button>`;
+}
+function dayMenu(id) {
+  const d = dayOf(id), i = R().rot.indexOf(d);
+  return `<div class="grab"></div><h3>${d.name}</h3>
+    <button class="act" data-sheet="rename:${id}">${svg(IC.edit)} Rename</button>
+    ${i > 0 ? `<button class="act" data-move="${id}:-1">${svg(IC.up)} Move earlier</button>` : ""}
+    ${i < R().rot.length - 1 ? `<button class="act" data-move="${id}:1">${svg(IC.down)} Move later</button>` : ""}
+    <button class="act danger" data-sheet="rmday:${id}">${svg(IC.trash)} Remove day</button>`;
+}
+
+// ---------------------------------------------------------------- B: Day tabs
+function bRoot() {
+  const r = R();
+  if (!dayOf(S.bDay)) S.bDay = r.rot[0]?.id;
+  let body = "";
+  if (S.tab === "days") {
+    const d = dayOf(S.bDay);
+    body = `<div class="dchips">${r.rot.map(x => `<button class="dchip ${x.id===S.bDay?"on":""}" data-bday="${x.id}">${x.name}${r.cursor===x.id?'<i class="dot"></i>':""}</button>`).join("")}
+        <button class="dchip" data-go="days" aria-label="Edit days">${svg(IC.edit,"width:22px;height:22px")}</button></div>
+      ${revisedBanner()}
+      ${d ? `<div class="sect" style="margin:0">${dayMeta(d)}${r.cursor===d.id?'<span class="tag">Next up</span>':""}</div>
+      ${d.cardio ? `<div class="card" style="padding:16px">A cardio day.</div>` : d.ex.map(e => exRow(d, e, "buttons")).join("") + `<button class="btn dashed" data-pick="add:${d.id}">+ Add exercise</button>`}` : ""}
+      ${r.shape ? `<button class="btn ghost" data-rebuild>${svg(IC.refresh)} Build it again</button>` : ""}`;
+  }
+  if (S.tab === "muscles") body = musclesBody(true);
+  if (S.tab === "setup") body = `<div class="rhead"><div class="nm">${r.name}</div></div>${settingsRows()}<button class="btn quiet" data-sheet="rename:routine">Rename routine</button>`;
+  return bar("Routine", "", false) + `<div class="seg">${[["days","Days"],["muscles","Muscles"],["setup","Setup"]].map(([k,l]) => `<button class="${S.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>
+    <div class="scroll">${body}</div>` + nav();
+}
+function bDays() {
+  const r = R();
+  return bar("Days") + `<div class="scroll">${revisedBanner()}
+    ${r.rot.map((d, i) => `<div class="ex"><span class="eqi" style="font:700 22px/1 var(--disp)">${i+1}</span>
+      <button class="t" data-sheet="rename:${d.id}"><b>${d.name}</b><small>${d.cardio?"Cardio":`${d.ex.length} lifts`} · tap to rename</small></button>
+      <span class="rowbtns"><button data-move="${d.id}:-1" ${i===0?"disabled style=opacity:.3":""} aria-label="Earlier">${svg(IC.up)}</button><button data-move="${d.id}:1" ${i===r.rot.length-1?"disabled style=opacity:.3":""} aria-label="Later">${svg(IC.down)}</button><button data-sheet="rmday:${d.id}" aria-label="Remove">${svg(IC.x)}</button></span></div>`).join("")}
+    <button class="btn dashed" data-sheet="addday">+ Add day</button></div>`;
+}
+
+// ---------------------------------------------------------------- C: Edit mode
+function cRoot() {
+  const r = R(), E = S.editing;
+  const days = r.rot.map((d, i) => `<div class="vday">
+    <div class="top">${E ? `<button class="dname" data-sheet="rename:${d.id}" style="text-align:left">${d.name} ${svg(IC.edit,"width:18px;height:18px;opacity:.6")}</button>
+        <span class="rowbtns"><button data-move="${d.id}:-1" ${i===0?"disabled style=opacity:.3":""} aria-label="Earlier">${svg(IC.up)}</button><button data-move="${d.id}:1" ${i===r.rot.length-1?"disabled style=opacity:.3":""} aria-label="Later">${svg(IC.down)}</button><button data-sheet="rmday:${d.id}" aria-label="Remove day">${svg(IC.trash)}</button></span>`
+      : `<span class="dn">${d.name}</span>${r.cursor===d.id?'<span class="tag">Next up</span>':""}`}</div>
+    ${dayMeta(d)}
+    ${d.cardio ? `<div class="dim">Cardio</div>` : d.ex.map(e => { const b = BY[e.id]; return E ? exRow(d, e, "buttons")
+      : `<button class="vex" data-exsheet="${d.id}:${e.k}">${eqIcon(b.eq)}<b>${b.name}${e.kept?`<span class="kept">${svg(IC.pin,"width:16px;height:16px")}</span>`:""}</b><span class="sets">${e.sets}×</span></button>`; }).join("")
+      + (E ? `<button class="btn dashed" data-pick="add:${d.id}">+ Add exercise</button>` : (d.ex.length ? "" : `<div class="dim">No lifts yet</div>`))}
+  </div>`).join("");
+  return bar("Routine", `<button class="tb ${E?"on":""}" data-edit>${E ? "Done" : "Edit"}</button>`, false) + `<div class="scroll ${E?"editing":""}">
+    <div class="rhead">${E ? `<button class="dname" data-sheet="rename:routine" style="text-align:left;font-size:34px">${r.name} ${svg(IC.edit,"width:20px;height:20px;opacity:.6")}</button>` : `<div class="nm">${r.name}</div>`}<div class="meta">${r.rot.length} days · ${r.days} a week</div></div>
+    ${revisedBanner()}
+    ${E ? "" : `<button style="display:flex;flex-direction:column;gap:8px;width:100%;text-align:left" data-go="muscles">${bodies(loadLvl(), true)}<span style="font-size:15px;text-align:center;width:100%;color:${findingLine() ? "var(--warn)" : "var(--dim)"}">${findingLine() || "Muscles"} ›</span></button>`}
+    ${days}
+    ${E ? `<button class="btn dashed" data-sheet="addday">+ Add day</button>` : ""}
+    <div class="label sect">Setup</div>${settingsRows()}
+    ${r.shape && !E ? `<button class="btn ghost" data-rebuild>${svg(IC.refresh)} Build it again</button>` : ""}
+    ${E ? `<button class="btn quiet" style="color:var(--warn)" data-toast="Delete routine: asks first">Delete routine</button>` : ""}
+  </div>` + nav();
+}
+
+// ---------------------------------------------------------------- D: boxes + C-style days
+const andList = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+function findingLine() {
+  const F = findings(), long = F.filter(f => f.kind === "long").map(f => f.day), none = F.filter(f => f.kind === "nolift").map(f => f.muscle);
+  return [long.length ? `${andList(long)} ${long.length > 1 ? "run" : "runs"} long` : "", none.length ? `No lift for ${andList(none)}` : ""].filter(Boolean).join(" · ");
+}
+function dMuscles() {
+  const lo = TARGET[R().goal][0], hi = TARGET[R().goal][1], max = hi * 1.5, L = load(), F = findings();
+  const long = F.filter(f => f.kind === "long"), none = F.filter(f => f.kind === "nolift");
+  return `${bodies(loadLvl())}
+    ${long.length ? `<div class="label sect">Runs long</div>` + long.map(f => `<div class="card finding"><p><b>${f.day}</b> · about ${f.m} min, you set ${R().minutes}</p><small>Take a set off something, or allow longer sessions.</small></div>`).join("") : ""}
+    ${none.length ? `<div class="label sect">No lift of their own</div><div class="card finding">${none.map(f => `<p><b style="text-transform:capitalize">${f.muscle}</b> <span class="dim" style="font-size:15px">· ${f.week ? `${fmt(f.week)} ${f.week === 1 ? "set" : "sets"} a week from other lifts` : "nothing yet"}</span></p>`).join("")}<small>Add a lift for it to any day.</small></div>` : ""}
+    <div class="label sect">Sets a week · aiming for ${lo}–${hi}</div>
+    ${L.map(l => `<div class="mrow"><b>${l.muscle}</b><span>${fmt(l.week)}${l.days ? ` · ${l.days}× a cycle` : ""}</span>
+      <div class="mbar"><i class="band" style="left:${lo/max*100}%;width:${(hi-lo)/max*100}%"></i><i class="fill" style="width:${Math.min(100, l.week/max*100)}%"></i></div></div>`).join("")}`;
+}
+function dRoot() {
+  const r = R(), line = findingLine();
+  return bar("Routine", `<button class="ib" data-go="settings" aria-label="Settings">${svg(IC.gear)}</button>`, false) + `<div class="scroll">
+    <div class="rhead"><div class="nm">${r.name}</div><div class="meta">${r.rot.length} days · ${r.days} a week</div></div>
+    <button style="display:flex;flex-direction:column;gap:8px;width:100%;text-align:left" data-go="muscles">${bodies(loadLvl(), true)}
+      <span style="font-size:15px;text-align:center;width:100%;color:${line ? "var(--warn)" : "var(--dim)"}">${line || "Muscles"} ›</span></button>
+    ${revisedBanner()}
+    ${r.rot.map((d, i) => `<button class="card day ${r.cursor===d.id?"next":""}" data-go="day:${d.id}">
+      <span class="top"><span class="pos">${i+1}</span><span class="dn">${d.name}</span>${r.cursor===d.id?'<span class="tag">Next up</span>':""}</span>
+      ${dayMeta(d)}<span class="lifts">${d.cardio ? "Cardio" : d.ex.map(e => BY[e.id].name).join(" · ") || "No lifts yet"}</span></button>`).join("")}
+    <button class="btn dashed" data-sheet="addday">+ Add day</button>
+    ${r.shape ? `<button class="btn ghost" data-rebuild>${svg(IC.refresh)} Build it again</button>` : ""}
+  </div>` + nav();
+}
+function dDay(id) {
+  const d = dayOf(id), E = S.editing, i = R().rot.indexOf(d);
+  return bar(d.name, `<button class="tb ${E?"on":""}" data-edit>${E ? "Done" : "Edit"}</button>`) + `<div class="scroll ${E?"editing":""}">
+    <div class="sect" style="margin:0">${dayMeta(d)}${R().cursor===id?'<span class="tag">Next up</span>':""}</div>
+    ${d.cardio ? `<div class="dim">Cardio. It takes its turn like any other day.</div>` : d.ex.map(e => { const b = BY[e.id]; return E ? exRow(d, e, "buttons")
+      : `<button class="vex" data-exsheet="${d.id}:${e.k}">${eqIcon(b.eq)}<b>${b.name}${e.kept?`<span class="kept">${svg(IC.pin,"width:16px;height:16px")}</span>`:""}</b><span class="sets">${e.sets}×</span></button>`; }).join("")
+      + (E ? `<button class="btn dashed" data-pick="add:${d.id}">+ Add exercise</button>` : (d.ex.length ? "" : `<div class="dim">No lifts yet</div>`))}
+    ${E ? `<div class="label sect">This day</div>
+      <button class="act" data-sheet="rename:${id}">${svg(IC.edit)} Rename</button>
+      ${i > 0 ? `<button class="act" data-move="${id}:-1">${svg(IC.up)} Move earlier</button>` : ""}
+      ${i < R().rot.length - 1 ? `<button class="act" data-move="${id}:1">${svg(IC.down)} Move later</button>` : ""}
+      <button class="act danger" data-sheet="rmday:${id}">${svg(IC.trash)} Remove day</button>` : ""}
+  </div>`;
+}
+
+// ---------------------------------------------------------------- the picker (add or replace)
+function picker(mode, did, k) {
+  const d = dayOf(did), cur = k ? d.ex.find(x => x.k === +k) : null, curB = cur && BY[cur.id];
+  const inDay = new Set(d.ex.map(e => e.id)), q = S.q.trim().toLowerCase();
+  const have = e => e.eq === "body only" || R().equip.has(e.eq);
+  let list = BANK.filter(e => !inDay.has(e.id) && (!q || e.name.toLowerCase().includes(q) || e.p.some(m => m.includes(q))));
+  if (S.pickFilter === "gym") list = list.filter(have);
+  const rank = e => curB ? (e.p[0] === curB.p[0] ? 0 : e.p.some(m => curB.p.includes(m)) ? 1 : 2) : 0;
+  list.sort((a, b) => rank(a) - rank(b));
+  const same = curB ? list.filter(e => rank(e) === 0) : [], rest = curB ? list.filter(e => rank(e) !== 0) : list;
+  const row = e => `<button class="ex ${have(e)?"":"off"}" data-picked="${e.id}"><span class="eqi">${eqIcon(e.eq)}</span><span class="t"><b>${e.name}</b><small>${e.p.join(", ")}${have(e)?"":" · not at your gym"}</small></span></button>`;
+  return bar(curB ? `Replace ${curB.name}` : `Add to ${d.name}`) + `<div class="scroll">
+    <div style="position:relative"><input id="q" type="search" placeholder="Search" value="${S.q.replace(/"/g,"&quot;")}" autocomplete="off" style="padding-left:44px"><span style="position:absolute;left:12px;top:16px;color:var(--dim)">${svg(IC.search,"width:22px;height:22px")}</span></div>
+    <div class="fchips"><button class="fchip ${S.pickFilter==="gym"?"on":""}" data-filter="gym">My gym</button><button class="fchip ${S.pickFilter==="all"?"on":""}" data-filter="all">Everything</button></div>
+    ${same.length ? `<div class="label sect">Same muscle</div>${same.map(row).join("")}<div class="label sect">Others</div>` : ""}
+    ${rest.map(row).join("") || `<div class="dim">Nothing matches.</div>`}
+    <button class="btn quiet" data-toast="Add new: the exercise form">+ Add a new exercise</button>
+  </div>`;
+}
+
+// ---------------------------------------------------------------- sheets
+function sheetBody(s) {
+  const [kind, a, b] = s.sheet.split(":");
+  if (kind === "ex") return exSheet(a, b);
+  if (kind === "daymenu") return dayMenu(a);
+  if (kind === "rename") { const cur = a === "routine" ? R().name : dayOf(a).name;
+    return `<div class="grab"></div><h3>Rename</h3><input id="nm" value="${cur}" autocomplete="off"><button class="btn primary" data-rename="${a}">Save</button>`; }
+  if (kind === "addday") return `<div class="grab"></div><h3>Add a day</h3><input id="nm" placeholder="Name, like Arms" autocomplete="off">
+    <div class="tiles"><button class="tile on" data-daykind="lift" style="min-height:90px">${svg(IC.barbell)}<b>Lifting</b></button><button class="tile" data-daykind="cardio" style="min-height:90px">${svg(IC.treadmill)}<b>Cardio</b></button></div>
+    <div class="dim" style="font-size:15px">The cycle starts again at day 1.</div><button class="btn primary" data-addday>Add day</button>`;
+  if (kind === "rmday") return `<div class="grab"></div><h3>Remove ${dayOf(a).name}?</h3><div class="dim">The cycle starts again at day 1. Your history stays.</div>
+    <button class="btn primary" data-rmday="${a}">Remove</button><button class="btn ghost" data-back>Keep it</button>`;
+  if (kind === "offer") return `<div class="grab"></div><h3>Build it again?</h3><div class="dim">${a === "equip" ? "You changed what your gym has." : "You changed what this routine is for."} Kept lifts stay.</div>
+    <button class="btn primary" data-offer="yes">Build it again</button><button class="btn ghost" data-offer="no">Keep what I have</button>`;
+  return "";
+}
+
+// ---------------------------------------------------------------- render
+function render() {
+  const p = page(), app = document.getElementById("app");
+  const html = p.p === "root" ? (S.v === "A" ? aRoot() : S.v === "B" ? bRoot() : S.v === "D" ? dRoot() : cRoot())
+    : p.p === "day" ? (S.v === "D" ? dDay(p.id) : aDay(p.id)) : p.p === "days" ? bDays() : p.p === "settings" ? bar("Settings") + `<div class="scroll"><div class="rhead"><div class="nm">${R().name}</div></div>${settingsRows()}<button class="btn quiet" data-sheet="rename:routine">Rename routine</button><button class="btn quiet" style="color:var(--warn)" data-toast="Delete routine: asks first">Delete routine</button></div>`
+    : p.p === "muscles" ? bar("Muscles") + `<div class="scroll">${"CD".includes(S.v) ? dMuscles() : musclesBody(true)}</div>`
+    : p.p === "q" ? settingQ(p.k) : p.p === "picker" ? picker(p.mode, p.did, p.k) : "";
+  const hadFocus = document.activeElement && document.activeElement.id === "q", pos = hadFocus ? document.activeElement.selectionStart : 0;
+  const sc = app.querySelector(".scroll"), keepScroll = sc && app.dataset.page === JSON.stringify(p) ? sc.scrollTop : 0;
+  app.innerHTML = html; app.dataset.page = JSON.stringify(p);
+  const sc2 = app.querySelector(".scroll"); if (sc2) sc2.scrollTop = keepScroll;
+  if (hadFocus) { const i = document.getElementById("q"); if (i) { i.focus(); i.setSelectionRange(pos, pos); } }
+  const s = sheet();
+  document.getElementById("layers").innerHTML = s ? `<div class="scrim" data-back></div><div class="sheet" role="dialog">${sheetBody(s)}</div>` : "";
+  if (s && /^(rename|addday)/.test(s.sheet)) setTimeout(() => document.getElementById("nm")?.focus(), 50);
+  renderProto();
+}
+function renderProto() {
+  const p = document.getElementById("proto"), th = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  p.className = "proto" + (S.minP ? " min" : "");
+  p.innerHTML = `<button class="tog" data-pmin>${S.minP ? "◀ proto" : "▶ hide"}</button>` +
+    Object.keys(NAMES).map(k => `<button data-v="${k}" class="${S.v===k?"on":""}">${k} ${NAMES[k]}</button>`).join("") +
+    `<div class="hr"></div>` + [["sample","Sample PPL"],["empty","Empty start"]].map(([k,l]) => `<button data-data="${k}" class="${S.data===k?"on":""}">${l}</button>`).join("") +
+    `<div class="hr"></div>` + ["dark","light"].map(k => `<button data-theme="${k}" class="${th===k?"on":""}">${k[0].toUpperCase()+k.slice(1)}</button>`).join("");
+  try { localStorage.setItem("routine-proto", JSON.stringify({ v:S.v, theme:document.documentElement.dataset.theme })); } catch (e) {}
+}
+function reset(v, data) {
+  S.v = v; S.data = data; S.R = data === "empty" ? empty() : sample(); S.stack = [{ p:"root" }]; S.tab = "days"; S.bDay = S.R.cursor; S.editing = data === "empty" && v === "C";
+  S.revised = ""; S.undo = null; S.q = ""; document.getElementById("toast").hidden = true;
+  try { history.replaceState({ d:1 }, ""); } catch (e) {}
+  render();
+}
+
+// ---------------------------------------------------------------- actions
+function find(ref) { const [did, k] = ref.split(":"); const d = dayOf(did); return [d, d.ex.find(x => x.k === +k)]; }
+function snapshot() { return JSON.stringify({ ...R(), equip:[...R().equip] }); }
+function restore(s) { const o = JSON.parse(s); o.equip = new Set(o.equip); S.R = o; }
+function rebuild() {
+  const before = snapshot(), have = e => e.eq === "body only" || R().equip.has(e.eq);
+  R().rot.forEach(d => { const used = new Set(d.ex.filter(e => e.kept).map(e => e.id));
+    d.ex = d.ex.map(e => { if (e.kept) return e; const b = BY[e.id];
+      const alts = BANK.filter(x => x.p[0] === b.p[0] && have(x) && !used.has(x.id));
+      const pick = alts.filter(x => x.id !== e.id)[Math.floor(Math.random() * Math.max(1, alts.length - 1))] || alts[0] || b;
+      used.add(pick.id); return { ...e, k: uid++, id: pick.id }; }); });
+  S.undo = before; toast("Built again. Kept lifts stayed.", true);
+}
+let dayKind = "lift";
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("button,[data-back]"); if (!t || t.disabled) return;
+  const d = t.dataset;
+  if (d.v) return reset(d.v, S.data);
+  if (d.data) return reset(S.v, d.data);
+  if (d.theme) { document.documentElement.dataset.theme = d.theme; return renderProto(); }
+  if ("pmin" in d) { S.minP = !S.minP; return renderProto(); }
+  if ("back" in d) return back();
+  if (d.toast) return toast("Prototype: " + d.toast);
+  if ("undo" in d) { if (S.undo) { restore(S.undo); S.undo = null; document.getElementById("toast").hidden = true; render(); } return; }
+  if (d.go) { S.revised = ""; S.editing = false; const [p, id] = d.go.split(":"); return push({ p, id }); }
+  if (d.tab) { S.tab = d.tab; S.revised = ""; return render(); }
+  if (d.bday) { S.bDay = d.bday; S.revised = ""; return render(); }
+  if ("edit" in d) { S.editing = !S.editing; S.revised = ""; return render(); }
+  if (d.sheet) return sheet() ? swapTop({ sheet:d.sheet }) : push({ sheet:d.sheet });
+  if (d.exsheet) return push({ sheet:"ex:" + d.exsheet });
+  if (d.set) return push({ p:"q", k:d.set, before:snapshot() });
+  if (d.pick) { const [mode, did] = d.pick.split(":"); S.q = ""; return push({ p:"picker", mode, did }); }
+  if (d.replace) { const [did, k] = d.replace.split(":"); S.q = ""; const e = { p:"picker", mode:"replace", did, k }; return sheet() ? swapTop(e) : push(e); }
+  if (d.filter) { S.pickFilter = d.filter; return render(); }
+  if (d.picked) {
+    const p = page(), day = dayOf(p.did);
+    if (p.k) { const i = day.ex.findIndex(x => x.k === +p.k); const old = day.ex[i]; day.ex[i] = { ...old, k: uid++, id: d.picked, kept:false }; toast(`${BY[old.id].name} → ${BY[d.picked].name}`); }
+    else { day.ex.push(ex(d.picked, 3)); toast(`Added ${BY[d.picked].name}`); }
+    return back();
+  }
+  if (d.keep) { const [, e] = find(d.keep); e.kept = !e.kept; return render(); }
+  if (d.remove) { const [day, e] = find(d.remove); const before = snapshot(); day.ex = day.ex.filter(x => x !== e); S.undo = before; toast(`Removed ${BY[e.id].name}`, true); if (sheet()) return back(); return render(); }
+  if (d.move) { const [id, dir] = d.move.split(":"); const rot = R().rot, i = rot.findIndex(x => x.id === id), j = i + +dir;
+    if (j < 0 || j >= rot.length) return; [rot[i], rot[j]] = [rot[j], rot[i]]; revise(`Moved ${rot[j].name}.`); if (sheet()) return back(); return render(); }
+  if (d.rmday) { const day = dayOf(d.rmday); R().rot = R().rot.filter(x => x.id !== d.rmday); revise(`Removed ${day.name}.`);
+    const onDay = page().p === "day" && page().id === d.rmday; return backN(onDay ? 2 : 1); }
+  if (d.daykind) { dayKind = d.daykind; document.querySelectorAll("[data-daykind]").forEach(b => b.classList.toggle("on", b.dataset.daykind === dayKind)); return; }
+  if ("addday" in d) { const nm = document.getElementById("nm").value.trim() || (dayKind === "cardio" ? "Cardio" : `Day ${R().rot.length + 1}`);
+    const id = "d" + uid++; R().rot.push({ id, name:nm, cardio: dayKind === "cardio", ex:[] }); revise(`Added ${nm}.`); S.bDay = id; dayKind = "lift"; return back(); }
+  if (d.rename) { const v = document.getElementById("nm").value.trim(); if (v) { if (d.rename === "routine") R().name = v; else dayOf(d.rename).name = v; } return back(); }
+  if (d.val) { const [k, v] = d.val.split(":"); R()[k] = (k === "days" || k === "minutes") ? +v : v; return render(); }
+  if (d.eqt) { R().equip.has(d.eqt) ? R().equip.delete(d.eqt) : R().equip.add(d.eqt); return render(); }
+  if (d.setdone) {
+    const k = d.setdone, was = JSON.parse(page().before), r = R();
+    const changed = k === "equip" ? was.equip.length !== r.equip.size || was.equip.some(e => !r.equip.has(e)) : was[k] !== r[k];
+    if (changed && ["goal","reps","equip","shape"].includes(k)) return swapTop({ sheet:"offer:" + k });
+    return back();
+  }
+  if (d.offer) { if (d.offer === "yes") rebuild(); return back(); }
+  if ("rebuild" in d) { rebuild(); return render(); }
+});
+document.addEventListener("input", e => { if (e.target.id === "q") { S.q = e.target.value; render(); } });
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input")) { if (e.key === "Enter" && sheet()) document.querySelector(".sheet .btn.primary")?.click(); return; }
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  const ks = Object.keys(NAMES), j = ks.indexOf(S.v);
+  reset(ks[(j + (e.key === "ArrowRight" ? 1 : ks.length - 1)) % ks.length], S.data);
+});
+
+try { history.replaceState({ d:1 }, ""); } catch (e) { hist = false; }
+reset(S.v, "sample");
+</script>
