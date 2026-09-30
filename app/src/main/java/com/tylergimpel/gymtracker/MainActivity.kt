@@ -213,11 +213,9 @@ private fun GymTracker(
 
                 Destination.WORKOUT -> SessionScreen(
                     onPickExercise = { navigator.pickFor(null) },
-                    onOpenRoutine = { navigator.open(Destination.ROUTINE) },
-                    onOpenBodyweight = { navigator.open(Destination.BODYWEIGHT) },
-                    onOpenSettings = { navigator.open(Destination.SETTINGS) },
                     onOpenHistory = navigator::openHistory,
-                    onOpenCalendar = { navigator.open(Destination.CALENDAR) },
+                    onLeave = navigator::back,
+                    onFinished = navigator::back,
                     viewModel = viewModel,
                 )
 

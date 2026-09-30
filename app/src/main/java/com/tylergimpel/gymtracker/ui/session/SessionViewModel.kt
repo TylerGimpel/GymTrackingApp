@@ -35,6 +35,11 @@ import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.AfterLogging
+import com.tylergimpel.gymtracker.domain.Addition
+import com.tylergimpel.gymtracker.domain.LineupItem
+import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.lineupOf
+import com.tylergimpel.gymtracker.domain.nextAfter
 import com.tylergimpel.gymtracker.domain.Avoided
 import com.tylergimpel.gymtracker.domain.avoidedExercises
 import com.tylergimpel.gymtracker.domain.SessionPace
@@ -224,7 +229,25 @@ private data class ScreenState(
     val askedAbout: Set<String> = emptySet(),
     /** A record the set just logged set, until it has been shown (#124). */
     val newRecord: PersonalRecord? = null,
+    /** Tonight's swaps and additions, in the order they were made (#142). */
+    val additions: List<Addition> = emptyList(),
+    /** Exercises the lifter said to skip tonight. */
+    val skipped: Set<String> = emptySet(),
+    /** What the exercise picker is open for, while it is. */
+    val picking: Picking? = null,
+    /** The finish summary, while it is open. */
+    val askingToFinish: FinishAsk? = null,
+    /** Set once the session has been finished from this screen, until the screen has left. */
+    val finished: Boolean = false,
+    /** What kind of set the running rest follows. */
+    val restAfter: SetType? = null,
 )
+
+/** Why the exercise picker is open: to replace the exercise in front of the lifter, or to add one after it. */
+enum class Picking { SWAP, ADD }
+
+/** The finish summary, and whether it opened because everything asked for is done. */
+data class FinishAsk(val allDone: Boolean)
 
 data class SessionUiState(
     /**
@@ -371,6 +394,14 @@ data class SessionUiState(
      * act on cannot disagree about how many sets there are.
      */
     val wheel: List<WheelSet> = emptyList(),
+    /** Tonight's exercises in order, with how much of each is done (#142). */
+    val lineup: List<LineupItem> = emptyList(),
+    /** What the selected exercise's sets were last time, in order, to read beside tonight's. */
+    val previousSets: List<PerformedSet> = emptyList(),
+    val picking: Picking? = null,
+    val askingToFinish: FinishAsk? = null,
+    val finished: Boolean = false,
+    val restAfter: SetType? = null,
 )
 
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
@@ -494,11 +525,26 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val recent: List<LoggedSession>,
         /** How long since each muscle was trained (#127). */
         val lastTrained: List<MuscleLastTrained>,
+        /** The selected exercise's sets the last time it was trained, and which exercise that is. */
+        val previous: Pair<String, List<PerformedSet>>?,
     )
+
+    /**
+     * The selected exercise's sets from the last session it was trained in before this one, so the
+     * wheel can say what each set was last time.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val previous: Flow<Pair<String, List<PerformedSet>>?> =
+        screen.map { it.selected?.id }.distinctUntilChanged().mapLatest { id ->
+            id ?: return@mapLatest null
+            val tonight = logged.value?.exercises?.map { it.id }.orEmpty().toSet()
+            val last = repository.historyPage(id, size = 3).firstOrNull { it.sessionExerciseId !in tonight }
+            id to last?.sets.orEmpty()
+        }
 
     val state: StateFlow<SessionUiState> =
         combine(
-            combine(logged, recommended, repository.observeRecent(), repository.observeLastTrained(), ::Training),
+            combine(logged, recommended, repository.observeRecent(), repository.observeLastTrained(), previous, ::Training),
             repository.observeLastFinished(),
             routines.observeProgress(),
             // Paired rather than passed separately: `combine` runs out of typed overloads at
@@ -573,6 +619,22 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 // What is left of what the session was for. An estimate and shown as one: nothing
                 // knows how many sets an exercise gets until the generator does (#26).
                 timeLeft = logged?.unperformed?.takeIf { it.isNotEmpty() }?.let(::timeLeftIn),
+                lineup = lineupOf(
+                    plan = logged?.plan ?: SessionPlan(),
+                    performed = logged?.exercises.orEmpty(),
+                    additions = screen.additions,
+                    skipped = screen.skipped,
+                ).let { lineup ->
+                    // Picked but not yet logged, with nothing planned: still where the lifter is.
+                    val chosen = screen.selected
+                    if (chosen == null || lineup.any { it.exercise.id == chosen.id }) lineup
+                    else lineup + LineupItem(chosen, done = 0, planned = null)
+                },
+                previousSets = training.previous?.takeIf { it.first == screen.selected?.id }?.second.orEmpty(),
+                picking = screen.picking,
+                askingToFinish = screen.askingToFinish,
+                finished = screen.finished,
+                restAfter = screen.restAfter,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SessionUiState())
 
@@ -724,12 +786,13 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     draft = it.draft.copy(note = null),
                     rightDraft = it.rightDraft.copy(note = null),
                     newRecord = record,
+                    restAfter = current.draft.type,
                 )
             }
             // The set it was for is down, so it has said what it had to say. Leaving it
             // standing would quietly make "just this set" mean "this exercise, tonight".
             restTimer.forgetThisSet()
-            advanceAfterLogging(exercise, asked.rest)
+            advanceAfterLogging(exercise, asked.rest, current)
         }
     }
 
@@ -741,9 +804,29 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * started between two members would have the lifter standing still in the middle of the one
      * thing that is supposed to keep moving. Rest begins only after focus has gone somewhere.
      */
-    private fun advanceAfterLogging(exercise: Exercise, rest: Duration?) {
-        when (val next = afterLogging(exercise, state.value.positions, rest)) {
-            AfterLogging.PromptToFinish -> startFinishing()
+    private fun advanceAfterLogging(exercise: Exercise, rest: Duration?, before: SessionUiState) {
+        val next = afterLogging(exercise, state.value.positions, rest)
+        // Past a superset's jump, an exercise that has had every working set it asked for hands
+        // on to the next one with work left, and the last of the evening opens the summary (#142).
+        if (next is AfterLogging.StartResting || next == AfterLogging.Nothing) {
+            val counted = if (before.draft.type.countsTowardVolume) 1 else 0
+            val lineup = before.lineup.map {
+                if (it.exercise.id == exercise.id) it.copy(done = it.done + counted) else it
+            }
+            val here = lineup.firstOrNull { it.exercise.id == exercise.id }
+            if (here?.planned != null && here.done >= here.planned) {
+                val onward = lineup.nextAfter(exercise.id)
+                if (onward == null) {
+                    screen.update { it.copy(askingToFinish = FinishAsk(allDone = true)) }
+                    return
+                }
+                select(onward)
+                (next as? AfterLogging.StartResting)?.let { restTimer.start(it.length) }
+                return
+            }
+        }
+        when (next) {
+            AfterLogging.PromptToFinish -> openFinish()
             is AfterLogging.JumpTo -> {
                 // Focus first and rest second, which is the ordering this whole type exists for.
                 // The rest is only ever present on the jump that closes the group's round.
@@ -875,7 +958,72 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * The only moment a plan is taken. A session started by simply logging a set has none, which is
      * what training with no routine looks like and is not a lesser session for it.
      */
-    fun startCursorDay() = cycle.startDay(state.value.routine)
+    fun startCursorDay() {
+        screen.update { it.copy(additions = emptyList(), skipped = emptySet(), finished = false) }
+        viewModelScope.launch {
+            // Read afresh rather than from [state], which nobody is collecting while Today shows.
+            val progress = routines.observeProgress().first()
+            cycle.startDay(progress)
+            // Straight into the first set rather than an overview (#142).
+            progress?.cursor?.exercises?.firstOrNull()?.let { select(it.exercise) }
+        }
+    }
+
+    /** Skips the exercise in front of the lifter for tonight, and moves on to the next with work left. */
+    fun skipExercise() {
+        val exercise = screen.value.selected ?: return
+        screen.update { it.copy(skipped = it.skipped + exercise.id) }
+        val onward = state.value.lineup
+            .map { if (it.exercise.id == exercise.id) it.copy(skipped = true) else it }
+            .nextAfter(exercise.id)
+        if (onward != null) select(onward) else openFinish()
+    }
+
+    /** Opens the picker to add an exercise after the one in front of the lifter. */
+    fun startAdding() {
+        viewModelScope.launch {
+            val bank = exercises.observeBank().first()
+            val trained = database.sessionDao().exercisesEverTrained().toSet()
+            screen.update {
+                it.copy(
+                    picking = Picking.ADD,
+                    // What they have done before first, because those need no calibrating.
+                    swapCandidates = bank.filter { exercise -> exercise.id in trained && !exercise.isDisliked },
+                    swappingLeavesOnlyDisliked = false,
+                    pickerBank = bank,
+                )
+            }
+        }
+    }
+
+    /** Opens the picker to swap [exercise], from its row in the drawer. */
+    fun startSwappingAt(exercise: Exercise) {
+        if (screen.value.selected?.id != exercise.id) select(exercise)
+        startSwapping()
+    }
+
+    /** Opens the finish summary. */
+    fun openFinish() = screen.update { it.copy(askingToFinish = FinishAsk(allDone = false)) }
+
+    fun closeFinish() = screen.update { it.copy(askingToFinish = null) }
+
+    /**
+     * Finishes from the summary. A session started from a routine day is that day, so it is
+     * recorded against it without asking; one started with nothing planned asks which day it was.
+     */
+    fun finishWorkout() {
+        screen.update { it.copy(askingToFinish = null) }
+        val current = state.value
+        val cursor = current.routine?.cursor
+        when {
+            current.session == null -> screen.update { it.copy(finished = true, selected = null) }
+            logged.value?.plan?.isEmpty == false && cursor != null -> finishSession(cursor)
+            else -> startFinishing()
+        }
+    }
+
+    /** The screen has gone back to Today after a finish. */
+    fun finishedSeen() = screen.update { it.copy(finished = false) }
 
     /** Opens what the lifter calls the selected exercise, and the note they keep on it. */
     fun startEditingExercise() {
@@ -1009,6 +1157,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
             screen.update {
                 it.copy(
+                    picking = Picking.SWAP,
                     swapCandidates = candidates.ifEmpty { leastBad },
                     swappingLeavesOnlyDisliked = leastBad.isNotEmpty(),
                     pickerBank = bank,
@@ -1058,7 +1207,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun cancelSwapping() =
-        screen.update { it.copy(swapCandidates = null, swappingLeavesOnlyDisliked = false) }
+        screen.update { it.copy(swapCandidates = null, swappingLeavesOnlyDisliked = false, picking = null) }
 
     /**
      * Trains [instead] for the rest of this session.
@@ -1068,8 +1217,24 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
      * exercises and a busy rack is not evidence about anything (ADR 0004).
      */
     fun swapTo(instead: Exercise) {
+        val here = screen.value.selected
+        val picking = screen.value.picking ?: Picking.SWAP
+        val started = here != null && logged.value?.setsOf(here).orEmpty().isNotEmpty()
+        screen.update { now ->
+            val additions = when {
+                here == null -> now.additions + Addition(instead)
+                picking == Picking.ADD -> now.additions + Addition(instead, after = here.id)
+                // One already started stays where it is, with its sets, and the new one follows it.
+                started -> now.additions + Addition(instead, after = here.id)
+                // One added tonight and not started is simply replaced.
+                now.additions.any { it.exercise.id == here.id } -> now.additions.map {
+                    if (it.exercise.id == here.id) it.copy(exercise = instead) else it
+                }
+                else -> now.additions + Addition(instead, replaces = here.id)
+            }
+            now.copy(additions = additions, swapCandidates = null, swappingLeavesOnlyDisliked = false, picking = null)
+        }
         select(instead)
-        screen.update { it.copy(swapCandidates = null, swappingLeavesOnlyDisliked = false) }
     }
 
     /** Opens what the app is asking the lifter to rest for, so they can disagree with it. */
@@ -1131,8 +1296,12 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     draft = SetDraft(),
                     perSide = false,
                     overridingDisplayUnit = false,
+                    additions = emptyList(),
+                    skipped = emptySet(),
+                    finished = true,
                 )
             }
+            restTimer.end()
         }
     }
 
