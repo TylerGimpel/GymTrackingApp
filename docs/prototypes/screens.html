@@ -20,7 +20,8 @@
                3  Tabs        - Progress · Sets · Settings for the one exercise.
 
   CHOSEN: More tab B (Tiles) and History 3 (Tabs). Round 2 fixed the exercise list's first
-  group being squashed and clipped when the list ran past the screen.
+  group being squashed and clipped when the list ran past the screen, and let the
+  equipment chips wrap onto two lines instead of scrolling sideways out of reach.
 
   The exercise picker is not here: the routine prototype settled it.
   Everything is made up. Back is real browser history.
@@ -267,7 +268,7 @@ function bank() {
   const r = e => `<button class="row" data-go="ex:${e.name}"><span class="eqi">${svg(IC[EQI[e.eq]])}</span><span class="t"><b>${e.name}</b><small>${e.m}${e.last ? ` · last ${e.last}` : ""}</small></span></button>`;
   return bar("Exercises", `<button class="ib" data-go="newex" aria-label="New exercise">${svg(IC.plus)}</button>`) + `<div class="scroll">
     <div style="position:relative"><input id="q" type="search" placeholder="Search" value="${S.q}" autocomplete="off" style="padding-left:44px"><span style="position:absolute;left:12px;top:16px;color:var(--dim)">${svg(IC.search,"ico","width:22px;height:22px")}</span></div>
-    <div class="fchips">${[["all","All"],...Object.entries(EQN)].map(([k,l]) => `<button class="fchip ${S.eqf===k?"on":""}" data-eqf="${k}">${l}</button>`).join("")}</div>
+    <div class="fchips" style="flex-wrap:wrap">${[["all","All"],...Object.entries(EQN)].map(([k,l]) => `<button class="fchip ${S.eqf===k?"on":""}" data-eqf="${k}">${l}</button>`).join("")}</div>
     ${trained.length ? `<span class="label">You've done</span><div class="rows">${trained.map(r).join("")}</div>` : ""}
     ${rest.length ? `<span class="label sect">Others</span><div class="rows">${rest.map(r).join("")}</div>` : ""}
     ${list.length ? "" : `<div class="note">Nothing matches.</div><button class="btn ghost" data-go="newex">Add "${S.q}"</button>`}
