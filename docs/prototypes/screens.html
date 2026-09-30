@@ -20,8 +20,9 @@
                3  Tabs        - Progress · Sets · Settings for the one exercise.
 
   CHOSEN: More tab B (Tiles) and History 3 (Tabs). Round 2 fixed the exercise list's first
-  group being squashed and clipped when the list ran past the screen, and let the
-  equipment chips wrap onto two lines instead of scrolling sideways out of reach.
+  group being squashed and clipped when the list ran past the screen, and made the
+  equipment chips one row that really scrolls: swipe, mouse drag or wheel, with the row
+  fading at whichever edge has more chips (round 3; two wrapped rows took too much room).
 
   The exercise picker is not here: the routine prototype settled it.
   Everything is made up. Back is real browser history.
@@ -100,6 +101,10 @@
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
   .fchips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: none; }
   .fchips::-webkit-scrollbar { display: none; }
+  .fchips.more-r { -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
+  .fchips.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 20%); mask-image: linear-gradient(90deg, transparent, #000 20%); }
+  .fchips.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent); mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent); }
+  .fchips[data-hscroll] { cursor: grab; position: relative; }
   .fchip { flex: none; height: 40px; padding: 0 14px; border-radius: 999px; background: var(--s2); font-weight: 600; font-size: 15px; }
   .fchip.on { background: var(--accent); color: var(--on); }
   .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); margin: 0 16px 8px; flex: none; }
@@ -268,7 +273,7 @@ function bank() {
   const r = e => `<button class="row" data-go="ex:${e.name}"><span class="eqi">${svg(IC[EQI[e.eq]])}</span><span class="t"><b>${e.name}</b><small>${e.m}${e.last ? ` · last ${e.last}` : ""}</small></span></button>`;
   return bar("Exercises", `<button class="ib" data-go="newex" aria-label="New exercise">${svg(IC.plus)}</button>`) + `<div class="scroll">
     <div style="position:relative"><input id="q" type="search" placeholder="Search" value="${S.q}" autocomplete="off" style="padding-left:44px"><span style="position:absolute;left:12px;top:16px;color:var(--dim)">${svg(IC.search,"ico","width:22px;height:22px")}</span></div>
-    <div class="fchips" style="flex-wrap:wrap">${[["all","All"],...Object.entries(EQN)].map(([k,l]) => `<button class="fchip ${S.eqf===k?"on":""}" data-eqf="${k}">${l}</button>`).join("")}</div>
+    <div class="fchips" data-hscroll>${[["all","All"],...Object.entries(EQN)].map(([k,l]) => `<button class="fchip ${S.eqf===k?"on":""}" data-eqf="${k}">${l}</button>`).join("")}</div>
     ${trained.length ? `<span class="label">You've done</span><div class="rows">${trained.map(r).join("")}</div>` : ""}
     ${rest.length ? `<span class="label sect">Others</span><div class="rows">${rest.map(r).join("")}</div>` : ""}
     ${list.length ? "" : `<div class="note">Nothing matches.</div><button class="btn ghost" data-go="newex">Add "${S.q}"</button>`}
@@ -469,9 +474,27 @@ function render() {
   const sc2 = app.querySelector(".scroll"); if (sc2) sc2.scrollTop = keep;
   if (hadQ) { const q = document.getElementById("q"); q?.focus(); q?.setSelectionRange(q.value.length, q.value.length); }
   const t = topE();
+  wireRows();
   document.getElementById("layers").innerHTML = t.sheet ? `<div class="scrim" data-back></div><div class="sheet" role="dialog">${sheetBody(t.sheet)}</div>` : "";
   renderProto();
 }
+// a sideways row: swipe on a phone, drag or wheel with a mouse, and a fade where more is hidden
+function fades(el) { el.classList.toggle("more-l", el.scrollLeft > 2); el.classList.toggle("more-r", el.scrollLeft + el.clientWidth < el.scrollWidth - 2); }
+function wireRows() { document.querySelectorAll("[data-hscroll]").forEach(el => {
+  const seen = () => { S.chipX = el.scrollLeft; fades(el); };
+  if (S.chipX != null) el.scrollLeft = S.chipX;
+  // the chosen chip is never left out of sight
+  const on = el.querySelector(".on"); if (on) { const a = on.offsetLeft - el.offsetLeft, b = a + on.offsetWidth;
+    if (a < el.scrollLeft) el.scrollLeft = a - 16; else if (b > el.scrollLeft + el.clientWidth) el.scrollLeft = b - el.clientWidth + 16; }
+  seen();
+  el.addEventListener("scroll", seen);
+  el.addEventListener("wheel", e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); seen(); } }, { passive: false });
+  let x0 = null, s0 = 0, moved = false;
+  el.addEventListener("pointerdown", e => { if (e.pointerType !== "mouse") return; x0 = e.clientX; s0 = el.scrollLeft; moved = false; });
+  addEventListener("pointermove", e => { if (x0 == null) return; const dx = e.clientX - x0; if (Math.abs(dx) > 4) moved = true; el.scrollLeft = s0 - dx; seen(); });
+  addEventListener("pointerup", () => { x0 = null; });
+  el.addEventListener("click", e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+}); }
 function renderProto() {
   const p = document.getElementById("proto"), th = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
   p.className = "proto" + (S.minP ? " min" : "");
