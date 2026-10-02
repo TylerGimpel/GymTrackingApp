@@ -1,0 +1,193 @@
+<title>Train Tracks Icon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<!--
+  THROWAWAY PROTOTYPE - not production code. Wayfinder ticket #153
+  "Prototype: the launcher icon" (map #130 "Map: UI overhaul").
+
+  Question: what should the Train Tracks launcher icon look like?
+
+  Every mark is drawn on Android's adaptive icon grid: a 108dp canvas, of which the phone
+  shows the middle 72dp cut to its own shape, and a 66dp safe circle that is never cut.
+  Caution style: yellow #F5C518 on warm charcoal #14130F, squared and bold.
+
+  Round 2 (the lifter turned down rails, bar track, TT and climb): a track curving towards
+  you, its sleepers dumbbells that grow as they get nearer. Gentle bend, sweeping bend, S-bend.
+  Round 3 (the lifter picked the gentle bend): fewer, bigger dumbbells.
+    3, 4 or 5 dumbbells.
+  Round 4 (the lifter picked three): wider dumbbells, and a wider track, especially at the top.
+    W  Wide       - the track keeps more of its width far away; longer bars, bigger plates.
+    X  Extra wide - more of both.
+
+  The panel also switches: wallpaper light/dark, the shape the phone cuts it to,
+  themed (monochrome) icons on/off, colours inverted, and the safe zone overlay.
+  The neighbouring icons are generic stand-ins, not real apps.
+-->
+<style>
+  :root { color-scheme: dark; --bg:#14130F; --surface:#1E1C17; --line:#3E392E; --text:#F5F2EA; --dim:#ABA590; --y:#F5C518; --c:#14130F;
+    --disp:"Barlow Condensed","Arial Narrow",sans-serif; --body:"Barlow",system-ui,sans-serif; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { color-scheme: light; --bg:#F6F4EE; --surface:#FFFFFF; --line:#D6CFBC; --text:#1A1813; --dim:#696350; } }
+  :root[data-theme="light"] { color-scheme: light; --bg:#F6F4EE; --surface:#FFFFFF; --line:#D6CFBC; --text:#1A1813; --dim:#696350; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 var(--body); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  #app { max-width: 440px; margin-inline: auto; padding: 16px 16px 40px; display: flex; flex-direction: column; gap: 18px; }
+  h1 { margin: 0; font: 700 28px/1 var(--disp); text-transform: uppercase; letter-spacing: .03em; }
+  .label { font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .nm { font: 700 40px/1 var(--disp); text-transform: uppercase; }
+  .sub { color: var(--dim); font-size: 15px; margin-top: 4px; }
+
+  /* the phone */
+  .phone { border-radius: 28px; padding: 26px 18px 22px; position: relative; overflow: hidden; border: 1px solid var(--line); }
+  .phone.light { background: linear-gradient(160deg, #F3E7D3 0%, #DCCBB0 45%, #B9C7B5 100%); }
+  .phone.dark { background: linear-gradient(160deg, #23262B 0%, #15181C 55%, #2A2420 100%); }
+  .clock { font: 300 54px/1 var(--body); text-align: center; margin-bottom: 4px; }
+  .date { text-align: center; font-size: 13px; margin-bottom: 22px; }
+  .phone.light .clock, .phone.light .date, .phone.light .lab { color: #22201B; }
+  .phone.dark .clock, .phone.dark .date, .phone.dark .lab { color: #F0EEE8; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 8px; }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .lab { font-size: 11.5px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .ic { width: 56px; height: 56px; overflow: hidden; display: grid; place-items: center; position: relative; }
+  .ic svg { width: 100%; height: 100%; display: block; }
+  .shape-circle .ic { border-radius: 50%; }
+  .shape-squircle .ic { border-radius: 34%; }
+  .shape-rounded .ic { border-radius: 22%; }
+  .ours .lab { font-weight: 600; }
+  .dock { margin-top: 26px; padding: 12px 10px; border-radius: 26px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; justify-items: center; }
+  .phone.light .dock { background: rgba(255,255,255,.35); } .phone.dark .dock { background: rgba(255,255,255,.08); }
+
+  /* big view */
+  .big { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .big .cell { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .canvas { width: 100%; aspect-ratio: 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); position: relative; }
+  .canvas svg { width: 100%; height: 100%; display: block; }
+  .masked { width: 78%; aspect-ratio: 1; overflow: hidden; }
+  .shape-circle .masked { border-radius: 50%; } .shape-squircle .masked { border-radius: 34%; } .shape-rounded .masked { border-radius: 22%; }
+  .masked svg { width: 100%; height: 100%; display: block; }
+  .sizes { display: flex; align-items: flex-end; gap: 16px; padding: 16px; border-radius: 14px; border: 1px solid var(--line); }
+  .sizes .s { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; }
+  .sizes .ic { border-radius: 50%; }
+  .all { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .all button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--line); }
+  .all button.on { border: 2px solid var(--y); padding: 7px 3px; }
+  .all .ic { width: 64px; height: 64px; border-radius: 50%; }
+  .all b { font: 700 16px/1 var(--disp); text-transform: uppercase; }
+
+  .proto { position: fixed; z-index: 99; top: 12px; right: 6px; display: flex; flex-direction: column; gap: 2px; max-height: calc(100% - 24px); overflow-y: auto;
+           background: #0a0a0a; color: #fff; border: 1px dashed #ff3bd4; border-radius: 12px; padding: 4px; font: 600 12px/1.2 system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+  .proto button { color: #fff; padding: 6px 8px; border-radius: 8px; text-align: left; }
+  .proto button.on { background: #ff3bd4; color: #000; }
+  .proto .hr { height: 1px; background: #333; margin: 2px 0; }
+  .proto span { padding: 4px 8px; opacity: .6; }
+  .proto.min > :not(.tog) { display: none; }
+</style>
+
+<div id="app"></div>
+<div class="proto" id="proto"></div>
+
+<script>
+const NAMES = { W:"Wide", X:"Extra wide" };
+const S = { v:"W", wall:"dark", shape:"circle", themed:false, invert:false, safe:true, minP:false };
+try { const p = JSON.parse(localStorage.getItem("icon-proto")||"{}"); if (NAMES[p.v]) S.v = p.v; } catch (e) {}
+
+// ---------------------------------------------------------------- the marks, on the 108dp grid (safe circle r=33 at 54,54)
+// A curved track coming towards you: t runs 0 (far, small) to 1 (near, big).
+const BENDS = {                                     // every bend ends pointing straight down, at the viewer
+  A: [[66, 29], [54, 50], [54, 78]],                 // quadratic: start, control, end (the gentle bend)
+  B: [[84, 46], [54, 38], [54, 80]],
+  C: [[46, 25], [80, 38, 54, 56], [54, 80]],         // cubic: start, [c1, c2], end
+};
+function centre(v, t) {
+  const b = BENDS.A;
+  if (b[1].length === 2) { const [p0, c, p2] = b, u = 1 - t;
+    return [u*u*p0[0] + 2*u*t*c[0] + t*t*p2[0], u*u*p0[1] + 2*u*t*c[1] + t*t*p2[1]]; }
+  const [p0, [c1x, c1y, c2x, c2y], p3] = b, u = 1 - t;
+  return [u*u*u*p0[0] + 3*u*u*t*c1x + 3*u*t*t*c2x + t*t*t*p3[0], u*u*u*p0[1] + 3*u*u*t*c1y + 3*u*t*t*c2y + t*t*t*p3[1]];
+}
+function normal(v, t) { const e = .002, a = centre(v, Math.max(0, t - e)), b = centre(v, Math.min(1, t + e)), dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1; return [-dy / L, dx / L]; }
+const WIDE = { W: { far: 6, near: 13, reach: [2.6, 3], plate: [2.2, 3.4], height: [4.4, 9.6] },
+               X: { far: 8, near: 14, reach: [3.4, 3.6], plate: [2.6, 3.8], height: [5, 10] } };
+let cur = "W";
+const half = t => WIDE[cur].far + (WIDE[cur].near - WIDE[cur].far) * Math.pow(t, 1.2);           // half the track's width, growing as it nears
+function mark(v, fg) {
+  cur = v;
+  const N = 48, pts = side => Array.from({ length: N + 1 }, (_, i) => { const t = i / N, [x, y] = centre(v, t), [nx, ny] = normal(v, t), w = half(t), rw = 1.1 + 1.6 * t;
+    return [[x + nx * (w * side - rw), y + ny * (w * side - rw)], [x + nx * (w * side + rw), y + ny * (w * side + rw)]]; });
+  const rail = side => { const p = pts(side); return `<path d="M${p.map(q => q[0].map(n => n.toFixed(2)).join(" ")).join(" L")} L${p.reverse().map(q => q[1].map(n => n.toFixed(2)).join(" ")).join(" L")} Z" fill="${fg}"/>`; };
+  // dumbbell sleepers, spaced the way they'd look receding: closer together far away
+  const dbs = [0.3, 0.64, 1.0].map(t => {
+    const [x, y] = centre(v, t), [nx, ny] = normal(v, t), K = WIDE[v], w = half(t) + K.reach[0] + K.reach[1] * t;
+    const ang = Math.atan2(ny, nx) * 180 / Math.PI, bar = 1.4 + 1.8 * t, ph = K.height[0] + K.height[1] * t, pw = K.plate[0] + K.plate[1] * t, inner = 1.2 + 1.8 * t;
+    return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${ang.toFixed(1)})" opacity="${(.7 + .3 * t).toFixed(2)}">
+      <rect x="${-w}" y="${-bar / 2}" width="${2 * w}" height="${bar}" fill="${fg}"/>
+      <rect x="${-w - pw}" y="${-ph / 2}" width="${pw}" height="${ph}" rx="${pw * .25}" fill="${fg}"/><rect x="${w}" y="${-ph / 2}" width="${pw}" height="${ph}" rx="${pw * .25}" fill="${fg}"/>
+      <rect x="${-w + .2}" y="${-ph * .36}" width="${inner}" height="${ph * .72}" fill="${fg}"/><rect x="${w - .2 - inner}" y="${-ph * .36}" width="${inner}" height="${ph * .72}" fill="${fg}"/></g>`;
+  }).join("");
+  // scaled about the centre and nudged up so the nearest plates stay inside the 66dp safe circle
+  const F = FIT[v];
+  return `<g transform="translate(54 ${54 + F.dy}) scale(${F.k}) translate(-54 -54)">${dbs + rail(-1) + rail(1)}</g>`;
+}
+const FIT = { W: { k: .84, dy: -2.5 }, X: { k: .79, dy: -2.5 } };
+function colours() {
+  if (S.themed) return S.wall === "dark" ? ["#2B3226", "#CAD6B8"] : ["#DCE5CF", "#2D3A22"];
+  return S.invert ? ["#F5C518", "#14130F"] : ["#14130F", "#F5C518"];
+}
+// full = whole 108 canvas (for the grid view); otherwise the middle 72 the phone shows
+function icon(v, full=false, safe=false) {
+  const [bg, fg] = colours();
+  const vb = full ? "0 0 108 108" : "18 18 72 72";
+  return `<svg viewBox="${vb}" aria-label="Train Tracks"><rect x="0" y="0" width="108" height="108" fill="${bg}"/>${mark(v, fg)}
+    ${safe ? `<rect x="18" y="18" width="72" height="72" fill="none" stroke="#ff3bd4" stroke-width=".6" stroke-dasharray="2 2"/><circle cx="54" cy="54" r="33" fill="none" stroke="#ff3bd4" stroke-width=".6"/>` : ""}</svg>`;
+}
+
+// generic neighbours: a coloured tile and a plain glyph, no real apps
+const N = [["Phone","#3C8D5A",'<path d="M9 5h3l1.5 4-2 1.5a10 10 0 0 0 4 4l1.5-2 4 1.5v3a2 2 0 0 1-2 2A15 15 0 0 1 7 7a2 2 0 0 1 2-2z"/>'],
+  ["Messages","#3D6FB6",'<path d="M5 6h14v9H9l-4 4z"/>'],["Camera","#5A5A62",'<rect x="4" y="8" width="16" height="11" rx="2"/><circle cx="12" cy="13.5" r="3"/><path d="M9 8l1.5-2h3L15 8"/>'],
+  ["Clock","#2E2E33",'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>'],["Calendar","#C4553B",'<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16M9 4v4M15 4v4"/>'],
+  ["Photos","#B98A2E",'<circle cx="9" cy="9" r="2"/><path d="M4 18l5-5 3 3 3-4 5 6z"/>'],["Maps","#4B8E8C",'<path d="M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2z"/><path d="M9 4v14M15 6v14"/>'],
+  ["Settings","#6B6B73",'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>'],
+  ["Music","#8C4BA8",'<path d="M9 17V6l10-2v11"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="15" r="2"/>'],["Notes","#C9A227",'<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>'],
+  ["Weather","#3E86C9",'<circle cx="9" cy="10" r="3"/><path d="M8 18h9a3 3 0 0 0 0-6 4 4 0 0 0-7-1"/>']];
+function neighbour([label, col, glyph]) {
+  const [tb, tf] = S.themed ? colours() : [col, "#fff"];
+  return `<div class="app"><span class="ic" style="background:${tb}"><svg viewBox="0 0 24 24" style="width:58%;height:58%" fill="none" stroke="${tf}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg></span><span class="lab">${label}</span></div>`;
+}
+function render() {
+  const ours = `<div class="app ours"><span class="ic">${icon(S.v)}</span><span class="lab">Train Tracks</span></div>`;
+  const grid = [...N.slice(0, 5), { ours:true }, ...N.slice(5, 11)].map(x => x.ours ? ours : neighbour(x)).join("");
+  document.getElementById("app").innerHTML = `
+    <div><span class="label">Launcher icon · ${S.v}</span><div class="nm">${NAMES[S.v]}</div><div class="sub">${S.themed ? "Themed icons on: the phone tints the monochrome layer." : S.invert ? "Charcoal on yellow." : "Yellow on charcoal."}</div></div>
+    <div class="phone ${S.wall} shape-${S.shape}"><div class="clock">9:41</div><div class="date">Thursday 1 October</div><div class="grid">${grid}</div>
+      <div class="dock">${[N[0], N[1], N[2], N[7]].map(n => neighbour(n).replace(/<span class="lab">.*?<\/span>/, "")).join("")}</div></div>
+    <div class="big shape-${S.shape}">
+      <div class="cell"><span class="label">Whole canvas</span><div class="canvas">${icon(S.v, true, S.safe)}</div></div>
+      <div class="cell"><span class="label">What the phone shows</span><div class="canvas" style="display:grid;place-items:center;background:${S.wall==="dark"?"#1B1D21":"#E7DCC8"}"><div class="masked">${icon(S.v)}</div></div></div>
+    </div>
+    <div class="label">Sizes</div>
+    <div class="sizes" style="background:${S.wall==="dark"?"#1B1D21":"#E7DCC8"}">${[24, 36, 48, 64, 96].map(px => `<div class="s"><span class="ic" style="width:${px}px;height:${px}px">${icon(S.v)}</span><span style="color:${S.wall==="dark"?"#ccc":"#333"}">${px}</span></div>`).join("")}</div>
+    <div class="label">Both</div>
+    <div class="all">${Object.keys(NAMES).map(k => `<button class="${S.v===k?"on":""}" data-v="${k}"><span class="ic">${icon(k)}</span><b>${k} ${NAMES[k]}</b></button>`).join("")}</div>`;
+  renderProto();
+}
+function renderProto() {
+  const p = document.getElementById("proto"); p.className = "proto" + (S.minP ? " min" : "");
+  const b = (attr, val, on, label) => `<button data-${attr}="${val}" class="${on?"on":""}">${label}</button>`;
+  p.innerHTML = `<button class="tog" data-pmin>${S.minP ? "◀ proto" : "▶ hide"}</button><span>Icon</span>` +
+    Object.keys(NAMES).map(k => b("v", k, S.v===k, `${k} ${NAMES[k]}`)).join("") +
+    `<div class="hr"></div><span>Wallpaper</span>` + b("wall","light",S.wall==="light","Light") + b("wall","dark",S.wall==="dark","Dark") +
+    `<div class="hr"></div><span>Phone cuts to</span>` + [["circle","Circle"],["squircle","Squircle"],["rounded","Rounded"]].map(([k,l]) => b("shape",k,S.shape===k,l)).join("") +
+    `<div class="hr"></div>` + b("themed","1",S.themed,"Themed icons") + b("invert","1",S.invert,"Invert colours") + b("safe","1",S.safe,"Safe zone");
+  try { localStorage.setItem("icon-proto", JSON.stringify({ v:S.v })); } catch (e) {}
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (d.v) S.v = d.v; else if (d.wall) S.wall = d.wall; else if (d.shape) S.shape = d.shape;
+  else if (d.themed) S.themed = !S.themed; else if (d.invert) S.invert = !S.invert; else if (d.safe) S.safe = !S.safe;
+  else if ("pmin" in d) S.minP = !S.minP; else return;
+  render();
+});
+document.addEventListener("keydown", e => { if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return; const ks = Object.keys(NAMES), j = ks.indexOf(S.v); S.v = ks[(j + (e.key === "ArrowRight" ? 1 : ks.length - 1)) % ks.length]; render(); });
+render();
+</script>
