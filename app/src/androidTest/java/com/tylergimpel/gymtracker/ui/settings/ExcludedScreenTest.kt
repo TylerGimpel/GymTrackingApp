@@ -24,7 +24,7 @@ class ExcludedScreenTest {
         compose.setContent { ExcludedScreen(excluded = listOf(arnold), onTakeBack = { takenBack = it }) }
 
         compose.onNodeWithText("Arnold Press").assertExists()
-        compose.onNodeWithText("Allow again").performClick()
+        compose.onNodeWithText("Allow").performClick()
 
         assertEquals(arnold, takenBack)
     }

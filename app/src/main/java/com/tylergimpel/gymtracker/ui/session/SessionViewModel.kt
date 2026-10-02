@@ -1028,23 +1028,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     /** Opens what the lifter calls the selected exercise, and the note they keep on it. */
     fun startEditingExercise() {
         val exercise = screen.value.selected ?: return
-        screen.update {
-            it.copy(
-                editingExercise = ExerciseDetails(
-                    exerciseId = exercise.id,
-                    name = exercise.name,
-                    note = exercise.note.orEmpty(),
-                    progressionModel = exercise.progressionModel,
-                    disliked = exercise.isDisliked,
-                    increment = exercise.chosenIncrement
-                        ?.asTextIn(state.value.lifterUnit)
-                        .orEmpty(),
-                    repRangeBottom = exercise.chosenRepRange?.bottom?.toString().orEmpty(),
-                    repRangeTop = exercise.chosenRepRange?.top?.toString().orEmpty(),
-                    displayUnit = exercise.displayUnit,
-                ),
-            )
-        }
+        screen.update { it.copy(editingExercise = exercise.details(state.value.lifterUnit)) }
     }
 
     fun changeExerciseDetails(details: ExerciseDetails) =
@@ -1065,34 +1049,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val exercise = screen.value.selected?.takeIf { it.id == open.exerciseId } ?: return
         val renamed = open.name.trim().takeIf { it.isNotBlank() && it != exercise.bankName }
         viewModelScope.launch {
-            exercises.rename(open.exerciseId, renamed)
-            exercises.note(open.exerciseId, open.note)
-            // Recorded as a choice only where it departs from what the bank derived, the same move
-            // a display unit makes: agreeing with the derivation is not a decision, and a row that
-            // stored the agreement would be stranded there the day the derivation improved.
-            exercises.setProgressionModel(
-                open.exerciseId,
-                open.progressionModel.takeIf { it != exercise.bankProgressionModel },
-            )
-            exercises.setDisliked(open.exerciseId, open.disliked)
-            // Blank puts the equipment back in charge, which is what clearing a field means.
-            exercises.setIncrement(
-                open.exerciseId,
-                open.increment.trim().toDoubleOrNull()
-                    ?.takeIf { it > 0 }
-                    ?.let { state.value.lifterUnit.toKilograms(it) },
-            )
-            // The same write the unit chip makes, so the two can never disagree about what this
-            // exercise is read in. Made only when it changed: saving the dialog for a note is not
-            // a statement about units.
+            exercises.saveDetails(exercise, open, state.value.lifterUnit)
             val unitChanged = open.displayUnit != exercise.displayUnit
-            if (unitChanged) exercises.setDisplayUnit(open.exerciseId, open.displayUnit)
-            // Both ends or neither, and a mistyped pair leaves what was there alone.
-            when (val edit = open.repRangeEdit()) {
-                RepRangeEdit.Clear -> exercises.setRepRange(open.exerciseId, null)
-                is RepRangeEdit.Set -> exercises.setRepRange(open.exerciseId, edit.range)
-                RepRangeEdit.Unusable -> Unit
-            }
             screen.update {
                 it.copy(
                     editingExercise = null,
@@ -1370,4 +1328,44 @@ private fun Performance.correctedAs(recorded: LoggingType): LoggingType = when (
     is Performance.Assisted -> LoggingType.ASSISTED
     is Performance.Timed -> LoggingType.TIME
     is Performance.DistanceAndTime -> LoggingType.DISTANCE_TIME
+}
+
+/** What the lifter has said about [this] exercise, as the fields that edit it. */
+internal fun Exercise.details(lifterUnit: WeightUnit) = ExerciseDetails(
+    exerciseId = id,
+    name = name,
+    note = note.orEmpty(),
+    progressionModel = progressionModel,
+    disliked = isDisliked,
+    increment = chosenIncrement?.asTextIn(lifterUnit).orEmpty(),
+    repRangeBottom = chosenRepRange?.bottom?.toString().orEmpty(),
+    repRangeTop = chosenRepRange?.top?.toString().orEmpty(),
+    displayUnit = displayUnit,
+)
+
+/**
+ * Writes what the lifter said about [exercise] (ADR 0009), from wherever it was said.
+ *
+ * A name matching what the bank already calls it is stored as no name at all, so a later update
+ * correcting the shipped name is free to take effect. A progression model is recorded only where
+ * it departs from what the bank derived, and the unit only where it changed. Blank increment puts
+ * the equipment back in charge; a rep range is both ends or neither, and a mistyped pair leaves
+ * what was there alone.
+ */
+internal suspend fun ExerciseRepository.saveDetails(exercise: Exercise, open: ExerciseDetails, lifterUnit: WeightUnit) {
+    val renamed = open.name.trim().takeIf { it.isNotBlank() && it != exercise.bankName }
+    rename(open.exerciseId, renamed)
+    note(open.exerciseId, open.note)
+    setProgressionModel(open.exerciseId, open.progressionModel.takeIf { it != exercise.bankProgressionModel })
+    setDisliked(open.exerciseId, open.disliked)
+    setIncrement(
+        open.exerciseId,
+        open.increment.trim().toDoubleOrNull()?.takeIf { it > 0 }?.let { lifterUnit.toKilograms(it) },
+    )
+    if (open.displayUnit != exercise.displayUnit) setDisplayUnit(open.exerciseId, open.displayUnit)
+    when (val edit = open.repRangeEdit()) {
+        RepRangeEdit.Clear -> setRepRange(open.exerciseId, null)
+        is RepRangeEdit.Set -> setRepRange(open.exerciseId, edit.range)
+        RepRangeEdit.Unusable -> Unit
+    }
 }

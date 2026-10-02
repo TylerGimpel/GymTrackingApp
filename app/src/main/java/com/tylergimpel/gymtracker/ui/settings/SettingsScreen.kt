@@ -1,5 +1,16 @@
 package com.tylergimpel.gymtracker.ui.settings
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Surface
+import com.tylergimpel.gymtracker.ui.theme.ControlShape
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
+import com.tylergimpel.gymtracker.ui.theme.SectionLabel
+import com.tylergimpel.gymtracker.ui.theme.RowDivider
+import com.tylergimpel.gymtracker.ui.theme.CardRow
+import com.tylergimpel.gymtracker.ui.theme.AppCard
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -63,6 +74,8 @@ fun SettingsScreen(
     onOpenPlates: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenExcluded: () -> Unit,
+    /** Settings proper, or the lifter's data (#148). */
+    section: SettingsSection = SettingsSection.SETTINGS,
     /** Opened from the first screen's "Import from FitNotes": start the picker straight away. */
     importOnArrival: Boolean = false,
     onImportStarted: () -> Unit = {},
@@ -105,6 +118,7 @@ fun SettingsScreen(
 
     SettingsScreen(
         state = state,
+        section = section,
         onBack = onBack,
         onOpenPlates = onOpenPlates,
         onOpenProfile = onOpenProfile,
@@ -138,6 +152,7 @@ fun SettingsScreen(
 @Composable
 fun SettingsScreen(
     state: SettingsUiState,
+    section: SettingsSection = SettingsSection.SETTINGS,
     onBack: () -> Unit = {},
     onOpenPlates: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
@@ -163,10 +178,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             AppTopBar(
-                title = stringResource(R.string.settings_title),
-                actions = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.settings_done)) }
-                },
+                title = stringResource(if (section == SettingsSection.DATA) R.string.settings_data else R.string.settings_title),
             )
         },
     ) { insets ->
@@ -190,10 +202,8 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Setting(
-                label = stringResource(R.string.settings_unit),
-                why = stringResource(R.string.settings_unit_why),
-            ) {
+            if (section == SettingsSection.SETTINGS) {
+            Setting(label = stringResource(R.string.settings_unit)) {
                 // The same setting a weigh-in's chip settles, and the one every exercise falls
                 // back to until it says otherwise.
                 WeightUnitChips(selected = state.preferredUnit, onReadIn = onDisplayUnit)
@@ -206,11 +216,7 @@ fun SettingsScreen(
                         Theme.LIGHT to R.string.settings_theme_light,
                         Theme.DARK to R.string.settings_theme_dark,
                     ).forEach { (theme, text) ->
-                        FilterChip(
-                            selected = state.theme == theme,
-                            onClick = { onTheme(theme) },
-                            label = { Text(stringResource(text)) },
-                        )
+                        Pill(stringResource(text), selected = state.theme == theme) { onTheme(theme) }
                     }
                 }
             }
@@ -218,10 +224,7 @@ fun SettingsScreen(
             // Whether a rest can reach the lifter, said before they miss one rather than after.
             // Each failure carries the way out of it; going to the system's settings without
             // being taken there is half an answer.
-            Setting(
-                label = stringResource(R.string.settings_rest),
-                why = stringResource(R.string.settings_rest_why),
-            ) {
+            Setting(label = stringResource(R.string.settings_rest)) {
                 RestAlertLine(
                     fine = state.restAlerts.alarmsAreReliable,
                     fineText = R.string.settings_rest_alarms_fine,
@@ -238,26 +241,26 @@ fun SettingsScreen(
                 )
             }
 
-            HorizontalDivider()
+            }
 
+            if (section == SettingsSection.DATA) {
             // The lifter's data, going out. Named for what each file is, because the difference
             // between a backup and an export is the thing nobody finds out until it matters.
-            Setting(
-                label = stringResource(R.string.settings_data),
-                why = stringResource(R.string.settings_backup_why),
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // The backup first: it is the one that restores, and the one worth keeping.
-                TextButton(onClick = onBackUp) { Text(stringResource(R.string.settings_backup)) }
-                TextButton(onClick = onRestore) { Text(stringResource(R.string.settings_restore)) }
-                // Bringing history in from FitNotes, said plainly so the lossy CSV is not picked by
-                // mistake: the backup is richer, and it is the only one this reads.
-                Text(
-                    text = stringResource(R.string.settings_import_why),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onImportFitNotes) {
-                    Text(stringResource(R.string.settings_import))
+                AppCard(Modifier.fillMaxWidth()) {
+                    CardRow(stringResource(R.string.settings_backup), onClick = onBackUp)
+                    RowDivider()
+                    CardRow(stringResource(R.string.settings_restore), onClick = onRestore)
+                    RowDivider()
+                    CardRow(stringResource(R.string.settings_export), onClick = onExportForSpreadsheets)
+                    RowDivider()
+                    // The FitNotes backup, which is richer than its CSV and the only one this reads.
+                    CardRow(
+                        stringResource(R.string.settings_import),
+                        subtitle = stringResource(R.string.settings_import_short),
+                        onClick = onImportFitNotes,
+                    )
                 }
                 // Where imports are listed, each with the way to take it back (#102).
                 state.imports.forEach { listed ->
@@ -279,14 +282,6 @@ fun SettingsScreen(
                             Text(stringResource(R.string.import_undo))
                         }
                     }
-                }
-                Text(
-                    text = stringResource(R.string.settings_export_why),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onExportForSpreadsheets) {
-                    Text(stringResource(R.string.settings_export))
                 }
                 state.dataMessage?.let { message ->
                     Text(
@@ -340,7 +335,7 @@ fun SettingsScreen(
                 }
             }
 
-            HorizontalDivider()
+            }
 
             state.confirmingUndo?.let { listed ->
                 AlertDialog(
@@ -360,10 +355,6 @@ fun SettingsScreen(
                 ConfirmRestoreDialog(confirm = it, onConfirm = onConfirmRestore, onCancel = onCancelRestore)
             }
 
-            TextButton(onClick = onOpenProfile) { Text(stringResource(R.string.settings_profile)) }
-            TextButton(onClick = onOpenPlates) { Text(stringResource(R.string.settings_plates)) }
-            // Everything excluded from swap and dislike, where each can be taken back (#93).
-            TextButton(onClick = onOpenExcluded) { Text(stringResource(R.string.settings_excluded)) }
         }
     }
 }
@@ -437,8 +428,8 @@ private fun importedText(result: ImportResult): String = buildList {
 
 @Composable
 private fun Setting(label: String, why: String? = null, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel(label)
         why?.let {
             Text(
                 text = it,
@@ -464,4 +455,24 @@ private fun RestAlertLine(
         color = if (fine) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
     )
     if (!fine) TextButton(onClick = onFix) { Text(stringResource(fixText)) }
+}
+
+/** Which half of what used to be one Settings screen this is (#148). */
+enum class SettingsSection { SETTINGS, DATA }
+
+/** A choice among a few, as the new look draws one: filled with the accent when chosen. */
+@Composable
+internal fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = LocalGymColors.current
+    Surface(
+        onClick = onClick,
+        shape = ControlShape,
+        color = if (selected) colors.accent else colors.raised,
+        contentColor = if (selected) colors.onAccent else colors.text,
+        modifier = Modifier.heightIn(min = 48.dp),
+    ) {
+        Box(Modifier.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+        }
+    }
 }

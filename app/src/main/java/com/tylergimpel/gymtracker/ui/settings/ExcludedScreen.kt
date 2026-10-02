@@ -1,5 +1,16 @@
 package com.tylergimpel.gymtracker.ui.settings
 
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
+import com.tylergimpel.gymtracker.ui.theme.RowDivider
+import com.tylergimpel.gymtracker.ui.theme.CardRow
+import com.tylergimpel.gymtracker.ui.theme.AppCard
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.foundation.layout.PaddingValues
 import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -58,6 +69,11 @@ class ExcludedViewModel(application: Application) : AndroidViewModel(application
         .map { it.excluded() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
 
+    /** Excludes [exercise] again: the Undo after allowing it. */
+    fun exclude(exercise: Exercise) {
+        viewModelScope.launch { exercises.setDisliked(exercise.id, disliked = true) }
+    }
+
     fun takeBack(exercise: Exercise) {
         viewModelScope.launch { exercises.setDisliked(exercise.id, disliked = false) }
     }
@@ -74,57 +90,68 @@ fun ExcludedScreen(
     viewModel: ExcludedViewModel = viewModel(),
 ) {
     val excluded by viewModel.excluded.collectAsStateWithLifecycle()
-    ExcludedScreen(excluded = excluded, onBack = onBack, onTakeBack = viewModel::takeBack, onOpenHistory = onOpenHistory)
+    ExcludedScreen(
+        excluded = excluded,
+        onBack = onBack,
+        onTakeBack = viewModel::takeBack,
+        onUndo = viewModel::exclude,
+        onOpenHistory = onOpenHistory,
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Excluded exercises (#148): never suggested, each one a tap from being allowed again, with an
+ * Undo for the tap. Its history is a tap on its name, because excluding it erased nothing (#121).
+ */
 @Composable
 fun ExcludedScreen(
     excluded: List<Exercise>,
     onBack: () -> Unit = {},
     onTakeBack: (Exercise) -> Unit = {},
+    onUndo: (Exercise) -> Unit = {},
     onOpenHistory: (Exercise) -> Unit = {},
 ) {
-    Scaffold(
-        topBar = {
-            AppTopBar(
-                title = stringResource(R.string.excluded_title),
-                actions = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.settings_done)) }
-                },
-            )
-        },
-    ) { insets ->
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
+    val colors = LocalGymColors.current
+    val snackbars = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val allowed = stringResource(R.string.excluded_allowed)
+    val undo = stringResource(R.string.routine_undo)
+    Scaffold(topBar = { AppTopBar(stringResource(R.string.excluded_title)) }, snackbarHost = { SnackbarHost(snackbars) }) { insets ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = insets.calculateTopPadding(),
+                bottom = insets.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             item {
-                Text(
-                    text = stringResource(
-                        if (excluded.isEmpty()) R.string.excluded_none else R.string.excluded_why,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
-                )
+                Text(stringResource(if (excluded.isEmpty()) R.string.excluded_none else R.string.excluded_never), color = colors.dim)
             }
-            items(excluded, key = Exercise::id) { exercise ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Excluding it erased nothing: what was done on it is a tap away (#121).
-                    TextButton(onClick = { onOpenHistory(exercise) }, modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = exercise.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    TextButton(onClick = { onTakeBack(exercise) }) {
-                        Text(stringResource(R.string.excluded_take_back))
+            if (excluded.isNotEmpty()) {
+                item {
+                    AppCard(Modifier.fillMaxWidth()) {
+                        excluded.forEachIndexed { index, exercise ->
+                            if (index > 0) RowDivider()
+                            CardRow(
+                                title = exercise.name,
+                                subtitle = exercise.primaryMuscle,
+                                onClick = { onOpenHistory(exercise) },
+                                trailing = {
+                                    Pill(stringResource(R.string.excluded_allow), selected = false) {
+                                        onTakeBack(exercise)
+                                        scope.launch {
+                                            val result = snackbars.showSnackbar(allowed.format(exercise.name), actionLabel = undo, duration = SnackbarDuration.Short)
+                                            if (result == SnackbarResult.ActionPerformed) onUndo(exercise)
+                                        }
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
-                HorizontalDivider()
             }
         }
     }

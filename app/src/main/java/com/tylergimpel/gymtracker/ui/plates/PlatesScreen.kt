@@ -1,161 +1,169 @@
 package com.tylergimpel.gymtracker.ui.plates
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import com.tylergimpel.gymtracker.ui.theme.TextButton
-import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
+import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.PlatePair
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.ui.label
+import com.tylergimpel.gymtracker.ui.routine.DashedButton
+import com.tylergimpel.gymtracker.ui.routine.Tile
+import com.tylergimpel.gymtracker.ui.session.Sheet
+import com.tylergimpel.gymtracker.ui.session.SheetTitle
+import com.tylergimpel.gymtracker.ui.settings.Pill
+import com.tylergimpel.gymtracker.ui.theme.AppCard
+import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
+import com.tylergimpel.gymtracker.ui.theme.RowDivider
+import com.tylergimpel.gymtracker.ui.theme.SectionLabel
+import com.tylergimpel.gymtracker.ui.theme.UppercaseText
 
 /**
- * The plates in the room.
+ * The plates in the room and the bar they go on (#148).
  *
  * **One inventory, and the only place it is edited.** Every barbell recommendation is rounded to
- * what these can build, and the plate line under a set says how to build it, so a change here
- * changes what the next set asks for with nothing to keep in step.
- *
- * Pairs rather than plates throughout, because a bar loaded at one end is not a lift.
+ * what these can build, so a change here changes what the next set asks for. Pairs rather than
+ * plates throughout, because a bar loaded at one end is not a lift.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlatesScreen(onBack: () -> Unit, viewModel: PlatesViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val colors = LocalGymColors.current
+    val unit = state.unit
+    val unitLabel = stringResource(unit.label)
+    var adding by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            AppTopBar(
-                title = stringResource(R.string.plates_title),
-                actions = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.plates_done)) }
-                },
-            )
-        },
-    ) { insets ->
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
+    Scaffold(topBar = { AppTopBar(stringResource(R.string.plates_title)) }) { insets ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = insets.calculateTopPadding(),
+                bottom = insets.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             item {
-                Text(
-                    text = stringResource(R.string.plates_explainer),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
-                )
-                OutlinedTextField(
-                    value = state.barText,
-                    onValueChange = viewModel::typeBar,
-                    label = { Text(stringResource(R.string.plates_bar)) },
-                    suffix = { Text(stringResource(state.unit.label)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
-                TextButton(
-                    onClick = viewModel::saveBar,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                ) {
-                    Text(stringResource(R.string.session_save))
-                }
-                HorizontalDivider()
-            }
-
-            items(state.pairs, key = { it.weight.value }) { pair ->
-                PlateRow(pair, state.unit) { viewModel.setPairs(pair.weight, it) }
-                HorizontalDivider()
-            }
-
-            item {
-                // Empty means nobody has described their gym, never that there is nothing to
-                // lift with — which is why the engine falls back on an ordinary rack.
-                if (state.pairs.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.plates_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = state.adding,
-                        onValueChange = viewModel::typeAdding,
-                        label = { Text(stringResource(R.string.plates_add_weight)) },
-                        suffix = { Text(stringResource(state.unit.label)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = viewModel::addPair) {
-                        Text(stringResource(R.string.plates_add))
+                SectionLabel(stringResource(R.string.plates_bar))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                    barsFor(unit).forEach { amount ->
+                        Pill(
+                            "${amount.asAmountText()} $unitLabel",
+                            selected = state.bar.asTextIn(unit) == amount.asAmountText(),
+                        ) { viewModel.chooseBar(amount) }
                     }
                 }
             }
+            item { SectionLabel(stringResource(R.string.plates_pairs), Modifier.padding(top = 8.dp)) }
+            if (state.pairs.isNotEmpty()) {
+                item {
+                    AppCard(Modifier.fillMaxWidth()) {
+                        state.pairs.forEachIndexed { index, pair ->
+                            if (index > 0) RowDivider()
+                            PlateRow(pair, unit) { viewModel.setPairs(pair.weight, it) }
+                        }
+                    }
+                }
+            } else {
+                // Empty means nobody has described their gym, never that there is nothing to lift
+                // with: the engine falls back on an ordinary rack.
+                item { Text(stringResource(R.string.plates_standard), color = colors.dim) }
+            }
+            item { DashedButton(stringResource(R.string.plates_add_plate)) { adding = true } }
+            item {
+                val heaviest = Kilograms(state.bar.value + 2 * state.pairs.sumOf { it.weight.value * it.pairs })
+                Text(
+                    stringResource(R.string.plates_heaviest, heaviest.asTextIn(unit), unitLabel),
+                    color = colors.dim,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+
+    if (adding) {
+        Sheet(onDismiss = { adding = false }) {
+            SheetTitle(stringResource(R.string.plates_add_plate_title))
+            platesFor(unit).chunked(4).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { amount ->
+                        Tile(
+                            selected = false,
+                            onClick = {
+                                viewModel.addPairOf(amount)
+                                adding = false
+                            },
+                            modifier = Modifier.weight(1f).heightIn(min = 72.dp),
+                        ) {
+                            Text(amount.asAmountText(), style = MaterialTheme.typography.titleLarge)
+                            Text(unitLabel, fontSize = 13.sp, color = colors.dim)
+                        }
+                    }
+                    repeat(4 - row.size) { Box(Modifier.weight(1f)) }
+                }
+            }
         }
     }
 }
 
-/** One weight, and how many pairs of it are in the room. */
+/** One weight, and how many pairs of it are in the room, stepped; down to none removes it. */
 @Composable
 private fun PlateRow(pair: PlatePair, unit: WeightUnit, onChange: (Int) -> Unit) {
+    val colors = LocalGymColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
-            Text(
-                text = "${pair.weight.asTextIn(unit)} ${stringResource(unit.label)}",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = stringResource(
-                    if (pair.pairs == 1) {
-                        R.string.plates_pair_count
-                    } else {
-                        R.string.plates_pair_count_many
-                    },
-                    pair.pairs,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        UppercaseText(
+            "${pair.weight.asTextIn(unit)} ${stringResource(unit.label)}",
+            style = MaterialTheme.typography.titleLarge.copy(color = colors.text),
+            modifier = Modifier.weight(1f),
+        )
+        AppOutlinedButton("−", onClick = { onChange(pair.pairs - 1) }, modifier = Modifier.width(56.dp).testTag("fewer-${pair.weight.value}"))
+        Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(pair.pairs.toString(), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = colors.text)
+            Text(stringResource(R.string.plates_pairs_short), fontSize = 12.sp, color = colors.dim)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            // Down to none takes the row away: an inventory lists what somebody has, and a count
-            // of zero is a way of writing "none" that leaves clutter behind.
-            TextButton(onClick = { onChange(pair.pairs - 1) }) {
-                Text(stringResource(R.string.plates_fewer))
-            }
-            TextButton(onClick = { onChange(pair.pairs + 1) }) {
-                Text(stringResource(R.string.plates_more))
-            }
-        }
+        AppOutlinedButton("+", onClick = { onChange(pair.pairs + 1) }, modifier = Modifier.width(56.dp))
     }
 }
+
+/** The bars offered, in the unit read: a women's and a men's Olympic bar. */
+private fun barsFor(unit: WeightUnit): List<Double> =
+    if (unit == WeightUnit.POUNDS) listOf(35.0, 45.0) else listOf(15.0, 20.0)
+
+/** The plate sizes offered to add, in the unit read. */
+private fun platesFor(unit: WeightUnit): List<Double> =
+    if (unit == WeightUnit.POUNDS) listOf(45.0, 35.0, 25.0, 10.0, 5.0, 2.5, 1.25) else listOf(25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25, 0.5)

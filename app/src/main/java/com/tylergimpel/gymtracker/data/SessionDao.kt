@@ -278,6 +278,23 @@ interface SessionDao {
     )
     fun observeCalendar(from: LocalDate, to: LocalDate): Flow<List<CalendarRow>>
 
+    /**
+     * Every working set ever logged, oldest first, as the exercise, weight and reps: the bank
+     * keeps the last of each so it can say what an exercise was last done at (#148).
+     */
+    @Query(
+        """
+        SELECT session_exercise.exercise_id AS exercise_id, set_entry.weight_kg AS weight_kg,
+               set_entry.reps AS reps
+        FROM set_entry
+        JOIN session_exercise ON session_exercise.id = set_entry.session_exercise_id
+        JOIN session ON session.id = session_exercise.session_id
+        WHERE set_entry.type IN ('working', 'backoff', 'amrap') AND set_entry.side IS NOT 'right'
+        ORDER BY session.date, set_entry.id
+        """,
+    )
+    fun observeWorkingSets(): Flow<List<LastSetRow>>
+
     /** The day of the first session there is, or null with none. */
     @Query("SELECT MIN(date) FROM session")
     suspend fun firstDay(): LocalDate?

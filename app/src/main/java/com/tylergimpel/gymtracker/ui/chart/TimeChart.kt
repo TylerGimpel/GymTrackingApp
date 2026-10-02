@@ -1,5 +1,12 @@
 package com.tylergimpel.gymtracker.ui.chart
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,9 +52,16 @@ fun TimeChart(
     valueText: (Double) -> String,
     description: String,
     modifier: Modifier = Modifier,
+    /** Where imported history ends, drawn as a dashed line with [seamLabel] beside it (#148). */
+    seam: LocalDate? = null,
+    seamLabel: String? = null,
 ) {
     val all = series.flatMap(ChartSeries::values)
     if (all.isEmpty()) return
+    // The value under a tap or a drag, said above the plot while the finger is there.
+    var touched by remember(series) { mutableStateOf<ChartValue?>(null) }
+    val touchedText = touched?.let { valueText(it.value) + " · " + it.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)) }
+    val seamColour = MaterialTheme.colorScheme.onSurfaceVariant
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
     val axisColour = MaterialTheme.colorScheme.outlineVariant
@@ -61,7 +75,30 @@ fun TimeChart(
     val firstText = first.format(days)
     val lastText = last.format(days)
 
-    Canvas(modifier = modifier.fillMaxWidth().height(CHART_HEIGHT).semantics { contentDescription = description }) {
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(CHART_HEIGHT)
+            .semantics { contentDescription = description }
+            .pointerInput(series) {
+                fun nearest(x: Float): ChartValue? {
+                    val firstDay = all.minOf(ChartValue::date).toEpochDay()
+                    val span = (all.maxOf(ChartValue::date).toEpochDay() - firstDay).coerceAtLeast(1)
+                    val day = firstDay + (x / size.width * span).toLong()
+                    return all.minByOrNull { kotlin.math.abs(it.date.toEpochDay() - day) }
+                }
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    touched = nearest(down.position.x)
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) break
+                        touched = nearest(change.position.x)
+                    }
+                }
+            },
+    ) {
         val gap = LABEL_GAP.toPx()
         val highLabel = measurer.measure(highText, labelStyle)
         val lowLabel = measurer.measure(lowText, labelStyle)
@@ -90,6 +127,17 @@ fun TimeChart(
         drawText(firstLabel, topLeft = Offset(if (span == 0f) x(first) - firstLabel.size.width / 2 else left, bottom + gap / 2))
         if (span != 0f) drawText(lastLabel, topLeft = Offset(right - lastLabel.size.width, bottom + gap / 2))
 
+        if (seam != null && seam > first && seam < last) {
+            val at = x(seam)
+            drawLine(
+                seamColour,
+                Offset(at, top),
+                Offset(at, bottom),
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
+            )
+            seamLabel?.let { drawText(measurer.measure(it, labelStyle), topLeft = Offset(at + gap / 2, top)) }
+        }
+
         series.forEach { one ->
             val placed = one.values.sortedBy(ChartValue::date).map { Offset(x(it.date), y(it.value)) }
             if (Mark.LINE in one.marks && placed.size > 1) {
@@ -100,6 +148,16 @@ fun TimeChart(
                 drawPath(path, one.colour, style = Stroke(width = LINE_WIDTH.toPx()))
             }
             if (Mark.POINTS in one.marks) placed.forEach { drawCircle(one.colour, radius = POINT_RADIUS.toPx(), center = it) }
+        }
+
+        touched?.let { value ->
+            val at = Offset(x(value.date), y(value.value))
+            drawCircle(seamColour, radius = POINT_RADIUS.toPx() * 2, center = at, style = Stroke(width = 2f))
+            touchedText?.let {
+                val label = measurer.measure(it, labelStyle)
+                val leftEdge = (at.x - label.size.width / 2).coerceIn(left, right - label.size.width)
+                drawText(label, topLeft = Offset(leftEdge, 0f))
+            }
         }
     }
 }

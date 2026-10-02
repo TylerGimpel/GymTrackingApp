@@ -77,6 +77,18 @@ class PlatesViewModel(application: Application) : AndroidViewModel(application) 
 
     fun typeAdding(text: String) = screen.update { it.copy(adding = text) }
 
+    /** Records a bar of [amount] in the unit the screen reads in (#148). */
+    fun chooseBar(amount: Double) {
+        typeBar(amount.toString())
+        saveBar()
+    }
+
+    /** Adds one pair of [amount], in the unit the screen reads in, from the grid of sizes (#148). */
+    fun addPairOf(amount: Double) {
+        typeAdding(amount.toString())
+        addPair()
+    }
+
     /** Adds one pair of whatever weight is typed, which is how a rack grows. */
     fun addPair() {
         val typed = screen.value.adding.trim().toDoubleOrNull()?.takeIf { it > 0 } ?: return
