@@ -25,6 +25,10 @@ interface BodyweightDao {
     @Query("SELECT DISTINCT date FROM bodyweight_entry WHERE date BETWEEN :from AND :to")
     fun observeDaysBetween(from: LocalDate, to: LocalDate): Flow<List<LocalDate>>
 
+    /** Every reading between [from] and [to], for the weights the calendar shows (#147). */
+    @Query("SELECT * FROM bodyweight_entry WHERE date BETWEEN :from AND :to")
+    fun observeBetween(from: LocalDate, to: LocalDate): Flow<List<BodyweightEntryEntity>>
+
     /** The day of the first weigh-in there is, or null with none. */
     @Query("SELECT MIN(date) FROM bodyweight_entry")
     suspend fun firstDay(): LocalDate?

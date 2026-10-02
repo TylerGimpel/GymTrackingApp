@@ -181,7 +181,7 @@
     <string name="set_distance_summary">%1$s %2$s in %3$s</string>
     <string name="set_added_weight_summary">+%1$s %2$s × %3$d</string>
     <string name="set_assisted_summary">−%1$s %2$s × %3$d</string>
-    <string name="set_reps_summary">× %1$d</string>
+    <string name="set_reps_summary">%1$d reps</string>
 
     <string name="routine_title">Routine</string>
     <string name="routine_done">Done</string>
@@ -634,4 +634,14 @@
     <string name="routine_times_a_cycle">%1$d× a cycle</string>
     <string name="routine_q_session">How long can you train?</string>
     <string name="routine_min">min</string>
+    <!-- The calendar (#147) -->
+    <string name="calendar_weighed">weighed %1$s %2$s</string>
+    <string name="calendar_today">today</string>
+    <plurals name="calendar_days_ago">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="day_weigh_in">Weigh-in · %1$s %2$s</string>
+    <string name="day_no_routine">No routine</string>
+    <string name="day_drop">%1$s %2$s × %3$d</string>
 </resources>

@@ -6,6 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.tylergimpel.gymtracker.data.CalendarRepository
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.domain.CalendarDay
+import com.tylergimpel.gymtracker.domain.MuscleLastTrained
+import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.data.profileRepository
+import com.tylergimpel.gymtracker.data.sessionRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,11 +31,17 @@ data class CalendarUiState(
     val canGoBack: Boolean = false,
     /** Whether [month] is before this one: there is nothing to mark in the future. */
     val canGoForward: Boolean = false,
+    /** How long since each muscle was trained, as of today (#127): the strip under the grid. */
+    val lastTrained: List<MuscleLastTrained> = emptyList(),
+    /** What a weight on the grid is read in. */
+    val lifterUnit: WeightUnit = WeightUnit.DEFAULT,
 )
 
 class CalendarViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = CalendarRepository(GymDatabase.getInstance(application))
+    private val database = GymDatabase.getInstance(application)
+
+    private val repository = CalendarRepository(database)
 
     private val month = MutableStateFlow(YearMonth.now())
 
@@ -40,12 +50,18 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<CalendarUiState> = combine(month, firstMonth, ::Pair)
         .flatMapLatest { (shown, first) ->
-            repository.observeMonth(shown).map { days ->
+            combine(
+                repository.observeMonth(shown),
+                database.sessionRepository().observeLastTrained(),
+                database.profileRepository().observeDisplayUnit(),
+            ) { days, lastTrained, unit ->
                 CalendarUiState(
                     month = shown,
                     days = days,
                     canGoBack = first != null && shown > first,
                     canGoForward = shown < YearMonth.now(),
+                    lastTrained = lastTrained,
+                    lifterUnit = unit,
                 )
             }
         }

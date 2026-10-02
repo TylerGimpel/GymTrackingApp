@@ -263,7 +263,12 @@ interface SessionDao {
      */
     @Query(
         """
-        SELECT session.id AS calendar_session_id, session.date AS calendar_date, exercise.*
+        SELECT session.id AS calendar_session_id, session.date AS calendar_date,
+               session.routine_day_name AS calendar_day_name,
+               (SELECT COUNT(DISTINCT set_entry.set_index) FROM set_entry
+                 WHERE set_entry.session_exercise_id = session_exercise.id
+                   AND set_entry.type IN ('working', 'backoff', 'amrap')) AS calendar_sets,
+               exercise.*
         FROM session
         LEFT JOIN session_exercise ON session_exercise.session_id = session.id
           AND EXISTS (SELECT 1 FROM set_entry WHERE set_entry.session_exercise_id = session_exercise.id)
