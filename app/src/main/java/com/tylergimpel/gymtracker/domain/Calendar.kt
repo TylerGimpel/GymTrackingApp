@@ -5,11 +5,31 @@ import java.time.LocalDate
 /** What training a day on the calendar shows (#118). */
 enum class DayTraining { LIFTING, CARDIO_ONLY }
 
-/** One marked day: what was trained on it, if anything, and whether the lifter weighed in. */
-data class CalendarDay(val date: LocalDate, val training: DayTraining?, val weighedIn: Boolean)
+/**
+ * One marked day: what was trained on it, if anything, and whether the lifter weighed in.
+ *
+ * With what the grid draws (#147): the routine day it realised, the sets each muscle got —
+ * direct work counting one and indirect a half, warm-ups never — and the day's weight.
+ */
+data class CalendarDay(
+    val date: LocalDate,
+    val training: DayTraining?,
+    val weighedIn: Boolean,
+    val name: String? = null,
+    val muscleSets: Map<String, Double> = emptyMap(),
+    val weight: Kilograms? = null,
+)
 
-/** One session as the calendar reads it: its day, and every exercise with a set logged in it. */
-data class CalendarSession(val date: LocalDate, val trained: List<Exercise>)
+/**
+ * One session as the calendar reads it: its day, every exercise with a set logged in it, how many
+ * of each exercise's sets counted as work, and the routine day it realised, if any.
+ */
+data class CalendarSession(
+    val date: LocalDate,
+    val trained: List<Exercise>,
+    val sets: Map<String, Int> = emptyMap(),
+    val name: String? = null,
+)
 
 /**
  * The marked days among [sessions] and [weighIns] (#118).
@@ -24,12 +44,33 @@ data class CalendarSession(val date: LocalDate, val trained: List<Exercise>)
  *
  * Unmarked days are absent rather than present and empty.
  */
-fun calendarDays(sessions: List<CalendarSession>, weighIns: Collection<LocalDate>): Map<LocalDate, CalendarDay> {
+fun calendarDays(
+    sessions: List<CalendarSession>,
+    weighIns: Collection<LocalDate>,
+    /** The weight each day settled on, where the calendar knows it. */
+    weights: Map<LocalDate, Kilograms> = emptyMap(),
+): Map<LocalDate, CalendarDay> {
     val training = sessions.filter { it.trained.isNotEmpty() }
         .groupBy(CalendarSession::date)
         .mapValues { (_, day) ->
             if (day.any { session -> session.trained.any { !it.isCardio } }) DayTraining.LIFTING else DayTraining.CARDIO_ONLY
         }
     val weighed = weighIns.toSet()
-    return (training.keys + weighed).associateWith { CalendarDay(it, training[it], weighedIn = it in weighed) }
+    val sessionsOn = sessions.filter { it.trained.isNotEmpty() }.groupBy(CalendarSession::date)
+    return (training.keys + weighed).associateWith { date ->
+        val those = sessionsOn[date].orEmpty()
+        CalendarDay(
+            date = date,
+            training = training[date],
+            weighedIn = date in weighed,
+            name = those.firstNotNullOfOrNull { it.name },
+            muscleSets = those.flatMap { session ->
+                session.trained.flatMap { exercise ->
+                    val counted = (session.sets[exercise.id] ?: 0).toDouble()
+                    exercise.primaryMuscles.map { it to counted } + exercise.secondaryMuscles.map { it to counted / 2 }
+                }
+            }.groupBy({ it.first }, { it.second }).mapValues { it.value.sum() }.filterValues { it > 0 },
+            weight = weights[date],
+        )
+    }
 }

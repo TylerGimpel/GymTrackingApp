@@ -49,6 +49,19 @@ class CalendarTest {
         assertEquals(setOf(MONDAY), days.keys)
     }
 
+    @Test
+    fun `a day counts working sets per muscle, direct as one and indirect as a half, and carries its routine day`() {
+        val bench = squat.copy(id = "bench", primaryMuscles = listOf("chest"), secondaryMuscles = listOf("triceps"))
+        val days = calendarDays(
+            sessions = listOf(CalendarSession(MONDAY, trained = listOf(bench), sets = mapOf("bench" to 4), name = "Push")),
+            weighIns = emptyList(),
+        )
+
+        val monday = days.getValue(MONDAY)
+        assertEquals("Push", monday.name)
+        assertEquals(mapOf("chest" to 4.0, "triceps" to 2.0), monday.muscleSets)
+    }
+
     private val squat = exercise("Barbell Squat", cardio = false)
     private val run = exercise("Running, Treadmill", cardio = true)
 

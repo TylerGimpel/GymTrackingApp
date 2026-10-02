@@ -1,5 +1,6 @@
 package com.tylergimpel.gymtracker.ui.calendar
 
+import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Effort
 import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.SessionExercise
@@ -40,6 +41,8 @@ data class DayUiState(
     val editing: EditingEffort? = null,
     /** A missed set being added (#120). */
     val adding: AddingSet? = null,
+    /** What the lifter weighed that day, the latest reading, if they weighed in. */
+    val weight: Kilograms? = null,
 )
 
 /** A set the lifter missed, being added to [sessionExerciseId] after the fact (#120). */
@@ -61,7 +64,11 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
     @OptIn(ExperimentalCoroutinesApi::class)
     private val day: Flow<DayUiState> = date.filterNotNull()
         .flatMapLatest { day ->
-            combine(sessions.observeOnDate(day), profile.observeDisplayUnit()) { onThatDay, unit ->
+            combine(
+                sessions.observeOnDate(day),
+                profile.observeDisplayUnit(),
+                database.bodyweightDao().observeBetween(day, day),
+            ) { onThatDay, unit, readings ->
                 val batches = onThatDay.mapNotNull { it.session.importBatchId }.toSet()
                 val sources = if (batches.isEmpty()) {
                     emptyMap()
@@ -69,7 +76,7 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
                     database.importBatchDao().all().filter { it.id in batches }
                         .associate { it.id to importSourceWithId(it.source) }
                 }
-                DayUiState(day, onThatDay, unit, sources)
+                DayUiState(day, onThatDay, unit, sources, weight = readings.maxByOrNull { it.recordedAt }?.let { Kilograms(it.weightKg) })
             }
         }
 
@@ -117,14 +124,17 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
     /** Starts a set the lifter missed on [performed], in its exercise's own terms. */
     fun startAdding(performed: SessionExercise) {
         val exercise = performed.exercise
+        // Filled in from the last working set, which is what a missed set most often repeats.
+        val last = performed.sets.lastOrNull { it.type.countsTowardVolume } ?: performed.sets.lastOrNull()
         adding.value = AddingSet(
             sessionExerciseId = performed.id,
             exerciseUnit = exercise.displayUnit,
-            draft = SetDraft(
-                loggingType = exercise.loggingType,
-                displayUnit = exercise.displayUnit,
-                lifterUnit = state.value.lifterUnit,
-            ),
+            draft = last?.let { editingOf(performed, it, it.leadingEffort, state.value.lifterUnit).draft.copy(note = null) }
+                ?: SetDraft(
+                    loggingType = exercise.loggingType,
+                    displayUnit = exercise.displayUnit,
+                    lifterUnit = state.value.lifterUnit,
+                ),
         )
     }
 
