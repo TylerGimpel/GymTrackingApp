@@ -80,6 +80,15 @@ data class RoutineEntity(
      */
     @ColumnInfo(name = "seed")
     val seed: Int? = null,
+
+    /**
+     * How long a session can run, in minutes (#146): the time ceiling a day is checked against.
+     *
+     * The lifter's to set now rather than a constant, and ninety until they do, which is what the
+     * constant was: a routine that said nothing before says the same now.
+     */
+    @ColumnInfo(name = "session_minutes", defaultValue = "90")
+    val sessionMinutes: Int = Routine.USUAL_SESSION_MINUTES,
 )
 
 /** One ordered position within a routine. Never a calendar day. */
@@ -136,6 +145,7 @@ fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
     cardio = CardioPlacement.valueOf(cardio),
     shape = shapeId?.let { id -> SPLIT_SHAPES.firstOrNull { it.id == id } ?: shapeOf(id) },
     seed = seed,
+    sessionMinutes = sessionMinutes,
     days = days.map { it.toDomain(RoutineGoal.valueOf(goal)) },
 )
 

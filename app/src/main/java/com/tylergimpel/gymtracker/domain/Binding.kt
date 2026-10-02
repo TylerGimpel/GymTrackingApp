@@ -211,7 +211,7 @@ private val SAME_DAY_CARDIO: Duration = Duration.ofMinutes(20)
  * **Invented and tuneable**, like the rest. Ninety minutes is where an ordinary gym session stops
  * being ordinary; nothing measured it.
  */
-val SESSION_CEILING: Duration = Duration.ofMinutes(90)
+val SESSION_CEILING: Duration = Duration.ofMinutes(Routine.USUAL_SESSION_MINUTES.toLong())
 
 /**
  * Everything about this routine that cannot be satisfied, and what would give.
@@ -221,7 +221,7 @@ val SESSION_CEILING: Duration = Duration.ofMinutes(90)
  */
 fun bindingOn(
     routine: Routine,
-    ceiling: Duration = SESSION_CEILING,
+    ceiling: Duration = Duration.ofMinutes(routine.sessionMinutes.toLong()),
     /**
      * The bank, where the least-bad question is worth asking.
      *
@@ -232,7 +232,9 @@ fun bindingOn(
 ): List<Binding> = buildList {
     routine.days.filter { it.kind == RoutineDayKind.LIFTING }.forEach { day ->
         val length = dayLength(day, routine.cardio, RepRange.DEFAULT)
-        if (length > ceiling) {
+        // Only past a margin (#136): an estimate of 52 minutes against 50 is the estimate being
+        // an estimate, and a flag on it would be noise.
+        if (length > ceiling.multipliedBy(11).dividedBy(10)) {
             add(
                 Binding.SessionTooLong(
                     day = day.name,

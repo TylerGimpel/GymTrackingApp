@@ -743,6 +743,16 @@ internal val MIGRATION_32_33 = object : Migration(32, 33) {
     }
 }
 
+/**
+ * Version 34 gives a routine its own session length (#146), ninety minutes for every routine
+ * already there: the ceiling each day was checked against until now.
+ */
+internal val MIGRATION_33_34 = object : Migration(33, 34) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `routine` ADD COLUMN `session_minutes` INTEGER NOT NULL DEFAULT 90")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -776,6 +786,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_30_31,
     MIGRATION_31_32,
     MIGRATION_32_33,
+    MIGRATION_33_34,
 )
 
 /**

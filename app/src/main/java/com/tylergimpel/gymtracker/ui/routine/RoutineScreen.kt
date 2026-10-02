@@ -1,236 +1,254 @@
 package com.tylergimpel.gymtracker.ui.routine
 
-import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
-import com.tylergimpel.gymtracker.ui.theme.UppercaseText
-import com.tylergimpel.gymtracker.ui.theme.MainButton
-import com.tylergimpel.gymtracker.ui.theme.AppCard
-import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.runtime.saveable.listSaver
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import com.tylergimpel.gymtracker.ui.theme.AppButton
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import com.tylergimpel.gymtracker.ui.theme.TextButton
-import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
-import com.tylergimpel.gymtracker.domain.RepPreference
-import com.tylergimpel.gymtracker.domain.CardioPlacement
-import com.tylergimpel.gymtracker.domain.RoutineDayKind
+import com.tylergimpel.gymtracker.domain.Binding
+import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.PlannedExercise
+import com.tylergimpel.gymtracker.domain.RecoveredRoutine
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
-import com.tylergimpel.gymtracker.domain.RoutineGoal
-import com.tylergimpel.gymtracker.domain.conflictsFor
-import com.tylergimpel.gymtracker.domain.Experience
+import com.tylergimpel.gymtracker.domain.RoutineDayKind
 import com.tylergimpel.gymtracker.domain.bindingOn
-import com.tylergimpel.gymtracker.domain.Binding
+import com.tylergimpel.gymtracker.domain.estimatedLengthOf
+import com.tylergimpel.gymtracker.domain.weeklyVolumeByMuscle
 import com.tylergimpel.gymtracker.domain.weeklyVolumeTargetFor
-import com.tylergimpel.gymtracker.domain.SplitShape
-import com.tylergimpel.gymtracker.domain.whatItTrains
-import com.tylergimpel.gymtracker.ui.exercise.ExercisePicker
-import com.tylergimpel.gymtracker.domain.Exercise
-import com.tylergimpel.gymtracker.domain.RecoveredRoutine
+import com.tylergimpel.gymtracker.ui.MuscleDiagram
+import com.tylergimpel.gymtracker.ui.MuscleShade
+import com.tylergimpel.gymtracker.ui.icons.AppIcons
+import com.tylergimpel.gymtracker.ui.icons.EquipmentIcons
+import com.tylergimpel.gymtracker.ui.session.Sheet
+import com.tylergimpel.gymtracker.ui.session.SheetTitle
+import com.tylergimpel.gymtracker.ui.shadeForExercise
+import com.tylergimpel.gymtracker.ui.theme.AppCard
+import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
+import com.tylergimpel.gymtracker.ui.theme.ControlShape
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
+import com.tylergimpel.gymtracker.ui.theme.MainButton
+import com.tylergimpel.gymtracker.ui.theme.SectionLabel
+import com.tylergimpel.gymtracker.ui.theme.TextButton
+import com.tylergimpel.gymtracker.ui.theme.UppercaseText
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /**
- * A minimal routine editor: a name, the properties, and an ordered list of day names.
- *
- * Deliberately provisional. Generation, pinning, validation and revision belong to the routines
- * spec; this exists so that the cursor has a routine to point into and so the day structure can be
- * exercised by hand.
+ * The Routine tab (#146): one read-only page — the name, the muscle diagram with a plain line
+ * about what needs attention, every day and its lifts, setup's rows, and Build it again — and one
+ * Edit button that shows every control at once.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutineScreen(
     onBack: () -> Unit,
     onAddNewExercise: (Long) -> Unit,
     onStartSetup: () -> Unit = {},
+    onOpenMuscles: () -> Unit = {},
+    onOpenSetting: (RoutineSetting) -> Unit = {},
     viewModel: RoutineViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val routine = state.progress?.routine
     val defaultName = stringResource(R.string.routine_default_name)
+    val firstDay = stringResource(R.string.routine_first_day)
+
+    // An empty start opens straight into Edit, since there is nothing yet to read.
+    var editing by rememberSaveable(routine?.id) {
+        mutableStateOf(routine != null && routine.days.all { it.exercises.isEmpty() })
+    }
+    var sheet by remember { mutableStateOf<RoutineSheet?>(null) }
+    val snackbars = remember { SnackbarHostState() }
+
+    val builtAgain = stringResource(R.string.routine_built_again)
+    val undo = stringResource(R.string.routine_undo)
+    LaunchedEffect(state.builtAgain) {
+        if (!state.builtAgain) return@LaunchedEffect
+        viewModel.builtAgainSeen()
+        val result = snackbars.showSnackbar(builtAgain, actionLabel = undo, duration = SnackbarDuration.Long)
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoRegeneration()
+    }
 
     Scaffold(
         topBar = {
             AppTopBar(
                 title = stringResource(R.string.routine_title),
                 actions = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.routine_done)) }
+                    if (routine != null) EditButton(editing) { editing = !editing }
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbars) },
     ) { insets ->
         if (routine == null) {
             EmptyRoutine(
                 insets = insets,
                 onStartSetup = onStartSetup,
-                onCreate = { viewModel.createRoutine(defaultName) },
+                onCreate = { viewModel.createRoutine(defaultName, firstDay) },
                 // Built against the usual answers; the routine's settings change any of them after.
                 onRebuildFromLog = { viewModel.rebuildFromLog(SetupAnswers().toRoutineSetup()) },
             )
-            state.choosingRoutine?.let { choice ->
-                ChooseRoutine(
-                    choices = choice.routines,
-                    limit = choice.limit,
-                    onChoose = viewModel::choose,
-                    onCancel = viewModel::cancelRebuildChoice,
-                )
-            }
-            return@Scaffold
+        } else {
+            RoutinePage(
+                routine = routine,
+                state = state,
+                editing = editing,
+                insets = insets,
+                onOpenMuscles = onOpenMuscles,
+                onOpenSetting = onOpenSetting,
+                onRegenerate = viewModel::regenerate,
+                onSheet = { sheet = it },
+                onMove = viewModel::moveDay,
+                onPin = viewModel::setPinned,
+                onReplace = viewModel::startReplacing,
+                onRemoveLift = viewModel::removeExerciseFromDay,
+                onAdd = viewModel::startPicking,
+            )
         }
-
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
-            item {
-                RoutineProperties(routine, state.availableEquipment, state.experience, viewModel)
-            }
-            item { HorizontalDivider() }
-            item {
-                Text(
-                    text = stringResource(R.string.routine_days),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
-            // Beside the days, where the change was made, rather than as a notification somewhere
-            // else. A fact and nothing more: no button, because there is nothing to approve —
-            // the cycle has already started again by the time this is read.
-            state.revised?.let { revised ->
-                item {
-                    Text(
-                        text = stringResource(
-                            when (revised) {
-                                Revised.ADDED -> R.string.routine_revised_added
-                                Revised.REMOVED -> R.string.routine_revised_removed
-                                Revised.MOVED -> R.string.routine_revised_moved
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LocalGymColors.current.accentText,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-            }
-            items(routine.rotation, key = RoutineDay::id) { day ->
-                RoutineDayRow(
-                    day = day,
-                    position = day.orderIndex,
-                    isNext = state.progress?.cursor?.id == day.id,
-                    onRename = { viewModel.renameDay(day.id, it) },
-                    onMove = { viewModel.moveDay(day.id, it) },
-                    onRemove = { viewModel.removeDay(day.id) },
-                    onAddExercise = { viewModel.startPicking(day.id) },
-                    onRemoveExercise = { viewModel.removeExerciseFromDay(day.id, it) },
-                    onPin = { id, pinned -> viewModel.setPinned(day.id, id, pinned) },
-                )
-                HorizontalDivider()
-            }
-            item { AddDay(onAdd = viewModel::addDay) }
-            item {
-                Regenerate(
-                    canRegenerate = state.progress?.routine?.shape != null,
-                    canUndo = state.canUndo,
-                    onRegenerate = viewModel::regenerate,
-                    onUndo = viewModel::undoRegeneration,
-                )
-            }
-            item { WhatItTrains(state.progress?.routine) }
-            item { WhatIsBinding(state.progress?.routine, state.bank) }
-            item {
-                TextButton(
-                    onClick = viewModel::deleteRoutine,
-                    modifier = Modifier.padding(16.dp),
-                ) {
-                    Text(stringResource(R.string.routine_delete))
-                }
-            }
+        state.choosingRoutine?.let { choice ->
+            ChooseRoutine(choice.routines, choice.limit, viewModel::choose, viewModel::cancelRebuildChoice)
         }
     }
 
-    // An offer, in front of the lifter, with declining as easy as accepting. The routine is
-    // untouched until they answer, and untouched afterwards if they say no.
-    state.offeringRebuild?.let { offer ->
-        AlertDialog(
-            onDismissRequest = viewModel::declineRebuild,
-            text = {
-                Text(
-                    stringResource(
-                        when (offer) {
-                            RebuildOffer.EQUIPMENT -> R.string.routine_offer_equipment
-                            RebuildOffer.WHAT_IT_IS_FOR -> R.string.routine_offer_rebuild
-                        },
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::acceptRebuild) {
-                    Text(stringResource(R.string.routine_offer_accept))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::declineRebuild) {
-                    Text(stringResource(R.string.routine_offer_decline))
-                }
+    when (val open = sheet) {
+        null -> Unit
+        is RoutineSheet.Lift -> LiftSheet(
+            day = open.day,
+            planned = open.planned,
+            onDismiss = { sheet = null },
+            onReplace = { viewModel.startReplacing(open.day.id, open.planned.exercise) },
+            onKeep = { viewModel.setPinned(open.day.id, open.planned.exercise.id, !open.planned.pinned) },
+            onRemove = { viewModel.removeExerciseFromDay(open.day.id, open.planned.exercise.id) },
+        )
+        is RoutineSheet.Rename -> RenameSheet(
+            current = open.current,
+            onDismiss = { sheet = null },
+            onSave = { name ->
+                if (open.dayId == null) viewModel.renameRoutine(name) else viewModel.renameDay(open.dayId, name)
+                sheet = null
             },
         )
+        RoutineSheet.AddDay -> AddDaySheet(
+            onDismiss = { sheet = null },
+            onAdd = { name, kind ->
+                viewModel.addDay(name, kind)
+                sheet = null
+            },
+        )
+        is RoutineSheet.RemoveDay -> Sheet(onDismiss = { sheet = null }) {
+            SheetTitle(stringResource(R.string.routine_remove_day_title, open.day.name))
+            Text(stringResource(R.string.routine_remove_day_body), color = LocalGymColors.current.dim)
+            MainButton(
+                stringResource(R.string.routine_remove),
+                onClick = {
+                    viewModel.removeDay(open.day.id)
+                    sheet = null
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            AppOutlinedButton(stringResource(R.string.routine_keep_it), onClick = { sheet = null }, modifier = Modifier.fillMaxWidth())
+        }
+        RoutineSheet.Delete -> Sheet(onDismiss = { sheet = null }) {
+            SheetTitle(stringResource(R.string.routine_delete_title))
+            Text(stringResource(R.string.routine_delete_body), color = LocalGymColors.current.dim)
+            MainButton(
+                stringResource(R.string.routine_delete),
+                onClick = {
+                    viewModel.deleteRoutine()
+                    editing = false
+                    sheet = null
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            AppOutlinedButton(stringResource(R.string.routine_keep_it), onClick = { sheet = null }, modifier = Modifier.fillMaxWidth())
+        }
     }
 
-    // Over the routine rather than away from it: filling a day is part of building one, and
-    // being thrown at another screen to do it loses the lifter their place.
-    state.nothingToRebuild.takeIf { it }?.let {
+    // An offer, with declining as easy as accepting. The routine is untouched until they answer.
+    state.offeringRebuild?.let { offer ->
+        Sheet(onDismiss = viewModel::declineRebuild) {
+            SheetTitle(stringResource(R.string.routine_offer_title))
+            Text(
+                stringResource(
+                    when (offer) {
+                        RebuildOffer.EQUIPMENT -> R.string.routine_offer_equipment
+                        RebuildOffer.WHAT_IT_IS_FOR -> R.string.routine_offer_rebuild
+                        RebuildOffer.SPLIT -> R.string.routine_offer_split
+                    },
+                ),
+                color = LocalGymColors.current.dim,
+            )
+            MainButton(stringResource(R.string.routine_offer_accept), onClick = viewModel::acceptRebuild, modifier = Modifier.fillMaxWidth())
+            AppOutlinedButton(stringResource(R.string.routine_offer_decline), onClick = viewModel::declineRebuild, modifier = Modifier.fillMaxWidth())
+        }
+    }
+
+    if (state.nothingToRebuild) {
         AlertDialog(
             onDismissRequest = viewModel::dismissNothingToRebuild,
             text = { Text(stringResource(R.string.routine_rebuild_none)) },
             confirmButton = {
-                TextButton(onClick = viewModel::dismissNothingToRebuild) {
-                    Text(stringResource(R.string.routine_offer_decline))
-                }
+                TextButton(onClick = viewModel::dismissNothingToRebuild) { Text(stringResource(R.string.routine_offer_decline)) }
             },
         )
     }
 
     state.picking?.let { picking ->
-        RoutinePicker(
+        LiftPicker(
             picking = picking,
-            equipment = state.progress?.routine?.equipment.orEmpty(),
+            equipment = routine?.equipment.orEmpty(),
+            inDay = routine?.rotation?.firstOrNull { it.id == picking.dayId }?.exercises
+                ?.map { it.exercise.id }?.toSet().orEmpty(),
             addingDisliked = state.addingDisliked,
             onPick = viewModel::pick,
-            // Leaving for the bank's own form closes this, so coming back does not reopen a
-            // list taken before the exercise they went to write down existed.
+            // Leaving for the bank's own form closes this, so coming back does not reopen a list
+            // taken before the exercise they went to write down existed.
             onAddNew = {
                 viewModel.cancelPicking()
                 onAddNewExercise(picking.dayId)
@@ -240,161 +258,535 @@ fun RoutineScreen(
     }
 }
 
-/**
- * What the routine does, muscle by muscle.
- *
- * **Facts and never grades.** "This cycle trains chest 3x a cycle" is something a lifter can act
- * on; "your routine is unbalanced" is marking their homework. So this prints counts and says
- * nothing about whether they are the right ones — training chest three times and back once is a
- * decision somebody is allowed to make, and the app's only job is to make sure they made it
- * knowing what it was.
- *
- * Nothing here blocks a save, because there is nothing here to fail.
- */
-@Composable
-private fun WhatItTrains(routine: Routine?) {
-    val load = remember(routine) { routine?.whatItTrains().orEmpty() }
-    val target = routine?.let { weeklyVolumeTargetFor(it.goal) }
+/** What a sheet over the routine is showing. */
+private sealed interface RoutineSheet {
+    data class Lift(val day: RoutineDay, val planned: PlannedExercise) : RoutineSheet
+    data class Rename(val dayId: Long?, val current: String) : RoutineSheet
+    data object AddDay : RoutineSheet
+    data class RemoveDay(val day: RoutineDay) : RoutineSheet
+    data object Delete : RoutineSheet
+}
 
-    Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+@Composable
+private fun EditButton(editing: Boolean, onClick: () -> Unit) {
+    val colors = LocalGymColors.current
+    Surface(
+        onClick = onClick,
+        shape = ControlShape,
+        color = if (editing) colors.accent else colors.bg,
+        contentColor = if (editing) colors.onAccent else colors.text,
+        modifier = Modifier.height(44.dp).padding(end = 4.dp).testTag(ROUTINE_EDIT),
     ) {
-        Text(
-            text = stringResource(R.string.routine_what_it_trains),
-            style = MaterialTheme.typography.labelLarge,
-        )
-        if (load.isEmpty()) {
-            Text(
-                text = stringResource(R.string.routine_trains_nothing),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        // The band the goal aims at, said once rather than beside every muscle. A number to read
-        // the rows against, and still a fact: it is what the app is aiming for, not a mark out of
-        // ten for what they built.
-        target?.takeIf { load.isNotEmpty() }?.let {
-            Text(
-                text = stringResource(
-                    R.string.routine_muscle_target,
-                    it.start.asSetsText(),
-                    it.endInclusive.asSetsText(),
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        load.forEach { entry ->
-            Text(
-                text = stringResource(
-                    R.string.routine_muscle_load,
-                    entry.muscle,
-                    entry.sessions,
-                    entry.weeklySets.asSetsText(),
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        // The one thing worth saying beyond the counts, and it is still a count: work past the cap
-        // is work that is there and not doing anything.
-        load.filter { it.pastSessionCap }.forEach { entry ->
-            Text(
-                text = stringResource(
-                    R.string.routine_past_session_cap,
-                    entry.muscle,
-                    entry.mostInOneSession.asSetsText(),
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Box(Modifier.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+            UppercaseText(
+                stringResource(if (editing) R.string.setup_done else R.string.routine_edit),
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
             )
         }
     }
 }
 
-/**
- * What the routine cannot satisfy, and what would give.
- *
- * **Never a refusal.** Nothing on this screen stops a lifter saving or training what they built —
- * an impossible request is a conversation, so the app says what is binding, offers what could be
- * relaxed, and leaves the decision where it belongs.
- *
- * Silent when everything holds, like the rest of this screen.
- */
 @Composable
-private fun WhatIsBinding(routine: Routine?, bank: List<Exercise>) {
-    val findings = remember(routine, bank) {
-        routine?.let { bindingOn(it, bank = bank) }.orEmpty()
-    }
-    if (findings.isEmpty()) return
-
-    Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+private fun RoutinePage(
+    routine: Routine,
+    state: RoutineUiState,
+    editing: Boolean,
+    insets: PaddingValues,
+    onOpenMuscles: () -> Unit,
+    onOpenSetting: (RoutineSetting) -> Unit,
+    onRegenerate: () -> Unit,
+    onSheet: (RoutineSheet) -> Unit,
+    onMove: (Long, Int) -> Unit,
+    onPin: (Long, String, Boolean) -> Unit,
+    onReplace: (Long, Exercise) -> Unit,
+    onRemoveLift: (Long, String) -> Unit,
+    onAdd: (Long) -> Unit,
+) {
+    val colors = LocalGymColors.current
+    val findings = remember(routine, state.bank) { bindingOn(routine, bank = state.bank) }
+    val rotation = routine.rotation
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().testTag(ROUTINE_PAGE),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = insets.calculateTopPadding(),
+            bottom = insets.calculateBottomPadding() + 24.dp,
+        ),
     ) {
-        Text(
-            text = stringResource(R.string.routine_binding),
-            style = MaterialTheme.typography.labelLarge,
-        )
-        findings.forEach { finding ->
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        item {
+            Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    Modifier.let { if (editing) it.clickable { onSheet(RoutineSheet.Rename(null, routine.name)) } else it },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UppercaseText(routine.name, style = MaterialTheme.typography.headlineLarge.copy(color = colors.text))
+                    if (editing) {
+                        Icon(AppIcons.Edit, stringResource(R.string.routine_rename), tint = colors.dim, modifier = Modifier.padding(start = 6.dp).size(20.dp))
+                    }
+                }
                 Text(
-                    text = finding.said(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    stringResource(R.string.routine_meta, pluralStringResource(R.plurals.routine_days, rotation.size, rotation.size), routine.cadence),
+                    fontSize = 15.sp,
+                    color = colors.dim,
                 )
-                // What to relax, rather than what they did wrong. Every finding carries its own,
-                // because a constraint named without a way out is just a complaint.
-                finding.relax.forEach {
+            }
+        }
+        state.revised?.let { revised ->
+            item {
+                Text(
+                    stringResource(
+                        when (revised) {
+                            Revised.ADDED -> R.string.routine_revised_added
+                            Revised.REMOVED -> R.string.routine_revised_removed
+                            Revised.MOVED -> R.string.routine_revised_moved
+                        },
+                    ),
+                    fontSize = 15.sp,
+                    color = colors.text,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .background(colors.raised, ControlShape)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+        }
+        if (!editing) {
+            item {
+                Column(
+                    Modifier.fillMaxWidth().clickable(onClick = onOpenMuscles).padding(bottom = 8.dp).testTag(ROUTINE_MUSCLES),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    MuscleDiagram(shade = routineShade(routine), maxHeight = 150.dp)
+                    val line = findingLine(findings)
                     Text(
-                        text = stringResource(R.string.routine_relax, it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        (line ?: stringResource(R.string.routine_muscles)) + " ›",
+                        fontSize = 15.sp,
+                        color = if (line != null) colors.warn else colors.dim,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                }
+            }
+        }
+        rotation.forEachIndexed { index, day ->
+            item(key = "day-${day.id}") {
+                DayBlock(
+                    routine = routine,
+                    day = day,
+                    isNext = state.progress?.cursor?.id == day.id,
+                    first = index == 0,
+                    last = index == rotation.lastIndex,
+                    editing = editing,
+                    onSheet = onSheet,
+                    onMove = onMove,
+                    onPin = onPin,
+                    onReplace = onReplace,
+                    onRemoveLift = onRemoveLift,
+                    onAdd = onAdd,
+                )
+            }
+        }
+        if (editing) {
+            item {
+                DashedButton(stringResource(R.string.routine_add_day), Modifier.padding(top = 12.dp)) { onSheet(RoutineSheet.AddDay) }
+            }
+        }
+        item {
+            SectionLabel(stringResource(R.string.routine_setup), Modifier.padding(top = 24.dp, bottom = 10.dp))
+            SettingRows(routine, onOpenSetting)
+        }
+        if (routine.shape != null && !editing) {
+            item {
+                AppOutlinedButton(
+                    stringResource(R.string.routine_offer_accept),
+                    onClick = onRegenerate,
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp).testTag(ROUTINE_BUILD_AGAIN),
+                )
+            }
+        }
+        if (editing) {
+            item {
+                TextButton(onClick = { onSheet(RoutineSheet.Delete) }, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    UppercaseText(stringResource(R.string.routine_delete), style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp, color = colors.warn))
                 }
             }
         }
     }
 }
 
-/** One finding, in the lifter's terms rather than the model's. */
+/** A muscle lit fully once its weekly sets reach the goal's band, partly while any reach it. */
+internal fun routineShade(routine: Routine): (String) -> MuscleShade {
+    val weekly = routine.weeklyVolumeByMuscle()
+    val floor = weeklyVolumeTargetFor(routine.goal).start
+    return { muscle ->
+        val sets = weekly[muscle] ?: 0.0
+        when {
+            sets >= floor -> MuscleShade.FULL
+            sets > 0 -> MuscleShade.PARTIAL
+            else -> MuscleShade.NONE
+        }
+    }
+}
+
+/** What needs attention, in plain words: `Legs runs long · No lift for traps and glutes`. */
 @Composable
-private fun Binding.said(): String = when (this) {
-    is Binding.SessionTooLong -> stringResource(
-        R.string.routine_too_long,
-        day,
-        estimated.toMinutes().toInt(),
-        ceiling.toMinutes().toInt(),
-    )
+private fun findingLine(findings: List<Binding>): String? {
+    val long = findings.filterIsInstance<Binding.SessionTooLong>().map { it.day }
+    val none = findings.filterIsInstance<Binding.MuscleNotTrained>().map { it.muscle }
+    val parts = buildList {
+        if (long.isNotEmpty()) add(pluralStringResource(R.plurals.routine_runs_long, long.size, andList(long)))
+        if (none.isNotEmpty()) add(stringResource(R.string.routine_no_lift_for, andList(none)))
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
 
-    is Binding.VolumeOutsideBand -> stringResource(
-        R.string.routine_off_band,
-        muscle,
-        weeklySets.asSetsText(),
-        target.start.asSetsText(),
-        target.endInclusive.asSetsText(),
-    )
+@Composable
+internal fun andList(items: List<String>): String = when (items.size) {
+    0 -> ""
+    1 -> items.single()
+    else -> stringResource(R.string.and_list, items.dropLast(1).joinToString(", "), items.last())
+}
 
-    is Binding.OnlyDislikedLeft -> stringResource(R.string.routine_only_disliked, muscle)
+@Composable
+private fun DayBlock(
+    routine: Routine,
+    day: RoutineDay,
+    isNext: Boolean,
+    first: Boolean,
+    last: Boolean,
+    editing: Boolean,
+    onSheet: (RoutineSheet) -> Unit,
+    onMove: (Long, Int) -> Unit,
+    onPin: (Long, String, Boolean) -> Unit,
+    onReplace: (Long, Exercise) -> Unit,
+    onRemoveLift: (Long, String) -> Unit,
+    onAdd: (Long) -> Unit,
+) {
+    val colors = LocalGymColors.current
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = colors.line)
+        Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (editing) {
+                    Row(
+                        Modifier.weight(1f).clickable { onSheet(RoutineSheet.Rename(day.id, day.name)) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        UppercaseText(day.name, style = MaterialTheme.typography.headlineMedium.copy(color = colors.text))
+                        Icon(AppIcons.Edit, stringResource(R.string.routine_rename), tint = colors.dim, modifier = Modifier.padding(start = 6.dp).size(18.dp))
+                    }
+                    SmallIconButton(AppIcons.Up, stringResource(R.string.routine_move_earlier), enabled = !first) { onMove(day.id, -1) }
+                    SmallIconButton(AppIcons.Down, stringResource(R.string.routine_move_later), enabled = !last) { onMove(day.id, 1) }
+                    SmallIconButton(AppIcons.Trash, stringResource(R.string.routine_remove_day)) { onSheet(RoutineSheet.RemoveDay(day)) }
+                } else {
+                    UppercaseText(day.name, style = MaterialTheme.typography.headlineMedium.copy(color = colors.text), modifier = Modifier.weight(1f, fill = false))
+                    if (isNext) Tag(stringResource(R.string.routine_next_up))
+                }
+            }
+            DayMeta(routine, day)
+            if (day.kind == RoutineDayKind.CARDIO) {
+                Text(stringResource(R.string.routine_cardio_day), color = colors.dim)
+            } else {
+                day.exercises.forEach { planned ->
+                    LiftRow(
+                        planned = planned,
+                        editing = editing,
+                        onOpen = { onSheet(RoutineSheet.Lift(day, planned)) },
+                        onKeep = { onPin(day.id, planned.exercise.id, !planned.pinned) },
+                        onReplace = { onReplace(day.id, planned.exercise) },
+                        onRemove = { onRemoveLift(day.id, planned.exercise.id) },
+                    )
+                }
+                if (editing) {
+                    DashedButton(stringResource(R.string.routine_add_exercise)) { onAdd(day.id) }
+                } else if (day.exercises.isEmpty()) {
+                    Text(stringResource(R.string.routine_no_lifts), color = colors.dim)
+                }
+            }
+        }
+    }
+}
 
-    // Which of the two is true, because "never trained" is false about a muscle getting real
-    // secondary work — and the lifter deciding whether to care needs the honest one.
-    is Binding.MuscleNotTrained -> if (weeklySets == 0.0) {
-        stringResource(R.string.routine_not_trained, muscle)
-    } else {
-        stringResource(R.string.routine_only_secondary, muscle, weeklySets.asSetsText())
+/** `5 lifts · 18 sets · ~52 min`, the minutes in the warning colour past the ceiling's margin. */
+@Composable
+private fun DayMeta(routine: Routine, day: RoutineDay) {
+    val colors = LocalGymColors.current
+    if (day.kind == RoutineDayKind.CARDIO) return
+    val minutes = routine.estimatedLengthOf(day).toMinutes()
+    val long = minutes > routine.sessionMinutes * 1.1
+    val sets = day.exercises.sumOf { it.sets ?: 0 }
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(pluralStringResource(R.plurals.routine_lifts, day.exercises.size, day.exercises.size), fontSize = 15.sp, color = colors.dim)
+        Text(pluralStringResource(R.plurals.routine_sets, sets, sets), fontSize = 15.sp, color = colors.dim)
+        if (day.exercises.isNotEmpty()) {
+            Text(stringResource(R.string.today_minutes, minutes), fontSize = 15.sp, color = if (long) colors.warn else colors.dim)
+        }
     }
 }
 
 /**
- * A fractional set count as a lifter would write it.
- *
- * Halves exist because indirect work counts at a half (ADR 0005), and "7.5" is the honest way to
- * print one. A whole number keeps no decimal point, because "8.0 sets" reads like a measurement.
+ * One lift: its equipment, its plain name, a pin if it is kept, and how many sets. In Edit, Keep,
+ * Replace and Remove beside it instead.
  */
-private fun Double.asSetsText(): String =
-    if (this % 1.0 == 0.0) toInt().toString() else "%.1f".format(this)
+@Composable
+private fun LiftRow(
+    planned: PlannedExercise,
+    editing: Boolean,
+    onOpen: () -> Unit,
+    onKeep: () -> Unit,
+    onReplace: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val colors = LocalGymColors.current
+    val exercise = planned.exercise
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = if (editing) 60.dp else 48.dp)
+            .let { if (!editing) it.clickable(onClick = onOpen) else it },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(EquipmentIcons.iconFor(exercise.equipment), null, tint = colors.dim, modifier = Modifier.size(24.dp))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(exercise.name, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = colors.text, modifier = Modifier.weight(1f, fill = false))
+            if (planned.pinned) {
+                Icon(AppIcons.Pin, stringResource(R.string.routine_kept), tint = colors.accentText, modifier = Modifier.padding(start = 6.dp).size(16.dp))
+            }
+        }
+        if (editing) {
+            SmallIconButton(AppIcons.Pin, stringResource(R.string.routine_keep), on = planned.pinned, onClick = onKeep)
+            SmallIconButton(AppIcons.Swap, stringResource(R.string.routine_replace), onClick = onReplace)
+            SmallIconButton(AppIcons.Close, stringResource(R.string.routine_remove), onClick = onRemove)
+        } else {
+            planned.sets?.let {
+                Text("$it×", style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), color = colors.dim)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmallIconButton(icon: ImageVector, description: String, enabled: Boolean = true, on: Boolean = false, onClick: () -> Unit) {
+    val colors = LocalGymColors.current
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = ControlShape,
+        color = if (on) colors.accent else colors.raised,
+        modifier = Modifier.size(44.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                description,
+                modifier = Modifier.size(22.dp),
+                tint = when {
+                    on -> colors.onAccent
+                    enabled -> colors.dim
+                    else -> colors.line
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun Tag(text: String) {
+    val colors = LocalGymColors.current
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+        color = colors.onAccent,
+        modifier = Modifier.background(colors.accent, ControlShape).padding(horizontal = 6.dp, vertical = 4.dp),
+    )
+}
+
+@Composable
+internal fun DashedButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val colors = LocalGymColors.current
+    Surface(
+        onClick = onClick,
+        shape = ControlShape,
+        color = colors.bg,
+        contentColor = colors.dim,
+        border = BorderStroke(1.dp, colors.line),
+        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            UppercaseText(text, style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp))
+        }
+    }
+}
+
+/** The routine's settings, as setup's summary rows: each opens its question's page. */
+enum class RoutineSetting { GOAL, REPS, DAYS, SPLIT, CARDIO, EQUIPMENT, SESSION_LENGTH }
+
+@Composable
+private fun SettingRows(routine: Routine, onOpen: (RoutineSetting) -> Unit) {
+    val answers = routine.asSetupAnswers()
+    AppCard(Modifier.fillMaxWidth()) {
+        SettingRow(R.string.setup_short_goal, stringResource(routine.goal.setupLabel)) { onOpen(RoutineSetting.GOAL) }
+        SettingRow(R.string.setup_short_reps, stringResource(routine.repPreference.setupLabel)) { onOpen(RoutineSetting.REPS) }
+        SettingRow(R.string.setup_short_days, stringResource(R.string.setup_days_value, routine.cadence)) { onOpen(RoutineSetting.DAYS) }
+        SettingRow(R.string.setup_short_split, routine.shape?.let { shapeName(it) } ?: stringResource(R.string.routine_by_hand)) {
+            onOpen(RoutineSetting.SPLIT)
+        }
+        SettingRow(R.string.setup_short_cardio, stringResource(routine.cardio.setupLabel)) { onOpen(RoutineSetting.CARDIO) }
+        SettingRow(R.string.setup_short_equipment, equipmentSummary(answers)) { onOpen(RoutineSetting.EQUIPMENT) }
+        SettingRow(R.string.routine_session_length, stringResource(R.string.workout_minutes_short, routine.sessionMinutes), last = true) {
+            onOpen(RoutineSetting.SESSION_LENGTH)
+        }
+    }
+}
+
+@Composable
+private fun SettingRow(label: Int, value: String, last: Boolean = false, onClick: () -> Unit) {
+    val colors = LocalGymColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            SectionLabel(stringResource(label), Modifier.padding(bottom = 6.dp))
+            UppercaseText(value, style = MaterialTheme.typography.headlineSmall.copy(color = colors.text))
+        }
+        Icon(AppIcons.Chevron, null, tint = colors.dim)
+    }
+    if (!last) HorizontalDivider(color = colors.line)
+}
+
+/** A routine's settings read as setup's answers, so its pages can show them. */
+internal fun Routine.asSetupAnswers(): SetupAnswers = SetupAnswers(
+    goal = goal,
+    repPreference = repPreference,
+    cadence = cadence,
+    shapeId = shape?.id?.removeSuffix("-cardio"),
+    cardio = cardio,
+    // Nothing narrowed is a full gym, as setup builds it.
+    equipment = if (equipment.isEmpty()) {
+        (SETUP_LIFTING_EQUIPMENT + SETUP_CARDIO_EQUIPMENT).toSet()
+    } else {
+        equipment - SetupAnswers.BODYWEIGHT
+    },
+)
+
+/** The lift's own sheet: its equipment, sets and muscles, and Replace, Keep and Remove. */
+@Composable
+private fun LiftSheet(
+    day: RoutineDay,
+    planned: PlannedExercise,
+    onDismiss: () -> Unit,
+    onReplace: () -> Unit,
+    onKeep: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val colors = LocalGymColors.current
+    val exercise = planned.exercise
+    fun then(action: () -> Unit): () -> Unit = {
+        onDismiss()
+        action()
+    }
+    Sheet(onDismiss = onDismiss) {
+        SheetTitle(exercise.name)
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(EquipmentIcons.iconFor(exercise.equipment), null, tint = colors.dim, modifier = Modifier.size(22.dp))
+            Text(stringResource(EquipmentIcons.pluralFor(exercise.equipment)), color = colors.dim, fontSize = 15.sp)
+            planned.sets?.let { Text(pluralStringResource(R.plurals.routine_sets, it, it), color = colors.dim, fontSize = 15.sp) }
+        }
+        MuscleDiagram(shade = shadeForExercise(exercise.primaryMuscles, exercise.secondaryMuscles), maxHeight = 150.dp)
+        Text(
+            exercise.primaryMuscles.joinToString(", ") +
+                if (exercise.secondaryMuscles.isNotEmpty()) {
+                    " · " + stringResource(R.string.routine_also, exercise.secondaryMuscles.joinToString(", "))
+                } else {
+                    ""
+                },
+            fontSize = 15.sp,
+            color = colors.dim,
+        )
+        SheetAction(AppIcons.Swap, stringResource(R.string.routine_replace), onClick = then(onReplace))
+        SheetAction(
+            AppIcons.Pin,
+            stringResource(if (planned.pinned) R.string.routine_kept else R.string.routine_keep),
+            sub = stringResource(R.string.routine_keep_sub),
+            on = planned.pinned,
+            onClick = then(onKeep),
+        )
+        SheetAction(AppIcons.Close, stringResource(R.string.routine_remove), danger = true, onClick = then(onRemove))
+        Text(day.name, fontSize = 13.sp, color = colors.dim)
+    }
+}
+
+@Composable
+private fun SheetAction(icon: ImageVector, text: String, sub: String? = null, on: Boolean = false, danger: Boolean = false, onClick: () -> Unit) {
+    val colors = LocalGymColors.current
+    Surface(
+        onClick = onClick,
+        shape = ControlShape,
+        color = if (on) colors.accent else colors.raised,
+        contentColor = when {
+            on -> colors.onAccent
+            danger -> colors.warn
+            else -> colors.text
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.heightIn(min = 64.dp).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(icon, null)
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+            sub?.let { Text(it, fontSize = 14.sp) }
+        }
+    }
+}
+
+@Composable
+private fun RenameSheet(current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var name by rememberSaveable { mutableStateOf(current) }
+    Sheet(onDismiss = onDismiss) {
+        SheetTitle(stringResource(R.string.routine_rename))
+        OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        MainButton(stringResource(R.string.session_save), onClick = { if (name.isNotBlank()) onSave(name.trim()) }, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun AddDaySheet(onDismiss: () -> Unit, onAdd: (String, RoutineDayKind) -> Unit) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var kind by rememberSaveable { mutableStateOf(RoutineDayKind.LIFTING) }
+    Sheet(onDismiss = onDismiss) {
+        SheetTitle(stringResource(R.string.routine_add_day_title))
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            placeholder = { Text(stringResource(R.string.routine_add_day_hint)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Tile(selected = kind == RoutineDayKind.LIFTING, onClick = { kind = RoutineDayKind.LIFTING }, modifier = Modifier.weight(1f).heightIn(min = 90.dp)) {
+                Icon(EquipmentIcons.iconFor("barbell"), null, modifier = Modifier.size(36.dp))
+                UppercaseText(stringResource(R.string.routine_lifting), style = MaterialTheme.typography.titleLarge)
+            }
+            Tile(selected = kind == RoutineDayKind.CARDIO, onClick = { kind = RoutineDayKind.CARDIO }, modifier = Modifier.weight(1f).heightIn(min = 90.dp)) {
+                Icon(EquipmentIcons.iconFor("treadmill"), null, modifier = Modifier.size(36.dp))
+                UppercaseText(stringResource(R.string.setup_cardio_group), style = MaterialTheme.typography.titleLarge)
+            }
+        }
+        Text(stringResource(R.string.routine_cycle_restarts), fontSize = 15.sp, color = LocalGymColors.current.dim)
+        MainButton(
+            stringResource(R.string.routine_add_day_button),
+            onClick = { if (name.isNotBlank()) onAdd(name.trim(), kind) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
 
 /**
  * No routine yet: setup, building one by hand, or bringing back what the log shows was trained
@@ -411,6 +803,7 @@ private fun EmptyRoutine(
         modifier = Modifier
             .fillMaxSize()
             .padding(insets)
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -425,174 +818,6 @@ private fun EmptyRoutine(
     }
 }
 
-/** The conflict table, read against what setup will build with. */
-@Composable
-private fun Conflicts(setup: RoutineSetup, experience: Experience) {
-    conflictsFor(
-        goal = setup.goal,
-        preference = setup.repPreference,
-        experience = experience,
-        equipment = setup.equipment,
-    ).forEach {
-        Text(
-            text = it.explanation,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/**
- * The routine's properties.
- *
- * Editable without touching the day structure, which is why they live in their own block: changing
- * a goal or the equipment at a gym is not a revision of the rotation and ends no cycle.
- */
-@Composable
-private fun RoutineProperties(
-    routine: Routine,
-    availableEquipment: List<String>,
-    /** How much training the lifter has behind them, which one conflict rule reads. */
-    experience: Experience,
-    viewModel: RoutineViewModel,
-) {
-    var name by rememberSaveable(routine.id) { mutableStateOf(routine.name) }
-    var cadence by rememberSaveable(routine.id) { mutableStateOf(routine.cadence.toString()) }
-
-    fun save(
-        goal: RoutineGoal = routine.goal,
-        repPreference: RepPreference = routine.repPreference,
-        equipment: Set<String> = routine.equipment,
-        cardio: CardioPlacement = routine.cardio,
-    ) = viewModel.editProperties(
-        name = name.ifBlank { routine.name },
-        goal = goal,
-        cadence = cadence.toIntOrNull()?.coerceAtLeast(1) ?: routine.cadence,
-        equipment = equipment,
-        repPreference = repPreference,
-        cardio = cardio,
-    )
-
-    Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it; save() },
-            label = { Text(stringResource(R.string.routine_name)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = cadence,
-            onValueChange = { cadence = it; save() },
-            label = { Text(stringResource(R.string.routine_cadence)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        ChoiceRow(
-            label = stringResource(R.string.routine_goal),
-            options = RoutineGoal.entries.map { it to it.name.lowercase() },
-            selected = routine.goal,
-            onSelect = { save(goal = it) },
-        )
-        ChoiceRow(
-            label = stringResource(R.string.routine_rep_preference),
-            options = RepPreference.entries.map { it to it.name.lowercase() },
-            selected = routine.repPreference,
-            onSelect = { save(repPreference = it) },
-        )
-
-        // Said here, at the moment the two are chosen, because this is where the lifter can do
-        // something about it. An override nobody is told about produces training that will not
-        // deliver the goal, and they do not find out for three months.
-        //
-        // The whole table, so they meet every one of these in one place rather than finding one
-        // here and another on the routine below.
-        conflictsFor(
-            goal = routine.goal,
-            preference = routine.repPreference,
-            experience = experience,
-            equipment = routine.equipment,
-        ).forEach {
-            Text(
-                text = it.explanation,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        // Whether they do any, and where it goes. A day of its own takes a position in the
-        // rotation; after lifting takes none, because the lifting session still happened.
-        ChoiceRow(
-            label = stringResource(R.string.routine_cardio),
-            options = listOf(
-                CardioPlacement.NONE to stringResource(R.string.cardio_none),
-                CardioPlacement.OWN_DAY to stringResource(R.string.cardio_own_day),
-                CardioPlacement.AFTER_LIFTING to stringResource(R.string.cardio_after_lifting),
-            ),
-            selected = routine.cardio,
-            onSelect = { save(cardio = it) },
-        )
-
-        Text(stringResource(R.string.routine_equipment), style = MaterialTheme.typography.labelLarge)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            availableEquipment.forEach { item ->
-                val owned = item in routine.equipment
-                FilterChip(
-                    selected = owned,
-                    onClick = {
-                        save(
-                            equipment = if (owned) {
-                                routine.equipment - item
-                            } else {
-                                routine.equipment + item
-                            },
-                        )
-                    },
-                    label = { Text(item) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun <T> ChoiceRow(
-    label: String,
-    options: List<Pair<T, String>>,
-    selected: T,
-    onSelect: (T) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { (value, text) ->
-                FilterChip(
-                    selected = value == selected,
-                    onClick = { onSelect(value) },
-                    label = { Text(text) },
-                )
-            }
-        }
-    }
-}
-
-/**
- * Which past routine to bring back, where the log holds more than one.
- *
- * Each is named as the sessions named it, with when it was last trained — which is how somebody
- * tells "the routine I ran last spring" from another they also called "My routine". Cancelling
- * brings nothing back and touches nothing.
- */
 @Composable
 private fun ChooseRoutine(
     choices: List<RecoveredRoutine>,
@@ -637,227 +862,8 @@ private fun ChooseRoutine(
     )
 }
 
-@Composable
-private fun RoutineDayRow(
-    day: RoutineDay,
-    position: Int,
-    isNext: Boolean,
-    onRename: (String) -> Unit,
-    onMove: (Int) -> Unit,
-    onRemove: () -> Unit,
-    onAddExercise: () -> Unit,
-    onPin: (String, Boolean) -> Unit,
-    onRemoveExercise: (String) -> Unit,
-) {
-    var name by rememberSaveable(day.id) { mutableStateOf(day.name) }
-
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = position.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it; onRename(it) },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        // A cardio day is said out loud, because an empty one looks like an unfinished lifting
-        // day otherwise — and because what it does to the volume arithmetic is worth knowing.
-        if (day.kind == RoutineDayKind.CARDIO) {
-            Text(
-                text = stringResource(R.string.routine_cardio_day_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (isNext) {
-                Text(
-                    text = stringResource(R.string.routine_next_up),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = LocalGymColors.current.accentText,
-                    modifier = Modifier.padding(end = 8.dp),
-                )
-            }
-            TextButton(onClick = { onMove(-1) }) { Text(stringResource(R.string.routine_move_up)) }
-            TextButton(onClick = { onMove(1) }) { Text(stringResource(R.string.routine_move_down)) }
-            TextButton(onClick = onRemove) { Text(stringResource(R.string.routine_remove)) }
-        }
-
-        // What the day holds, which is what a session started from it will copy. Editing this is
-        // not a revision: the rotation is unchanged, so the cycle carries on.
-        if (day.exercises.isEmpty()) {
-            Text(
-                text = stringResource(R.string.routine_day_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        day.exercises.forEach { planned ->
-            val exercise = planned.exercise
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // What to do and how much of it, which is what a day says. The count is the
-                // engine's and arrives whether the exercise was generated or added by hand.
-                Text(
-                    text = planned.sets
-                        ?.let { stringResource(R.string.routine_exercise_sets, exercise.name, it) }
-                        ?: exercise.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Row {
-                    // A pin is about the shape of the routine and nothing else. The copy stays
-                    // away from anything that sounds like history being at stake, because it
-                    // never is: history follows the exercise whatever a routine does.
-                    FilterChip(
-                        selected = planned.pinned,
-                        onClick = { onPin(exercise.id, !planned.pinned) },
-                        label = {
-                            Text(
-                                stringResource(
-                                    if (planned.pinned) {
-                                        R.string.routine_pinned
-                                    } else {
-                                        R.string.routine_pin
-                                    },
-                                ),
-                            )
-                        },
-                    )
-                    TextButton(onClick = { onRemoveExercise(exercise.id) }) {
-                        Text(stringResource(R.string.routine_remove_exercise))
-                    }
-                }
-            }
-        }
-        TextButton(onClick = onAddExercise) {
-            Text(stringResource(R.string.routine_add_exercise))
-        }
-    }
-}
-
-/**
- * The one picker, opened to fill a routine day.
- *
- * The same component a **Swap** opens, with nothing ranked in front of it: a day being built has
- * no exercise to be "instead of", so the lifter starts from their own gym and types.
- *
- * A **Dislike** stops the app suggesting something. It was never a promise to argue with somebody
- * who asks for one by name, so picking a banned exercise asks once and then adds it — the routine
- * is theirs.
- */
-@Composable
-private fun RoutinePicker(
-    picking: PickingFor,
-    equipment: Set<String>,
-    addingDisliked: Exercise?,
-    onPick: (Exercise) -> Unit,
-    onAddNew: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    ExercisePicker(
-        title = stringResource(R.string.routine_pick_exercise, picking.dayName),
-        bank = picking.bank,
-        equipment = equipment,
-        onPick = onPick,
-        onAddNew = onAddNew,
-        onCancel = onCancel,
-        note = addingDisliked?.let { stringResource(R.string.picker_disliked, it.name) },
-    )
-}
-
-/**
- * Asking for a different routine, and taking it back.
- *
- * **Variety is asked for and never inflicted.** Routines do not self-rotate exercises across
- * cycles, so this button is the only thing in the app that changes what a generated routine
- * holds without the lifter choosing each exercise themselves.
- *
- * Undo is one step and lives until the next session is logged, which is exactly as long as the
- * case it exists for: "I regenerated and I hate it" surfaces in seconds.
- */
-@Composable
-private fun Regenerate(
-    canRegenerate: Boolean,
-    canUndo: Boolean,
-    onRegenerate: () -> Unit,
-    onUndo: () -> Unit,
-) {
-    if (!canRegenerate && !canUndo) return
-
-    Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (canRegenerate) {
-                TextButton(onClick = onRegenerate) {
-                    Text(stringResource(R.string.routine_regenerate))
-                }
-            }
-            if (canUndo) {
-                TextButton(onClick = onUndo) { Text(stringResource(R.string.routine_undo)) }
-            }
-        }
-        Text(
-            text = stringResource(R.string.routine_pin_explainer),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun AddDay(onAdd: (String, RoutineDayKind) -> Unit) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var isCardio by rememberSaveable { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(stringResource(R.string.routine_new_day)) },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            AppButton(
-                text = stringResource(R.string.routine_add),
-                onClick = {
-                    onAdd(
-                        name.trim(),
-                        if (isCardio) RoutineDayKind.CARDIO else RoutineDayKind.LIFTING,
-                    )
-                    name = ""
-                    isCardio = false
-                },
-                enabled = name.isNotBlank(),
-            )
-        }
-        // Said when the day is made rather than afterwards: what a day is for decides how it is
-        // counted, and a cardio day added as a lifting one is wrong from its first cycle.
-        FilterChip(
-            selected = isCardio,
-            onClick = { isCardio = !isCardio },
-            label = { Text(stringResource(R.string.routine_day_is_cardio)) },
-        )
-    }
-}
+/** Handles for the tests. */
+const val ROUTINE_EDIT = "routine-edit"
+const val ROUTINE_PAGE = "routine-page"
+const val ROUTINE_MUSCLES = "routine-muscles"
+const val ROUTINE_BUILD_AGAIN = "routine-build-again"

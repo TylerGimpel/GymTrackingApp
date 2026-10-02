@@ -208,13 +208,14 @@ fun SetupScreen(
             }
         }
 
+        val routineName = shapeName(answers.shape)
         HorizontalDivider(color = colors.line)
         Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp)) {
             when {
                 reviewing -> MainButton(
                     stringResource(R.string.setup_build),
                     onClick = {
-                        viewModel.buildFromSetup(answers)
+                        viewModel.buildFromSetup(answers, routineName)
                         onBuilt()
                     },
                     modifier = Modifier.fillMaxWidth().testTag(SETUP_BUILD),

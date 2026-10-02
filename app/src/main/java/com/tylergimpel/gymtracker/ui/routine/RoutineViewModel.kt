@@ -34,6 +34,8 @@ data class PickingFor(
     val dayId: Long,
     val dayName: String,
     val bank: List<Exercise>,
+    /** The exercise being replaced, or null when adding one. */
+    val replacing: Exercise? = null,
 )
 
 /**
@@ -107,6 +109,9 @@ enum class RebuildOffer {
 
     /** What the gym has, which changes when somebody joins a new one and nothing else. */
     EQUIPMENT,
+
+    /** A different split, which only means anything once the days are laid out from it. */
+    SPLIT,
 }
 
 data class RoutineUiState(
@@ -165,6 +170,10 @@ data class RoutineUiState(
      * themselves is theirs.
      */
     val addingDisliked: Exercise? = null,
+    /** The split picked in the routine's settings, waiting on Build it again. */
+    val pendingShape: SplitShape? = null,
+    /** Set once a Build it again has landed, until the screen has said so. */
+    val builtAgain: Boolean = false,
 ) {
     /**
      * What to say about the last revision, for as long as it is still true.
@@ -226,9 +235,33 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), RoutineUiState())
 
-    fun createRoutine(name: String) {
-        viewModelScope.launch { repository.createRoutine(name = name) }
+    /** An empty start, built by hand: a named routine with one empty day to fill (#146). */
+    fun createRoutine(name: String, firstDay: String? = null) {
+        viewModelScope.launch {
+            val id = repository.createRoutine(name = name)
+            if (firstDay != null) repository.addDay(id, firstDay)
+        }
     }
+
+    /** Not a revision and not a reason to build again: the name changes nothing about training. */
+    fun renameRoutine(name: String) {
+        val routine = state.value.progress?.routine ?: return
+        viewModelScope.launch {
+            repository.editProperties(name, routine.goal, routine.cadence, routine.equipment, routine.repPreference, routine.cardio)
+        }
+    }
+
+    fun setSessionMinutes(minutes: Int) {
+        viewModelScope.launch { repository.setSessionMinutes(minutes) }
+    }
+
+    /** A different split was picked: asked about rather than done, like any other rebuild. */
+    fun offerSplit(shape: SplitShape) {
+        if (shape.id == state.value.progress?.routine?.shape?.id) return
+        held.update { it.copy(pendingShape = shape, offeringRebuild = RebuildOffer.SPLIT) }
+    }
+
+    fun builtAgainSeen() = held.update { it.copy(builtAgain = false) }
 
     /**
      * Lays out a routine from a shape the lifter recognised.
@@ -260,13 +293,13 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
      * Builds the routine setup asked for (#144): kilos or pounds is the lifter's own **Preferred
      * unit**, written where the setting lives, and the rest is the routine's.
      */
-    fun buildFromSetup(answers: SetupAnswers) {
+    fun buildFromSetup(answers: SetupAnswers, name: String) {
         viewModelScope.launch {
             database.profileRepository().setDisplayUnit(answers.unit)
             val shape = answers.shapeToBuild()
             val setup = answers.toRoutineSetup()
             repository.createFromShape(
-                name = shape.description,
+                name = name,
                 shape = shape,
                 goal = setup.goal,
                 cadence = setup.cadence,
@@ -307,8 +340,32 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     /** Takes the offer, which is the only way a property change reaches the days. */
     fun acceptRebuild() {
-        held.update { it.copy(offeringRebuild = null) }
-        regenerate()
+        val shape = state.value.pendingShape
+        held.update { it.copy(offeringRebuild = null, pendingShape = null) }
+        if (shape != null) rebuildAs(shape) else regenerate()
+    }
+
+    /**
+     * Lays the routine out again from a different split: new days, so a revision, and nothing
+     * kept, because the days the kept lifts were in are gone. Everything else about it stays.
+     */
+    private fun rebuildAs(shape: SplitShape) {
+        val routine = state.value.progress?.routine ?: return
+        held.update { it.copy(revision = null) }
+        viewModelScope.launch {
+            repository.deleteRoutine()
+            repository.createFromShape(
+                name = routine.name,
+                shape = if (routine.cardio == CardioPlacement.OWN_DAY) shape.withCardioDay() else shape,
+                goal = routine.goal,
+                cadence = routine.cadence,
+                equipment = routine.equipment,
+                repPreference = routine.repPreference,
+                cardio = routine.cardio,
+                bank = exercises.observeBank().first(),
+            )
+            repository.setSessionMinutes(routine.sessionMinutes)
+        }
     }
 
     /**
@@ -316,7 +373,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
      *
      * Nothing to undo, because nothing was done: the offer never touched the days.
      */
-    fun declineRebuild() = held.update { it.copy(offeringRebuild = null) }
+    fun declineRebuild() = held.update { it.copy(offeringRebuild = null, pendingShape = null) }
 
     fun dismissNothingToRebuild() = held.update { it.copy(nothingToRebuild = false) }
 
@@ -344,6 +401,15 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     fun cancelPicking() = held.update { it.copy(picking = null, addingDisliked = null) }
 
+    /** Opens the picker to replace [exercise] in [dayId], same muscle first. */
+    fun startReplacing(dayId: Long, exercise: Exercise) {
+        val day = state.value.progress?.routine?.rotation?.firstOrNull { it.id == dayId } ?: return
+        viewModelScope.launch {
+            val bank = exercises.observeBank().first()
+            held.update { it.copy(picking = PickingFor(dayId, day.name, bank, replacing = exercise)) }
+        }
+    }
+
     /** Keeps one of a day's exercises through the next regeneration, or stops keeping it. */
     fun setPinned(dayId: Long, exerciseId: String, pinned: Boolean) {
         viewModelScope.launch { repository.setPinned(dayId, exerciseId, pinned) }
@@ -361,6 +427,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         val shape = state.value.progress?.routine?.shape ?: return
         viewModelScope.launch {
             repository.regenerate(shape, exercises.observeBank().first())
+            held.update { it.copy(builtAgain = true) }
         }
     }
 
@@ -445,7 +512,12 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             held.update { it.copy(addingDisliked = exercise) }
             return
         }
-        addExerciseToDay(picking.dayId, exercise)
+        val replacing = picking.replacing
+        if (replacing != null) {
+            viewModelScope.launch { repository.replaceExerciseInDay(picking.dayId, replacing.id, exercise.id) }
+        } else {
+            addExerciseToDay(picking.dayId, exercise)
+        }
         held.update { it.copy(picking = null, addingDisliked = null) }
     }
 

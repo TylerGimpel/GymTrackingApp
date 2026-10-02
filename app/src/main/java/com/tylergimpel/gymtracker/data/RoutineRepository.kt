@@ -380,6 +380,12 @@ class RoutineRepository(
         )
     }
 
+    /** How long a session can run. Not a revision: the rotation is untouched. */
+    suspend fun setSessionMinutes(minutes: Int) {
+        val existing = routines.routine() ?: return
+        routines.update(existing.copy(sessionMinutes = minutes))
+    }
+
     /** Adds a day to the end of the rotation. A revision, so the current cycle ends. */
     suspend fun addDay(
         routineId: Long,
@@ -459,6 +465,18 @@ class RoutineRepository(
                 orderIndex = routines.highestDayExerciseOrder(dayId) + 1,
             ),
         )
+    }
+
+    /**
+     * Puts [instead] where [exerciseId] was in [dayId], asking for as many sets (#146).
+     *
+     * **Replace** is the permanent change, where **Swap** is tonight's only. The new one is not
+     * kept: keeping was a statement about the exercise that left. Not a revision either.
+     */
+    suspend fun replaceExerciseInDay(dayId: Long, exerciseId: String, instead: String) = database.withTransaction {
+        val old = routines.dayExercises(dayId).firstOrNull { it.exerciseId == exerciseId } ?: return@withTransaction
+        routines.deleteDayExercise(dayId, exerciseId)
+        routines.insert(old.copy(id = 0, exerciseId = instead, pinned = false))
     }
 
     /** Takes [exerciseId] out of [dayId]'s list. Not a revision, for the same reason. */
