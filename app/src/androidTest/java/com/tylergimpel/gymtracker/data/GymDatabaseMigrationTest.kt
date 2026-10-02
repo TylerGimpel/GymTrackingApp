@@ -948,6 +948,7 @@ class GymDatabaseMigrationTest {
         const val THIRTIETH_DATABASE = "migration-thirtieth.db"
         const val THIRTY_FIRST_DATABASE = "migration-thirty-first.db"
         const val THIRTY_SECOND_DATABASE = "migration-thirty-second.db"
+        const val THIRTY_THIRD_DATABASE = "migration-thirty-third.db"
     }
 
     /**
@@ -1354,6 +1355,27 @@ class GymDatabaseMigrationTest {
                 it.moveToFirst()
                 assertEquals(120, it.getInt(0))
                 assertTrue("nobody upgrading has reset an estimate", it.isNull(1) && it.isNull(2))
+            }
+        }
+    }
+
+    /**
+     * Version 34 gives a routine its own session length (#146). A routine already there keeps
+     * the ninety minutes it was always checked against.
+     */
+    @Test
+    fun migratesToRoutinesWithASessionLength() {
+        helper.createDatabase(THIRTY_THIRD_DATABASE, 33).use { version33 ->
+            version33.execSQL(
+                "INSERT INTO routine (id, name, goal, cadence, equipment, rep_preference, cardio) " +
+                    "VALUES (1, 'Push / Pull', 'HYPERTROPHY', 3, '', 'MODERATE', 'NONE')",
+            )
+        }
+
+        helper.runMigrationsAndValidate(THIRTY_THIRD_DATABASE, 34, true, MIGRATION_33_34).use { db ->
+            db.query("SELECT session_minutes FROM routine WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals(90, it.getInt(0))
             }
         }
     }

@@ -180,8 +180,15 @@ data class Routine(
      * for a muscle has four answers and no counter invents a fifth.
      */
     val seed: Int? = null,
+    /** How long a session can run, in minutes: the time ceiling each day is checked against (#146). */
+    val sessionMinutes: Int = USUAL_SESSION_MINUTES,
     val days: List<RoutineDay>,
 ) {
+    companion object {
+        /** Ninety, what the ceiling was before the lifter could set it. */
+        const val USUAL_SESSION_MINUTES = 90
+    }
+
     /** The days in rotation order, whatever order they arrived in. */
     val rotation: List<RoutineDay> get() = days.sortedBy(RoutineDay::orderIndex)
 

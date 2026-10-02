@@ -49,6 +49,9 @@ import com.tylergimpel.gymtracker.ui.theme.GymTrackerTheme
 import com.tylergimpel.gymtracker.ui.today.TodayScreen
 import com.tylergimpel.gymtracker.ui.today.TodayViewModel
 import com.tylergimpel.gymtracker.ui.routine.SetupScreen
+import com.tylergimpel.gymtracker.ui.routine.RoutineMusclesScreen
+import com.tylergimpel.gymtracker.ui.routine.RoutineSetting
+import com.tylergimpel.gymtracker.ui.routine.RoutineSettingScreen
 import com.tylergimpel.gymtracker.ui.routine.WelcomeScreen
 import java.time.LocalDate
 
@@ -83,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Destination {
     TODAY, CALENDAR, ROUTINE, MORE,
-    WORKOUT, SETUP, EXERCISE_PICKER, EXERCISES, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED, EXERCISE_HISTORY, DAY,
+    WORKOUT, SETUP, ROUTINE_MUSCLES, ROUTINE_SETTING, EXERCISE_PICKER, EXERCISES, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED, EXERCISE_HISTORY, DAY,
 }
 
 /** The destination each tab opens on. */
@@ -124,6 +127,9 @@ private fun GymTracker(
 
     // Which day the calendar opened (#118), as ISO text a Bundle holds without question.
     var dayOpen by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Which of the routine's settings is open (#146), by name.
+    var settingOpen by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Whether Settings was opened to import, from the first screen, rather than to look around.
     var importOnArrival by rememberSaveable { mutableStateOf(false) }
@@ -188,6 +194,7 @@ private fun GymTracker(
     }
 
     val defaultRoutineName = stringResource(R.string.routine_default_name)
+    val firstDayName = stringResource(R.string.routine_first_day)
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(
@@ -201,7 +208,7 @@ private fun GymTracker(
                     WelcomeScreen(
                         onGetStarted = { navigator.open(Destination.SETUP) },
                         onBuildMyself = {
-                            routineViewModel.createRoutine(defaultRoutineName)
+                            routineViewModel.createRoutine(defaultRoutineName, firstDayName)
                             navigator.openTab(Tab.ROUTINE)
                         },
                         onImport = navigator::openImport,
@@ -217,7 +224,7 @@ private fun GymTracker(
                     // By hand is the same mechanism from an empty start: a named routine with no
                     // days, and the editor to grow it in.
                     onBuildRoutine = {
-                        routineViewModel.createRoutine(defaultRoutineName)
+                        routineViewModel.createRoutine(defaultRoutineName, firstDayName)
                         navigator.openTab(Tab.ROUTINE)
                     },
                     onLetTheAppBuild = { navigator.open(Destination.SETUP) },
@@ -228,6 +235,16 @@ private fun GymTracker(
                     onOpenDay = navigator::openDay,
                     viewModel = todayViewModel,
                 )
+
+                Destination.ROUTINE_MUSCLES -> RoutineMusclesScreen(onBack = navigator::back, viewModel = routineViewModel)
+
+                Destination.ROUTINE_SETTING -> settingOpen?.let {
+                    RoutineSettingScreen(
+                        setting = RoutineSetting.valueOf(it),
+                        onDone = navigator::back,
+                        viewModel = routineViewModel,
+                    )
+                }
 
                 // Built, the routine's first day is ready on Today.
                 Destination.SETUP -> SetupScreen(
@@ -307,6 +324,11 @@ private fun GymTracker(
                     // comes with them, so what they add lands where they were putting it.
                     onAddNewExercise = navigator::pickFor,
                     onStartSetup = { navigator.open(Destination.SETUP) },
+                    onOpenMuscles = { navigator.open(Destination.ROUTINE_MUSCLES) },
+                    onOpenSetting = { setting ->
+                        settingOpen = setting.name
+                        navigator.open(Destination.ROUTINE_SETTING)
+                    },
                     viewModel = routineViewModel,
                 )
             }
