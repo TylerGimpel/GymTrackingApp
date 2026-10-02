@@ -3,7 +3,6 @@ package com.tylergimpel.gymtracker.data
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.tylergimpel.gymtracker.domain.CalendarDay
 import com.tylergimpel.gymtracker.domain.DayTraining
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Metres
@@ -13,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,12 +63,16 @@ class CalendarPersistenceTest {
 
         assertEquals(
             mapOf(
-                SEPTEMBER.atDay(1) to CalendarDay(SEPTEMBER.atDay(1), DayTraining.LIFTING, weighedIn = false),
-                SEPTEMBER.atDay(3) to CalendarDay(SEPTEMBER.atDay(3), DayTraining.CARDIO_ONLY, weighedIn = true),
-                SEPTEMBER.atDay(8) to CalendarDay(SEPTEMBER.atDay(8), DayTraining.LIFTING, weighedIn = false),
+                SEPTEMBER.atDay(1) to (DayTraining.LIFTING to false),
+                SEPTEMBER.atDay(3) to (DayTraining.CARDIO_ONLY to true),
+                SEPTEMBER.atDay(8) to (DayTraining.LIFTING to false),
             ),
-            days,
+            days.mapValues { (_, day) -> day.training to day.weighedIn },
         )
+        // A lifting day carries the work its muscles got, counted from its working sets (#147),
+        // and a weigh-in its weight.
+        assertTrue(days.getValue(SEPTEMBER.atDay(1)).muscleSets.isNotEmpty())
+        assertTrue(days.getValue(SEPTEMBER.atDay(3)).weight != null)
         assertEquals(SEPTEMBER, CalendarRepository(database).firstMonth())
     }
 
