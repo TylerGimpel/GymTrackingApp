@@ -66,83 +66,7 @@ internal fun ExerciseDetailsDialog(
         onDismissRequest = onCancel,
         title = { Text(stringResource(R.string.exercise_edit)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = details.name,
-                    onValueChange = { onChange(details.copy(name = it)) },
-                    label = { Text(stringResource(R.string.exercise_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = details.note,
-                    onValueChange = { onChange(details.copy(note = it)) },
-                    label = { Text(stringResource(R.string.exercise_note)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                // The lifter's word over the engine's: a rack that goes up in fours is a fact
-                // about their gym, and blank hands it back to the plates or the logged stack.
-                OutlinedTextField(
-                    value = details.increment,
-                    onValueChange = { onChange(details.copy(increment = it)) },
-                    label = { Text(stringResource(R.string.exercise_increment)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                // The band this exercise is worked in, where the lifter wants a say in it.
-                // Blank hands the question back to what they are training for, which is where it
-                // normally lives: a goal seeds a band, and a goal edited later does not reach
-                // back and take this one away.
-                Text(
-                    text = stringResource(R.string.exercise_rep_range),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = details.repRangeBottom,
-                        onValueChange = { onChange(details.copy(repRangeBottom = it)) },
-                        label = { Text(stringResource(R.string.exercise_rep_range_bottom)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = details.repRangeTop,
-                        onValueChange = { onChange(details.copy(repRangeTop = it)) },
-                        label = { Text(stringResource(R.string.exercise_rep_range_top)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                // The settled unit for this exercise, and the same setting the logging screen's
-                // chip changes. That chip is undecorated and taught once; this is where anybody who
-                // missed the tip finds it, beside everything else about the exercise.
-                Text(
-                    text = stringResource(R.string.exercise_unit),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                WeightUnitChips(
-                    selected = details.displayUnit,
-                    onReadIn = { onChange(details.copy(displayUnit = it)) },
-                    chipTag = { unit ->
-                        if (unit == WeightUnit.POUNDS) EXERCISE_UNIT_POUNDS else EXERCISE_UNIT_KILOGRAMS
-                    },
-                )
-                ProgressionModelChooser(details.progressionModel) {
-                    onChange(details.copy(progressionModel = it))
-                }
-                // Global, reversible, and a statement about what to suggest rather than about
-                // what was trained: everything already logged against it stays put.
-                FilterChip(
-                    selected = details.disliked,
-                    onClick = { onChange(details.copy(disliked = !details.disliked)) },
-                    label = { Text(stringResource(R.string.exercise_disliked)) },
-                )
-            }
+            ExerciseDetailsFields(details, onChange)
         },
         confirmButton = {
             TextButton(onClick = onSave) { Text(stringResource(R.string.session_save)) }
@@ -408,4 +332,86 @@ internal fun CoachMark(onDismiss: () -> Unit) {
         }
         TextButton(onClick = onDismiss) { Text(stringResource(R.string.coach_dismiss), fontSize = 14.sp) }
     }
+}
+
+/** What the lifter can say about an exercise, as fields: shared by the dialog and the exercise page (#148). */
+@Composable
+internal fun ExerciseDetailsFields(details: ExerciseDetails, onChange: (ExerciseDetails) -> Unit) {
+Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    OutlinedTextField(
+        value = details.name,
+        onValueChange = { onChange(details.copy(name = it)) },
+        label = { Text(stringResource(R.string.exercise_name)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = details.note,
+        onValueChange = { onChange(details.copy(note = it)) },
+        label = { Text(stringResource(R.string.exercise_note)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    // The lifter's word over the engine's: a rack that goes up in fours is a fact
+    // about their gym, and blank hands it back to the plates or the logged stack.
+    OutlinedTextField(
+        value = details.increment,
+        onValueChange = { onChange(details.copy(increment = it)) },
+        label = { Text(stringResource(R.string.exercise_increment)) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    // The band this exercise is worked in, where the lifter wants a say in it.
+    // Blank hands the question back to what they are training for, which is where it
+    // normally lives: a goal seeds a band, and a goal edited later does not reach
+    // back and take this one away.
+    Text(
+        text = stringResource(R.string.exercise_rep_range),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = details.repRangeBottom,
+            onValueChange = { onChange(details.copy(repRangeBottom = it)) },
+            label = { Text(stringResource(R.string.exercise_rep_range_bottom)) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        OutlinedTextField(
+            value = details.repRangeTop,
+            onValueChange = { onChange(details.copy(repRangeTop = it)) },
+            label = { Text(stringResource(R.string.exercise_rep_range_top)) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+    }
+    // The settled unit for this exercise, and the same setting the logging screen's
+    // chip changes. That chip is undecorated and taught once; this is where anybody who
+    // missed the tip finds it, beside everything else about the exercise.
+    Text(
+        text = stringResource(R.string.exercise_unit),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    WeightUnitChips(
+        selected = details.displayUnit,
+        onReadIn = { onChange(details.copy(displayUnit = it)) },
+        chipTag = { unit ->
+            if (unit == WeightUnit.POUNDS) EXERCISE_UNIT_POUNDS else EXERCISE_UNIT_KILOGRAMS
+        },
+    )
+    ProgressionModelChooser(details.progressionModel) {
+        onChange(details.copy(progressionModel = it))
+    }
+    // Global, reversible, and a statement about what to suggest rather than about
+    // what was trained: everything already logged against it stays put.
+    FilterChip(
+        selected = details.disliked,
+        onClick = { onChange(details.copy(disliked = !details.disliked)) },
+        label = { Text(stringResource(R.string.exercise_disliked)) },
+    )
+}
 }

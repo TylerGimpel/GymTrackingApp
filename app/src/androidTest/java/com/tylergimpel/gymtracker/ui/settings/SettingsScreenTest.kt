@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -84,6 +85,7 @@ class SettingsScreenTest {
         var fixed: RestFix? = null
         compose.setContent {
             SettingsScreen(
+                section = SettingsSection.DATA,
                 state = SettingsUiState(
                     dataMessage = DataMessage.Restored(sessions = 112),
                     restAlerts = RestAlerts(alarmsAreReliable = false),
@@ -122,7 +124,7 @@ class SettingsScreenTest {
         compose.onAllNodesWithText("Same as…")[0].performClick()
         assertEquals("Hammer Strength Row", choosing)
 
-        compose.onNodeWithText("Import").performClick()
+        compose.onNodeWithTag(IMPORT_GO).performClick()
         assertEquals(1, imported)
     }
 
@@ -168,8 +170,9 @@ class SettingsScreenTest {
 
         // Before anything is written (#103): how much, over when, what is left out, and the
         // honest word on volume.
-        compose.onNodeWithText("212 sessions and 2234 sets", substring = true).assertExists()
-        compose.onNodeWithText("from Jan 8, 2024 to Mar 2, 2026", substring = true).assertExists()
+        compose.onNodeWithText("212").assertExists()
+        compose.onNodeWithText("2234").assertExists()
+        compose.onNodeWithText("Jan 8, 2024 – Mar 2, 2026").assertExists()
         compose.onNodeWithText("5 sets cannot be read", substring = true).assertExists()
         compose.onNodeWithText("volume from before the import is approximate", substring = true).assertExists()
 
@@ -187,7 +190,7 @@ class SettingsScreenTest {
         compose.setContent { SettingsScreen(state = SettingsUiState(previewing = empty)) }
 
         compose.onNodeWithText("Nothing in this file can be brought in.").assertExists()
-        compose.onNodeWithText("Import").assertIsNotEnabled()
+        compose.onNodeWithTag(IMPORT_GO).assertIsNotEnabled()
     }
 
     @Test
@@ -200,7 +203,7 @@ class SettingsScreenTest {
             notYetSupported = mapOf("unreadable" to 5),
             volumeReliable = false,
         )
-        compose.setContent { SettingsScreen(state = SettingsUiState(dataMessage = DataMessage.Imported(result))) }
+        compose.setContent { SettingsScreen(state = SettingsUiState(dataMessage = DataMessage.Imported(result)), section = SettingsSection.DATA) }
 
         compose.onNodeWithText("Brought in 212 sessions, 2229 sets.", substring = true).assertExists()
         compose.onNodeWithText("5 sets could not be read", substring = true).assertExists()

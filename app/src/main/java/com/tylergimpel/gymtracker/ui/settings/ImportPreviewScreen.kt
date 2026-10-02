@@ -1,5 +1,14 @@
 package com.tylergimpel.gymtracker.ui.settings
 
+import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
+import com.tylergimpel.gymtracker.ui.theme.MainButton
+import com.tylergimpel.gymtracker.ui.theme.SectionLabel
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
+import com.tylergimpel.gymtracker.ui.theme.RowDivider
+import com.tylergimpel.gymtracker.ui.theme.CardRow
+import com.tylergimpel.gymtracker.ui.theme.AppCard
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,63 +74,52 @@ fun ImportPreviewScreen(
     onCancel: () -> Unit,
 ) {
     val preview = previewing.preview
+    val colors = LocalGymColors.current
+    val rows = buildList {
+        if (preview.alreadyHere > 0) add(stringResource(R.string.preview_row_already, preview.alreadyHere))
+        if (preview.unmatched.isNotEmpty()) add(stringResource(R.string.mapping_count, preview.unmatched.size))
+        if (preview.unreadable > 0) add(stringResource(R.string.preview_unreadable, preview.unreadable))
+    }
     Column(modifier = Modifier.fillMaxSize().padding(insets)) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val dates = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-            Text(
-                text = if (preview.from != null && preview.to != null) {
-                    stringResource(
-                        R.string.preview_what,
-                        preview.sessions,
-                        preview.sets,
-                        preview.from.format(dates),
-                        preview.to.format(dates),
-                    )
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                val dates = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+                if (preview.from != null && preview.to != null) {
+                    SectionLabel(stringResource(R.string.preview_range, preview.from.format(dates), preview.to.format(dates)))
                 } else {
-                    stringResource(R.string.preview_nothing)
-                },
-                style = MaterialTheme.typography.titleMedium,
-            )
-            if (preview.alreadyHere > 0) {
-                Text(
-                    text = stringResource(R.string.preview_already_here, preview.alreadyHere),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                    Text(stringResource(R.string.preview_nothing), color = colors.dim)
+                }
             }
-            if (preview.unreadable > 0) {
-                Text(
-                    text = stringResource(R.string.preview_unreadable, preview.unreadable),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            if (preview.sets > 0) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Count(preview.sessions, stringResource(R.string.preview_sessions), Modifier.weight(1f))
+                        Count(preview.sets, stringResource(R.string.preview_sets), Modifier.weight(1f))
+                    }
+                }
             }
+            if (rows.isNotEmpty()) {
+                item {
+                    AppCard(Modifier.fillMaxWidth()) {
+                        rows.forEachIndexed { index, row ->
+                            if (index > 0) RowDivider()
+                            CardRow(row)
+                        }
+                    }
+                }
+            }
+            // The one reassuring line: strength survives the import whole, volume only roughly.
             if (preview.sets > 0 && !previewing.records.source.volumeIsReliable) {
-                Text(
-                    text = stringResource(R.string.import_volume_approximate),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                item { Text(stringResource(R.string.import_volume_approximate), fontSize = 15.sp, color = colors.dim) }
             }
-            if (preview.unmatched.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.mapping_count, preview.unmatched.size),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    text = stringResource(R.string.mapping_why),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        HorizontalDivider()
-        LazyColumn(modifier = Modifier.weight(1f)) {
             items(preview.unmatched, key = Unmatched::name) { name ->
                 val decision = previewing.decisions[name.name] ?: NameDecision.CreateOwn
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text(
-                        text = stringResource(R.string.mapping_name, name.name, name.sets),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(stringResource(R.string.mapping_name, name.name, name.sets), color = colors.text)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = decision == NameDecision.CreateOwn,
@@ -142,20 +140,16 @@ fun ImportPreviewScreen(
                         )
                     }
                 }
-                HorizontalDivider()
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.mapping_cancel)) }
-            AppButton(
-                text = stringResource(R.string.mapping_import),
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            MainButton(
+                text = stringResource(R.string.preview_bring_in, preview.sessions),
                 onClick = onImport,
                 enabled = preview.sets > 0,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth().testTag(IMPORT_GO),
             )
+            AppOutlinedButton(stringResource(R.string.mapping_cancel), onClick = onCancel, modifier = Modifier.fillMaxWidth())
         }
     }
 
@@ -172,3 +166,17 @@ fun ImportPreviewScreen(
         )
     }
 }
+
+@Composable
+private fun Count(value: Int, label: String, modifier: Modifier = Modifier) {
+    val colors = LocalGymColors.current
+    AppCard(modifier) {
+        Column(Modifier.padding(14.dp)) {
+            Text(value.toString(), style = MaterialTheme.typography.displaySmall, color = colors.text)
+            Text(label, fontSize = 15.sp, color = colors.dim)
+        }
+    }
+}
+
+/** A handle for the tests. */
+const val IMPORT_GO = "import-go"

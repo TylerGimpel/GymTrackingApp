@@ -1,5 +1,14 @@
 package com.tylergimpel.gymtracker.ui.profile
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.width
+import com.tylergimpel.gymtracker.ui.settings.Pill
+import com.tylergimpel.gymtracker.ui.theme.AppOutlinedButton
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
+import com.tylergimpel.gymtracker.ui.theme.SectionLabel
+import com.tylergimpel.gymtracker.ui.theme.CardRow
+import com.tylergimpel.gymtracker.ui.theme.AppCard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,7 +70,10 @@ fun ProfileScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Profile (#148): all optional, and short. Bodyweight opens the weigh-ins; sex (tap again to clear),
+ * training behind you, and steppers for the year born and height.
+ */
 @Composable
 fun ProfileScreen(
     state: ProfileUiState,
@@ -72,167 +84,93 @@ fun ProfileScreen(
     onBirthYear: (Int?) -> Unit = {},
     onHeightCm: (Double?) -> Unit = {},
 ) {
-    Scaffold(
-        topBar = {
-            AppTopBar(
-                title = stringResource(R.string.profile_title),
-                actions = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.profile_done)) }
-                },
-            )
-        },
-    ) { insets ->
+    val colors = LocalGymColors.current
+    Scaffold(topBar = { AppTopBar(stringResource(R.string.profile_title)) }) { insets ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(insets)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Text(
-                text = stringResource(R.string.profile_optional),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            // First, and with its reason beside it: bodyweight is the one of these the engine
-            // can actually use, and the lifter decides whether to give it knowing what for.
-            Section(
-                label = stringResource(R.string.profile_bodyweight),
-                why = stringResource(R.string.profile_bodyweight_why),
-            ) {
-                Text(
-                    text = state.bodyweight?.let {
-                        stringResource(
-                            R.string.profile_bodyweight_latest,
-                            it.weight.asTextIn(state.preferredUnit),
-                            stringResource(state.preferredUnit.label),
-                        )
-                    } ?: stringResource(R.string.profile_bodyweight_none),
-                    style = MaterialTheme.typography.bodyLarge,
+            Text(stringResource(R.string.profile_all_optional), color = colors.dim)
+            AppCard(Modifier.fillMaxWidth()) {
+                CardRow(
+                    title = stringResource(R.string.profile_bodyweight),
+                    subtitle = state.bodyweight?.let {
+                        "${it.weight.asTextIn(state.preferredUnit)} ${stringResource(state.preferredUnit.label)}"
+                    } ?: stringResource(R.string.more_none_yet),
+                    onClick = onOpenBodyweight,
                 )
-                TextButton(onClick = onOpenBodyweight) {
-                    Text(stringResource(R.string.profile_bodyweight_open))
-                }
             }
-
-            Section(
-                label = stringResource(R.string.profile_sex),
-                why = stringResource(R.string.profile_sex_why),
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel(stringResource(R.string.profile_sex))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        Sex.FEMALE to R.string.profile_sex_female,
-                        Sex.MALE to R.string.profile_sex_male,
-                    ).forEach { (sex, text) ->
+                    listOf(Sex.FEMALE to R.string.profile_sex_female, Sex.MALE to R.string.profile_sex_male).forEach { (sex, text) ->
                         // Tapping the chosen one again takes it back: not saying is an answer.
-                        FilterChip(
-                            selected = state.profile.sex == sex,
-                            onClick = { onSex(if (state.profile.sex == sex) null else sex) },
-                            label = { Text(stringResource(text)) },
-                        )
+                        Pill(stringResource(text), selected = state.profile.sex == sex) {
+                            onSex(if (state.profile.sex == sex) null else sex)
+                        }
                     }
                 }
             }
-
-            // Moved here from the routine screen: it is the lifter's, not any routine's, and the
-            // one rule that reads it — steering a novice off high reps — reads it from here.
-            Section(
-                label = stringResource(R.string.routine_experience),
-                why = stringResource(R.string.profile_experience_why),
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel(stringResource(R.string.profile_training))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
-                        Experience.NOVICE to R.string.experience_novice,
-                        Experience.TRAINED to R.string.experience_trained,
-                        Experience.ADVANCED to R.string.experience_advanced,
+                        Experience.NOVICE to R.string.profile_training_new,
+                        Experience.TRAINED to R.string.profile_training_some,
+                        Experience.ADVANCED to R.string.profile_training_lots,
                     ).forEach { (experience, text) ->
-                        FilterChip(
-                            selected = state.profile.experience == experience,
-                            onClick = { onExperience(experience) },
-                            label = { Text(stringResource(text)) },
-                        )
+                        Pill(stringResource(text), selected = state.profile.experience == experience) { onExperience(experience) }
                     }
                 }
             }
-
-            Section(
-                label = stringResource(R.string.profile_birth_year),
-                why = stringResource(R.string.profile_birth_year_why),
-            ) {
-                NumberField(
-                    stored = state.profile.birthYear?.toString(),
-                    label = stringResource(R.string.profile_birth_year_field),
-                    decimal = false,
-                    // A year that could be somebody's, or blank to withdraw it. Anything else is
-                    // left untyped rather than stored, so a half-typed year is never saved.
-                    parse = { text -> text.toIntOrNull()?.takeIf { it in EARLIEST_YEAR..Year.now().value } },
-                    onValue = { onBirthYear(it) },
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel(stringResource(R.string.profile_birth_year))
+                ValueStepper(
+                    text = state.profile.birthYear?.toString() ?: "—",
+                    onStep = { by ->
+                        val next = (state.profile.birthYear ?: FIRST_YEAR_OFFERED) + if (state.profile.birthYear == null) 0 else by
+                        onBirthYear(next.coerceIn(EARLIEST_YEAR, Year.now().value))
+                    },
+                    onClear = { onBirthYear(null) }.takeIf { state.profile.birthYear != null },
                 )
             }
-
-            Section(
-                label = stringResource(R.string.profile_height),
-                why = stringResource(R.string.profile_height_why),
-            ) {
-                NumberField(
-                    stored = state.profile.heightCm?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() },
-                    label = stringResource(R.string.profile_height_field),
-                    decimal = true,
-                    parse = { text -> text.toDoubleOrNull()?.takeIf { it in HEIGHT_CM } },
-                    onValue = { onHeightCm(it) },
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel(stringResource(R.string.profile_height))
+                ValueStepper(
+                    text = state.profile.heightCm?.let { stringResource(R.string.profile_cm, it.toInt()) } ?: "—",
+                    onStep = { by ->
+                        val next = (state.profile.heightCm ?: FIRST_HEIGHT_OFFERED) + if (state.profile.heightCm == null) 0.0 else by.toDouble()
+                        onHeightCm(next.coerceIn(HEIGHT_CM))
+                    },
+                    onClear = { onHeightCm(null) }.takeIf { state.profile.heightCm != null },
                 )
             }
         }
     }
 }
 
+/** − value +, starting from an ordinary answer the first time either is pressed; Clear withdraws it. */
 @Composable
-private fun Section(label: String, why: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-        Text(
-            text = why,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        content()
+private fun ValueStepper(text: String, onStep: (Int) -> Unit, onClear: (() -> Unit)?) {
+    val colors = LocalGymColors.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        AppOutlinedButton("−", onClick = { onStep(-1) }, modifier = Modifier.width(60.dp))
+        Text(text, style = MaterialTheme.typography.headlineSmall, color = colors.text, modifier = Modifier.width(110.dp), textAlign = TextAlign.Center)
+        AppOutlinedButton("+", onClick = { onStep(1) }, modifier = Modifier.width(60.dp))
+        onClear?.let { TextButton(onClick = it) { Text(stringResource(R.string.profile_clear), color = colors.dim) } }
     }
 }
 
-/**
- * A number the lifter may give or withdraw, saved as they type once it is a real one.
- *
- * Blank withdraws it. Text that is not yet a usable number stays in the field and is not saved,
- * so the stored answer is always either something plausible or nothing at all.
- */
-@Composable
-private fun <T : Any> NumberField(
-    stored: String?,
-    label: String,
-    decimal: Boolean,
-    parse: (String) -> T?,
-    onValue: (T?) -> Unit,
-) {
-    var text by rememberSaveable(stored) { mutableStateOf(stored.orEmpty()) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { typed ->
-            text = typed
-            when {
-                typed.isBlank() -> onValue(null)
-                else -> parse(typed.trim())?.let(onValue)
-            }
-        },
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
+/** Where the year stepper starts when nothing is stored. */
+private const val FIRST_YEAR_OFFERED = 1990
+
+/** Where the height stepper starts when nothing is stored, in centimetres. */
+private const val FIRST_HEIGHT_OFFERED = 175.0
 
 /** The earliest year of birth worth accepting, which is only there to catch a slipped digit. */
 private const val EARLIEST_YEAR = 1900

@@ -1,40 +1,59 @@
 package com.tylergimpel.gymtracker.ui.history
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Row
-import com.tylergimpel.gymtracker.domain.Effort
-import com.tylergimpel.gymtracker.ui.session.DropRow
-import com.tylergimpel.gymtracker.domain.PerformedSet
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import com.tylergimpel.gymtracker.ui.theme.TextButton
-import com.tylergimpel.gymtracker.ui.theme.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.gymtracker.R
+import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.ExerciseHistoryEntry
-import com.tylergimpel.gymtracker.domain.SetType
+import com.tylergimpel.gymtracker.domain.PerformedSet
 import com.tylergimpel.gymtracker.domain.WeightUnit
-import com.tylergimpel.gymtracker.ui.session.label
+import com.tylergimpel.gymtracker.ui.icons.EquipmentIcons
+import com.tylergimpel.gymtracker.ui.session.ExerciseDetailsFields
 import com.tylergimpel.gymtracker.ui.session.summary
+import com.tylergimpel.gymtracker.ui.settings.Pill
+import com.tylergimpel.gymtracker.ui.theme.AppCard
+import com.tylergimpel.gymtracker.ui.theme.AppTopBar
+import com.tylergimpel.gymtracker.ui.theme.ControlShape
+import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
+import com.tylergimpel.gymtracker.ui.theme.MainButton
+import com.tylergimpel.gymtracker.ui.theme.SectionLabel
+import com.tylergimpel.gymtracker.ui.theme.UppercaseText
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -46,23 +65,32 @@ fun ExerciseHistoryScreen(
 ) {
     LaunchedEffect(exerciseId) { viewModel.open(exerciseId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    ExerciseHistoryScreen(state = state, onBack = onBack, onLoadMore = viewModel::loadMore)
+    ExerciseHistoryScreen(
+        state = state,
+        onBack = onBack,
+        onLoadMore = viewModel::loadMore,
+        onDetailsChange = viewModel::changeDetails,
+        onSaveDetails = viewModel::saveDetails,
+    )
 }
 
+/** The three tabs of one exercise (#148). */
+enum class ExerciseTab { PROGRESS, SETS, SETTINGS }
+
 /**
- * Every set ever done on one exercise, newest first, back as far as the lifter scrolls (#121).
- *
- * **The raw numbers**, per the original request for graphs *and* numbers: grouped by session,
- * each set as it was logged, imported sessions marked as imported. Read a page at a time, so a
- * lift with years behind it opens as fast as one with a week.
+ * One exercise (#121, #148): a header with its equipment, name and muscle, then Progress, Sets and
+ * Settings. Sets reads every session newest first, a page at a time as the lifter scrolls back.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseHistoryScreen(
     state: ExerciseHistoryUiState,
     onBack: () -> Unit = {},
     onLoadMore: () -> Unit = {},
+    onDetailsChange: (com.tylergimpel.gymtracker.ui.session.ExerciseDetails) -> Unit = {},
+    onSaveDetails: () -> Unit = {},
 ) {
+    val colors = LocalGymColors.current
+    var tab by rememberSaveable { mutableStateOf(ExerciseTab.PROGRESS) }
     val list = rememberLazyListState()
     val nearTheEnd by remember {
         derivedStateOf {
@@ -70,106 +98,146 @@ fun ExerciseHistoryScreen(
             last >= list.layoutInfo.totalItemsCount - LOAD_AHEAD
         }
     }
-    LaunchedEffect(nearTheEnd, state.entries.size) {
-        if (nearTheEnd && !state.reachedEnd) onLoadMore()
+    LaunchedEffect(nearTheEnd, state.entries.size, tab) {
+        if (tab == ExerciseTab.SETS && nearTheEnd && !state.reachedEnd) onLoadMore()
     }
 
-    Scaffold(
-        topBar = {
-            AppTopBar(
-                title = state.exercise?.name.orEmpty(),
-                actions = { TextButton(onClick = onBack) { Text(stringResource(R.string.settings_done)) } },
-            )
-        },
-    ) { insets ->
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = insets) {
-            if (state.entries.isNotEmpty()) item(key = "summary") { ExerciseSummary(state) }
-            if (state.reachedEnd && state.entries.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.history_none),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
+    Scaffold(topBar = { AppTopBar(stringResource(R.string.history_title)) }) { insets ->
+        val exercise = state.exercise
+        LazyColumn(
+            state = list,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = insets.calculateTopPadding(),
+                bottom = insets.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (exercise != null) item { Header(exercise) }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                    ExerciseTab.entries.forEach { each ->
+                        Box(Modifier.testTag("exercise-tab-${each.name.lowercase()}")) {
+                            Pill(stringResource(each.label), selected = tab == each) { tab = each }
+                        }
+                    }
                 }
             }
-            val displayUnit = state.exercise?.displayUnit ?: state.lifterUnit
-            items(state.entries, key = ExerciseHistoryEntry::sessionExerciseId) { entry ->
-                HistoryEntry(entry, displayUnit, state.lifterUnit)
-                HorizontalDivider()
+            when (tab) {
+                ExerciseTab.PROGRESS -> item { ProgressTab(state) }
+                ExerciseTab.SETS -> {
+                    if (state.reachedEnd && state.entries.isEmpty()) {
+                        item { Text(stringResource(R.string.history_none), color = colors.dim) }
+                    }
+                    val displayUnit = exercise?.displayUnit ?: state.lifterUnit
+                    items(state.entries, key = ExerciseHistoryEntry::sessionExerciseId) { entry ->
+                        SessionCard(entry, displayUnit, state.lifterUnit)
+                    }
+                }
+                ExerciseTab.SETTINGS -> item {
+                    state.details?.let { details ->
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ExerciseDetailsFields(details, onDetailsChange)
+                            MainButton(
+                                stringResource(if (state.saved) R.string.history_saved else R.string.session_save),
+                                onClick = onSaveDetails,
+                                modifier = Modifier.fillMaxWidth().testTag(EXERCISE_SAVE),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+private val ExerciseTab.label: Int
+    get() = when (this) {
+        ExerciseTab.PROGRESS -> R.string.history_tab_progress
+        ExerciseTab.SETS -> R.string.history_tab_sets
+        ExerciseTab.SETTINGS -> R.string.history_tab_settings
+    }
+
 @Composable
-private fun HistoryEntry(entry: ExerciseHistoryEntry, displayUnit: WeightUnit, lifterUnit: WeightUnit) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        val day = entry.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
-        Text(
-            text = if (entry.imported) stringResource(R.string.history_imported, day) else day,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        LoggedSetLines(entry.sets, displayUnit, lifterUnit)
+private fun Header(exercise: Exercise) {
+    val colors = LocalGymColors.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.size(56.dp).background(colors.raised, ControlShape), contentAlignment = Alignment.Center) {
+            Icon(EquipmentIcons.iconFor(exercise.equipment), null, tint = colors.accentText, modifier = Modifier.size(34.dp))
+        }
+        Column {
+            UppercaseText(exercise.name, style = MaterialTheme.typography.headlineMedium.copy(color = colors.text))
+            Text(
+                listOfNotNull(exercise.primaryMuscle, stringResource(EquipmentIcons.pluralFor(exercise.equipment))).joinToString(" · "),
+                fontSize = 15.sp,
+                color = colors.dim,
+            )
+        }
     }
 }
 
 /**
- * Sets as they were logged, numbered, wherever a past set is read back (#121, #118, #119).
- *
- * **In the shape they were logged in** (#119): a per-side set is one numbered set with a line for
- * each side, because it is one set however many rows record it (ADR 0003), and a drop set is one
- * set with its drops beneath it rather than several sets. Anything but a working set says what
- * kind it was.
+ * One session of this exercise: the date, how many sets or where it came from, then the sets in
+ * one line, warm-ups dimmed and the best set in the accent.
  */
 @Composable
-internal fun LoggedSetLines(
-    sets: List<PerformedSet>,
-    displayUnit: WeightUnit,
-    lifterUnit: WeightUnit,
-    /** Where a set can be corrected (#120), what tapping one of its **Efforts** opens; null to only read. */
-    onEdit: ((PerformedSet, Effort) -> Unit)? = null,
-) {
-    fun Modifier.editing(set: PerformedSet, effort: Effort) =
-        onEdit?.let { edit -> clickable { edit(set, effort) } } ?: this
-    sets.forEachIndexed { index, set ->
-        val kind = if (set.type == SetType.WORKING) null else stringResource(set.type.label)
-        val single = set.efforts.singleOrNull()
-        if (single != null && single.side == null) {
-            val line = stringResource(R.string.history_set, index + 1, single.summary(displayUnit, lifterUnit))
-            Text(
-                text = kind?.let { "$line · $it" } ?: line,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.fillMaxWidth().editing(set, single),
-            )
-            Drops(single, displayUnit)
-        } else {
-            val number = stringResource(R.string.history_set_number, index + 1)
-            Text(text = kind?.let { "$number · $it" } ?: number, style = MaterialTheme.typography.bodyLarge)
-            set.efforts.forEach { effort ->
-                val side = effort.side?.let { stringResource(it.label) }
-                val done = effort.summary(displayUnit, lifterUnit)
+private fun SessionCard(entry: ExerciseHistoryEntry, displayUnit: WeightUnit, lifterUnit: WeightUnit) {
+    val colors = LocalGymColors.current
+    val best = entry.sets.filter { it.type.countsTowardVolume }.maxByOrNull { it.weightTimesReps() }
+    val texts = entry.sets.map { set -> set to set.efforts.map { it.summary(set.displayUnit ?: displayUnit, lifterUnit) }.joinToString(" / ") }
+    AppCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = side?.let { stringResource(R.string.history_side, it, done) } ?: done,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth().editing(set, effort).padding(start = 16.dp),
+                    entry.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.text,
+                    modifier = Modifier.weight(1f),
                 )
-                // Beneath the side they continue: a drop on the left is not a drop on the right.
-                Drops(effort, displayUnit)
+                SectionLabel(
+                    if (entry.imported) {
+                        stringResource(R.string.history_fitnotes)
+                    } else {
+                        pluralStringResource(R.plurals.routine_sets, entry.sets.size, entry.sets.size)
+                    },
+                )
             }
+            Text(
+                buildAnnotatedString {
+                    texts.forEachIndexed { index, (set, text) ->
+                        if (index > 0) append("  ·  ")
+                        withStyle(
+                            SpanStyle(
+                                color = when {
+                                    set == best -> colors.accentText
+                                    !set.type.countsTowardVolume -> colors.dim
+                                    else -> colors.text
+                                },
+                                fontWeight = if (set == best) FontWeight.Bold else FontWeight.Normal,
+                            ),
+                        ) { append(text) }
+                    }
+                },
+                fontSize = 16.sp,
+            )
         }
     }
 }
 
-/** The **Drops** continuing one **Effort**, beneath it. */
-@Composable
-private fun Drops(effort: Effort, displayUnit: WeightUnit) {
-    effort.drops.forEach { drop ->
-        Row(modifier = Modifier.padding(start = 16.dp)) { DropRow(drop, displayUnit) }
+/** A rough size of a set, enough to pick the best one in a session to mark. */
+private fun PerformedSet.weightTimesReps(): Double {
+    val performance = leadingEffort.performance
+    return when (performance) {
+        is com.tylergimpel.gymtracker.domain.Performance.WeightAndReps -> performance.weight.value * (1 + performance.reps / 30.0)
+        else -> 0.0
     }
 }
 
 /** Invented: how close to the bottom of what is loaded the next page is asked for, in rows. */
 private const val LOAD_AHEAD = 3
+
+/** A handle for the tests. */
+const val EXERCISE_SAVE = "exercise-save"
+

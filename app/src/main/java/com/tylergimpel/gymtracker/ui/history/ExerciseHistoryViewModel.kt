@@ -1,5 +1,9 @@
 package com.tylergimpel.gymtracker.ui.history
 
+import com.tylergimpel.gymtracker.ui.session.saveDetails
+import com.tylergimpel.gymtracker.ui.session.details
+import com.tylergimpel.gymtracker.ui.session.ExerciseDetails
+import com.tylergimpel.gymtracker.data.ExerciseRepository
 import com.tylergimpel.gymtracker.domain.PersonalRecord
 import com.tylergimpel.gymtracker.domain.StrengthPoint
 import com.tylergimpel.gymtracker.domain.VolumeSeries
@@ -37,6 +41,10 @@ data class ExerciseHistoryUiState(
     val records: List<PersonalRecord> = emptyList(),
     /** Counted sets per session, from where set types became known (#125). */
     val volume: VolumeSeries = VolumeSeries(emptyList(), startsAfterHistory = false),
+    /** The Settings tab's fields, as the lifter is editing them (#148). */
+    val details: ExerciseDetails? = null,
+    /** Set briefly once the Settings tab has been saved. */
+    val saved: Boolean = false,
 )
 
 /**
@@ -52,6 +60,8 @@ class ExerciseHistoryViewModel(application: Application) : AndroidViewModel(appl
 
     private val sessions = database.sessionRepository()
 
+    private val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
+
     private val screen = MutableStateFlow(ExerciseHistoryUiState())
     val state: StateFlow<ExerciseHistoryUiState> = screen.asStateFlow()
 
@@ -65,11 +75,26 @@ class ExerciseHistoryViewModel(application: Application) : AndroidViewModel(appl
             screen.value = ExerciseHistoryUiState(
                 exercise = exercise,
                 lifterUnit = unit,
+                details = exercise?.details(unit),
                 strength = history.strengthSeries(resetOn = exercise?.estimateResetOn),
                 records = personalRecords(history),
                 volume = history.volumeSeries(),
             )
             loadMore()
+        }
+    }
+
+    fun changeDetails(details: ExerciseDetails) = screen.update { it.copy(details = details, saved = false) }
+
+    /** Saves the Settings tab, the same writes the workout makes, and reads the exercise back. */
+    fun saveDetails() {
+        val current = screen.value
+        val exercise = current.exercise ?: return
+        val details = current.details ?: return
+        viewModelScope.launch {
+            exercises.saveDetails(exercise, details, current.lifterUnit)
+            val reread = database.exerciseDao().byId(exercise.id)?.toDomain(current.lifterUnit) ?: exercise
+            screen.update { it.copy(exercise = reread, details = reread.details(current.lifterUnit), saved = true) }
         }
     }
 

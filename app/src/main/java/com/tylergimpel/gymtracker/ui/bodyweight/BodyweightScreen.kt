@@ -1,5 +1,16 @@
 package com.tylergimpel.gymtracker.ui.bodyweight
 
+import com.tylergimpel.gymtracker.ui.session.SheetTitle
+import com.tylergimpel.gymtracker.ui.session.Sheet
+import com.tylergimpel.gymtracker.ui.theme.UppercaseText
+import com.tylergimpel.gymtracker.ui.theme.MainButton
+import com.tylergimpel.gymtracker.ui.theme.RowDivider
+import com.tylergimpel.gymtracker.ui.theme.AppCard
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import com.tylergimpel.gymtracker.ui.chart.ChartSeries
 import com.tylergimpel.gymtracker.ui.chart.ChartValue
@@ -81,7 +92,10 @@ fun BodyweightScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Weigh-ins (#148): the latest weight big with its day, the trend, every reading (tap to correct
+ * or delete), and Weigh in, which opens a stepper that moves a tenth at a time.
+ */
 @Composable
 fun BodyweightScreen(
     state: BodyweightUiState,
@@ -95,59 +109,70 @@ fun BodyweightScreen(
     onDeleteEditing: () -> Unit = {},
     onCancelEditing: () -> Unit = {},
 ) {
-    Scaffold(
-        topBar = {
-            AppTopBar(
-                title = stringResource(R.string.bodyweight_title),
-                actions = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.bodyweight_done)) }
-                },
-            )
-        },
-    ) { insets ->
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
+    val colors = LocalGymColors.current
+    var weighing by rememberSaveable { mutableStateOf(false) }
+    Scaffold(topBar = { AppTopBar(stringResource(R.string.bodyweight_title)) }) { insets ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = insets.calculateTopPadding(),
+                bottom = insets.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            state.history.firstOrNull()?.let { latest ->
+                item {
+                    Column {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            UppercaseText(latest.weight.asTextIn(state.displayUnit), style = MaterialTheme.typography.displayLarge.copy(color = colors.text))
+                            Text(" " + stringResource(state.displayUnit.label), fontSize = 22.sp, color = colors.dim, modifier = Modifier.padding(bottom = 10.dp))
+                        }
+                        Text(latest.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)), color = colors.dim)
+                    }
+                }
+                item { WeighInChart(state) }
+            }
             item {
-                WeighInControls(
-                    draft = state.draft,
-                    onChange = onDraftChange,
-                    onReadIn = onReadIn,
-                    onRecord = onRecord,
-                )
+                MainButton(stringResource(R.string.bodyweight_weigh_in), onClick = { weighing = true }, modifier = Modifier.fillMaxWidth().testTag(WEIGH_IN))
             }
-            item { HorizontalDivider() }
-
-            // Over time, above the list (#126): the trend behind what they weigh now. The same chart
-            // as strength, in the unit this screen reads in; nothing drawn until there is a reading.
-            if (state.history.isNotEmpty()) {
-                item {
-                    WeighInChart(state)
-                    HorizontalDivider()
-                }
-            }
-
             if (state.history.isEmpty()) {
+                item { Text(stringResource(R.string.bodyweight_none), color = colors.dim) }
+            } else {
                 item {
-                    Text(
-                        text = stringResource(R.string.bodyweight_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
+                    AppCard(Modifier.fillMaxWidth()) {
+                        state.history.forEachIndexed { index, entry ->
+                            if (index > 0) RowDivider()
+                            WeighInRow(
+                                entry = entry,
+                                displayUnit = state.displayUnit,
+                                // Only where the day holds more than one reading.
+                                showTime = entry.date in state.daysWeighedSeveralTimes,
+                                onEdit = onEdit,
+                            )
+                        }
+                    }
                 }
             }
+        }
+    }
 
-            // Newest first: what a lifter came here to read is what they weigh now, and the rest is
-            // the trend behind it.
-            items(state.history, key = BodyweightEntry::id) { entry ->
-                WeighInRow(
-                    entry = entry,
-                    displayUnit = state.displayUnit,
-                    // Only where the day holds more than one reading: otherwise the day is the
-                    // whole of what a lifter came to read.
-                    showTime = entry.date in state.daysWeighedSeveralTimes,
-                    onEdit = onEdit,
-                )
-            }
+    if (weighing) {
+        Sheet(onDismiss = { weighing = false }) {
+            SheetTitle(stringResource(R.string.bodyweight_weigh_in))
+            WeighInStepper(state.draft, onDraftChange)
+            WeightUnitChips(selected = state.draft.displayUnit, onReadIn = onReadIn)
+            DayButton(state.draft.date) { onDraftChange(state.draft.copy(date = it)) }
+            MainButton(
+                stringResource(R.string.bodyweight_record),
+                onClick = {
+                    onRecord()
+                    weighing = false
+                },
+                enabled = state.draft.isRecordable,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 
@@ -163,37 +188,17 @@ fun BodyweightScreen(
     }
 }
 
-/**
- * The field, the scale's unit, the day, and the button that records it.
- *
- * The day is on screen rather than assumed, because weighing yourself and remembering to type it in
- * are different mornings — and a weigh-in filed on the wrong day is a wrong answer to "what did I
- * weigh then", which is the only question this data is ever asked.
- */
+/** The weight, typed or moved a tenth at a time either way. */
 @Composable
-private fun WeighInControls(
-    draft: BodyweightDraft,
-    onChange: (BodyweightDraft) -> Unit,
-    onReadIn: (WeightUnit) -> Unit,
-    onRecord: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            WeighInField(draft, onChange, modifier = Modifier.weight(1f))
-            AppButton(
-                text = stringResource(R.string.bodyweight_record),
-                onClick = onRecord,
-                enabled = draft.isRecordable,
-            )
-        }
-        WeightUnitChips(selected = draft.displayUnit, onReadIn = onReadIn)
-        DayButton(draft.date) { onChange(draft.copy(date = it)) }
+private fun WeighInStepper(draft: BodyweightDraft, onChange: (BodyweightDraft) -> Unit) {
+    fun step(by: Double) {
+        val now = draft.weightText.trim().replace(',', '.').toDoubleOrNull() ?: 0.0
+        onChange(draft.copy(weightText = "%.1f".format(java.util.Locale.ROOT, (now + by).coerceAtLeast(0.0))))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        AppOutlinedButton("−", onClick = { step(-0.1) }, modifier = Modifier.width(64.dp))
+        WeighInField(draft, onChange, modifier = Modifier.weight(1f))
+        AppOutlinedButton("+", onClick = { step(0.1) }, modifier = Modifier.width(64.dp))
     }
 }
 
@@ -247,10 +252,11 @@ private fun WeighInRow(
     showTime: Boolean,
     onEdit: (BodyweightEntry) -> Unit,
 ) {
-    val day = entry.date.toString()
+    val day = entry.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .clickable(
                 onClickLabel = stringResource(R.string.bodyweight_edit),
                 onClick = { onEdit(entry) },
@@ -339,6 +345,8 @@ private fun WeighInChart(state: BodyweightUiState) {
         ),
         valueText = { "${it.asAmountText()} $unitLabel" },
         description = stringResource(R.string.bodyweight_chart),
-        modifier = Modifier.padding(16.dp),
     )
 }
+
+/** A handle for the tests. */
+const val WEIGH_IN = "weigh-in"

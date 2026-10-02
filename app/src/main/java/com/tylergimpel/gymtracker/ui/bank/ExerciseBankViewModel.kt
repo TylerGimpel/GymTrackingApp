@@ -29,6 +29,10 @@ data class ExerciseBankUiState(
     val exercises: List<Exercise> = emptyList(),
     val query: String = "",
     val muscle: String? = null,
+    /** The equipment the list is narrowed to, or null for all of it. */
+    val equipment: String? = null,
+    /** What each exercise the lifter has done was last done at: weight in kilograms and reps. */
+    val last: Map<String, Pair<Double?, Int?>> = emptyMap(),
     /** The muscles the bank actually uses, offered as filters. */
     val muscles: List<String> = emptyList(),
     val total: Int = 0,
@@ -60,6 +64,7 @@ data class BankVocabulary(
 private data class ScreenState(
     val query: String = "",
     val muscle: String? = null,
+    val equipment: String? = null,
     val adding: NewExerciseDraft? = null,
 )
 
@@ -98,18 +103,27 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
         combine(
             repository.observeBank(),
             screen,
-            aliases,
+            combine(aliases, database.sessionDao().observeWorkingSets()) { a, sets -> a to sets },
             vocabulary,
-        ) { bank, screen, aliases, vocabulary ->
+        ) { bank, screen, aliasesAndSets, vocabulary ->
+            val (aliases, sets) = aliasesAndSets
             // Muscle first, then what was typed: the muscle answers "what is there for this body
             // part" and the query narrows that, rather than the other way round.
             val forMuscle = screen.muscle?.let(bank::workingMuscle) ?: bank
-            val matching = forMuscle.search(screen.query, aliases)
+            // Bodyweight covers the rows that need nothing at all, as the gym checklist does.
+            val forEquipment = when (val wanted = screen.equipment) {
+                null -> forMuscle
+                "body only" -> forMuscle.filter { it.equipment == null || it.equipment == "body only" }
+                else -> forMuscle.filter { it.equipment == wanted }
+            }
+            val matching = forEquipment.search(screen.query, aliases)
 
             ExerciseBankUiState(
                 exercises = matching,
                 query = screen.query,
                 muscle = screen.muscle,
+                equipment = screen.equipment,
+                last = sets.associate { it.exerciseId to (it.weightKg to it.reps) },
                 // Every muscle the filter could match on, so nothing is filterable but unoffered.
                 muscles = bank
                     .flatMap { it.primaryMuscles + it.secondaryMuscles }
@@ -136,7 +150,11 @@ class ExerciseBankViewModel(application: Application) : AndroidViewModel(applica
 
     fun search(query: String) = screen.update { it.copy(query = query) }
 
-    fun startAdding() = screen.update { it.copy(adding = NewExerciseDraft()) }
+    fun startAdding(name: String = "") = screen.update { it.copy(adding = NewExerciseDraft(name = name)) }
+
+    /** Choosing the equipment already chosen goes back to all of it. */
+    fun filterByEquipment(equipment: String?) =
+        screen.update { it.copy(equipment = equipment.takeIf { e -> e != it.equipment }) }
 
     fun changeAdding(draft: NewExerciseDraft) = screen.update { it.copy(adding = draft) }
 

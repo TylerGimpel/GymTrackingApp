@@ -45,6 +45,7 @@ import com.tylergimpel.gymtracker.ui.session.SessionScreen
 import com.tylergimpel.gymtracker.ui.session.SessionViewModel
 import com.tylergimpel.gymtracker.ui.settings.ExcludedScreen
 import com.tylergimpel.gymtracker.ui.settings.SettingsScreen
+import com.tylergimpel.gymtracker.ui.settings.SettingsSection
 import com.tylergimpel.gymtracker.ui.theme.GymTrackerTheme
 import com.tylergimpel.gymtracker.ui.today.TodayScreen
 import com.tylergimpel.gymtracker.ui.today.TodayViewModel
@@ -86,7 +87,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Destination {
     TODAY, CALENDAR, ROUTINE, MORE,
-    WORKOUT, SETUP, ROUTINE_MUSCLES, ROUTINE_SETTING, EXERCISE_PICKER, EXERCISES, BODYWEIGHT, PLATES, PROFILE, SETTINGS, EXCLUDED, EXERCISE_HISTORY, DAY,
+    WORKOUT, SETUP, ROUTINE_MUSCLES, ROUTINE_SETTING, EXERCISE_PICKER, EXERCISES, BODYWEIGHT, PLATES, PROFILE, SETTINGS, DATA, EXCLUDED, EXERCISE_HISTORY, DAY,
 }
 
 /** The destination each tab opens on. */
@@ -173,7 +174,7 @@ private fun GymTracker(
 
         override fun openImport() {
             importOnArrival = true
-            open(Destination.SETTINGS)
+            open(Destination.DATA)
         }
     }
 
@@ -278,6 +279,8 @@ private fun GymTracker(
                     onOpenPlates = { navigator.open(Destination.PLATES) },
                     onOpenProfile = { navigator.open(Destination.PROFILE) },
                     onOpenSettings = { navigator.open(Destination.SETTINGS) },
+                    onOpenExcluded = { navigator.open(Destination.EXCLUDED) },
+                    onOpenData = { navigator.open(Destination.DATA) },
                 )
 
                 Destination.BODYWEIGHT -> BodyweightScreen(onBack = navigator::back)
@@ -289,7 +292,8 @@ private fun GymTracker(
                     onOpenBodyweight = { navigator.open(Destination.BODYWEIGHT) },
                 )
 
-                Destination.SETTINGS -> SettingsScreen(
+                Destination.SETTINGS, Destination.DATA -> SettingsScreen(
+                    section = if (destination == Destination.DATA) SettingsSection.DATA else SettingsSection.SETTINGS,
                     onBack = navigator::back,
                     importOnArrival = importOnArrival,
                     onImportStarted = { importOnArrival = false },
