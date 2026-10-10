@@ -48,6 +48,10 @@ abstract class GenerateExerciseBankTask : DefaultTask() {
     @get:Input
     abstract val aliasAssetPath: Property<String>
 
+    /** Where the former names land inside assets: what renamed rows were called before. */
+    @get:Input
+    abstract val formerNameAssetPath: Property<String>
+
     /** Where the database lands inside assets, as Room's `createFromAsset()` will name it. */
     @get:Input
     abstract val assetPath: Property<String>
@@ -77,11 +81,15 @@ abstract class GenerateExerciseBankTask : DefaultTask() {
         aliasTarget.parentFile?.mkdirs()
         aliasTarget.writeText(ExerciseAliasWriter.toJson(bank.aliases))
 
+        val formerNameTarget = outputDirectory.file(formerNameAssetPath).get().asFile
+        formerNameTarget.parentFile?.mkdirs()
+        formerNameTarget.writeText(ExerciseAliasWriter.toJson(bank.formerNames))
+
         val authored = bank.exercises.count { it.source == ExerciseBankBuilder.SOURCE_AUTHORED }
         logger.lifecycle(
             "Exercise bank: ${bank.exercises.size} exercises " +
                 "(${bank.exercises.size - authored} upstream, $authored authored), " +
-                "${bank.aliases.size} aliases, " +
+                "${bank.aliases.size} aliases, ${bank.formerNames.size} former names, " +
                 "schema v${schema.version} ${schema.identityHash}, " +
                 "${target.length() / 1024} KB"
         )

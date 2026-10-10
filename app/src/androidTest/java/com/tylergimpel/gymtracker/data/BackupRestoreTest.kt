@@ -321,7 +321,7 @@ class BackupRestoreTest {
                 sets = listOf(
                     ImportedSet(
                         date = LocalDate.parse("2026-03-02"),
-                        exerciseName = "Barbell Squat",
+                        exerciseName = "Back Squat",
                         order = 1,
                         performance = Performance.WeightAndReps(Kilograms(100.0), 5),
                     ),

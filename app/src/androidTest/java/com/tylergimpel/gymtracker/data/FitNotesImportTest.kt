@@ -4,6 +4,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.tylergimpel.gymtracker.domain.FormerNames
 import com.tylergimpel.gymtracker.domain.ImportSource
 import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.LoggingType
@@ -43,6 +44,9 @@ import java.time.ZoneId
 class FitNotesImportTest {
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+    /** What the shipped bank called its renamed rows: the fixture uses FitNotes's names, some of them old ones. */
+    private val formerNames: suspend () -> FormerNames = { ExerciseAliasStore(context).loadFormerNames() }
     private val zone: ZoneId = ZoneId.of("Europe/London")
     /**
      * A week after the fixture's last session. The engine rightly recalibrates a lift left more
@@ -257,7 +261,7 @@ class FitNotesImportTest {
         val pounds = ProfileRepository(database.profileDao(), WeightUnit.POUNDS)
         val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), pounds)
 
-        ImportRepository(database, clock, zone, pounds).import(
+        ImportRepository(database, clock, zone, pounds, formerNames).import(
             FitNotesParser.parse(fixture),
             exercises.observeBank().first(),
             decisions = mapOf("Hammer Strength Row" to NameDecision.CreateOwn),
@@ -290,7 +294,7 @@ class FitNotesImportTest {
         val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), pounds)
         exercises.setDisplayUnit(SQUAT_ID, WeightUnit.KILOGRAMS)
 
-        ImportRepository(database, clock, zone, pounds).import(FitNotesParser.parse(fixture), exercises.observeBank().first())
+        ImportRepository(database, clock, zone, pounds, formerNames).import(FitNotesParser.parse(fixture), exercises.observeBank().first())
 
         assertEquals(WeightUnit.KILOGRAMS, exercises.observeBank().first().single { it.id == SQUAT_ID }.displayUnit)
     }
@@ -525,7 +529,7 @@ class FitNotesImportTest {
         SQLiteDatabase.openDatabase(fixture.path, null, SQLiteDatabase.OPEN_READWRITE).use(change)
 
     private fun imports() =
-        ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS))
+        ImportRepository(database, clock, zone, ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS), formerNames)
 
     private suspend fun importedSessions() =
         sessions().observeRecent(limit = 100).first().filter { it.session.isImported }

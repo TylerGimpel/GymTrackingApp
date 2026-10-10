@@ -61,6 +61,28 @@ class ImportTest {
     }
 
     @Test
+    fun `a name the bank shipped an exercise under before renaming it is matched to that exercise`() {
+        // FitNotes calls it "Barbell Squat", which is what the bank did until #149 made it
+        // "Back Squat". The same lift, so the same history.
+        val backSquat = squat.copy(bankName = "Back Squat")
+        val formerNames = mapOf("Barbell Squat" to "Back Squat")
+
+        assertEquals(backSquat, matchExactly(setOf("barbell squat"), listOf(backSquat), formerNames)["barbell squat"])
+        assertEquals(emptyList<Unmatched>(), unmatchedIn(NeutralImport(source = FITNOTES, fingerprint = "f", sets = listOf(importedSet("Barbell Squat"))), listOf(backSquat), formerNames))
+    }
+
+    @Test
+    fun `a former name never outranks an exercise that is called that now`() {
+        // The lifter's own "Barbell Squat" is what they mean by it, not the bank's renamed row.
+        val backSquat = squat.copy(bankName = "Back Squat")
+        val theirs = exercise("Their Squat").copy(id = "user_1", userName = "Barbell Squat")
+
+        val matched = matchExactly(setOf("Barbell Squat"), listOf(backSquat, theirs), mapOf("Barbell Squat" to "Back Squat"))
+
+        assertEquals(theirs, matched["Barbell Squat"])
+    }
+
+    @Test
     fun `a dropped bank row is not somewhere to put new history`() {
         val dropped = squat.copy(isTombstoned = true)
 

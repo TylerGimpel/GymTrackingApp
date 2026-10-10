@@ -101,6 +101,14 @@ data class NeutralImport(
 )
 
 /**
+ * A name the bank shipped an exercise under before renaming it, to the name it ships under now.
+ *
+ * Written by the build beside the bank. Stricter than shorthand: "Standing Military Press" is the
+ * overhead press, exactly, where "ohp" is only something a lifter might type.
+ */
+typealias FormerNames = Map<String, String>
+
+/**
  * Each of [names] matched to the exercise it exactly is, or to nothing.
  *
  * **Exactly or not at all** (ADR 0007). Case and spacing are forgiven, because they are not a
@@ -111,12 +119,26 @@ data class NeutralImport(
  * Matched against what the lifter calls an exercise as well as what the bank does, and never
  * against a **Tombstone**, which is there for history already pointing at it and is not somewhere
  * to put more.
+ *
+ * A name the bank used before a rename ([formerNames]) is the same exercise too, so a FitNotes
+ * history logged as "Barbell Squat" still lands on the squat once the bank calls it "Back Squat".
+ * It comes last: anything called that now, the lifter's own exercises above all, is what they mean.
  */
-fun matchExactly(names: Set<String>, bank: List<Exercise>): Map<String, Exercise?> {
+fun matchExactly(
+    names: Set<String>,
+    bank: List<Exercise>,
+    formerNames: FormerNames = emptyMap(),
+): Map<String, Exercise?> {
+    val live = bank.filterNot(Exercise::isTombstoned)
+    // Led to by what the bank calls it, never by a lifter's name that happens to be the same.
+    val byBankName = live.associateBy { normalised(it.bankName) }
     val byName = buildMap {
-        bank.filterNot(Exercise::isTombstoned).forEach { exercise ->
+        live.forEach { exercise ->
             putIfAbsent(normalised(exercise.bankName), exercise)
             exercise.userName?.let { putIfAbsent(normalised(it), exercise) }
+        }
+        formerNames.forEach { (former, current) ->
+            byBankName[normalised(current)]?.let { putIfAbsent(normalised(former), it) }
         }
     }
     return names.associateWith { byName[normalised(it)] }
@@ -149,8 +171,12 @@ sealed interface NameDecision {
  * Most first because that is where a wrong decision would cost the most; and once each, because
  * the mapping is a single chore against years of history rather than a question per set.
  */
-fun unmatchedIn(records: NeutralImport, bank: List<Exercise>): List<Unmatched> {
-    val matched = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank)
+fun unmatchedIn(
+    records: NeutralImport,
+    bank: List<Exercise>,
+    formerNames: FormerNames = emptyMap(),
+): List<Unmatched> {
+    val matched = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank, formerNames)
     return records.sets.filter { matched[it.exerciseName] == null }
         .groupingBy(ImportedSet::exerciseName).eachCount()
         .map { (name, sets) -> Unmatched(name, sets) }
@@ -181,7 +207,12 @@ data class ImportPreview(
  * What going ahead would bring in, less the dates an earlier import of the same source already
  * did ([alreadyHere]): a newer backup of the same history is mostly the same history.
  */
-fun previewOf(records: NeutralImport, bank: List<Exercise>, alreadyHere: Set<LocalDate> = emptySet()): ImportPreview {
+fun previewOf(
+    records: NeutralImport,
+    bank: List<Exercise>,
+    alreadyHere: Set<LocalDate> = emptySet(),
+    formerNames: FormerNames = emptyMap(),
+): ImportPreview {
     val fresh = records.without(alreadyHere)
     val dates = fresh.sets.map(ImportedSet::date)
     return ImportPreview(
@@ -190,7 +221,7 @@ fun previewOf(records: NeutralImport, bank: List<Exercise>, alreadyHere: Set<Loc
         sessions = dates.toSet().size,
         sets = fresh.sets.size,
         unreadable = records.notYetSupported.values.sum(),
-        unmatched = unmatchedIn(fresh, bank),
+        unmatched = unmatchedIn(fresh, bank, formerNames),
         alreadyHere = records.sessionsOn(alreadyHere),
     )
 }
