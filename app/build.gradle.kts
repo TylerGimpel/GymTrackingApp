@@ -20,11 +20,11 @@ val roomSchemaDirectory = layout.projectDirectory.dir("schemas")
 val roomDatabaseVersion = 36
 
 android {
-    namespace = "com.tylergimpel.gymtracker"
+    namespace = "com.tylergimpel.traintracks"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.tylergimpel.gymtracker"
+        applicationId = "com.tylergimpel.traintracks"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -73,7 +73,7 @@ tasks.named("check") { dependsOn(checkRoomSchemasFrozen) }
 
 exerciseBank {
     schemaDirectory.set(roomSchemaDirectory)
-    databaseClass.set("com.tylergimpel.gymtracker.data.GymDatabase")
+    databaseClass.set("com.tylergimpel.traintracks.data.GymDatabase")
     databaseVersion.set(roomDatabaseVersion)
     assetPath.set("databases/gym-bank.db")
 }

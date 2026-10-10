@@ -1,0 +1,85 @@
+package com.tylergimpel.traintracks.data
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import com.tylergimpel.traintracks.domain.Session
+import java.time.Instant
+import java.time.LocalDate
+
+/**
+ * One logged trip to the gym.
+ *
+ * There is deliberately no routine column and no foreign key to one. A session records only what
+ * happened; the routine it realised will later be copied onto it as a snapshot, so that revising a
+ * routine can never reach logged history.
+ */
+@Entity(
+    tableName = "session",
+    indices = [Index(value = ["import_batch_id"])],
+)
+data class SessionEntity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "id")
+    val id: Long = 0,
+
+    @ColumnInfo(name = "started_at")
+    val startedAt: Instant,
+
+    /** Null while the session is still being logged. */
+    @ColumnInfo(name = "finished_at")
+    val finishedAt: Instant?,
+
+    /** Stamped from [startedAt] when the session begins, and editable afterwards. */
+    @ColumnInfo(name = "date")
+    val date: LocalDate,
+
+    @ColumnInfo(name = "note")
+    val note: String?,
+
+    /**
+     * The routine this session realised, copied by name at the moment it was recorded.
+     *
+     * A name and not a reference. This is the seam that makes revising a routine safe: there is no
+     * constraint here for a deletion to travel along, so regenerating or throwing away a routine
+     * cannot reach a single logged set. Do not turn either of these into a foreign key.
+     */
+    @ColumnInfo(name = "routine_name")
+    val routineName: String?,
+
+    @ColumnInfo(name = "routine_day_name")
+    val routineDayName: String?,
+
+    /**
+     * The import that brought this session in, or null for one logged in the app.
+     *
+     * Provenance lives here, on the session every one of its sets belongs to: an imported set is
+     * an ordinary working set whose session came from an import, not a sixth set type
+     * (ADR 0007). No foreign key, because undoing an import deletes its sessions by this id.
+     */
+    @ColumnInfo(name = "import_batch_id")
+    val importBatchId: Long? = null,
+)
+
+fun SessionEntity.toDomain() = Session(
+    id = id,
+    startedAt = startedAt,
+    finishedAt = finishedAt,
+    date = date,
+    note = note,
+    routineName = routineName,
+    routineDayName = routineDayName,
+    importBatchId = importBatchId,
+)
+
+fun Session.toEntity() = SessionEntity(
+    id = id,
+    startedAt = startedAt,
+    finishedAt = finishedAt,
+    date = date,
+    note = note,
+    routineName = routineName,
+    routineDayName = routineDayName,
+    importBatchId = importBatchId,
+)
