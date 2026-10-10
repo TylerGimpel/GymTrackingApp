@@ -6,6 +6,7 @@ import com.tylergimpel.gymtracker.domain.Profile
 import com.tylergimpel.gymtracker.domain.Sex
 import com.tylergimpel.gymtracker.domain.Theme
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.WorkoutTip
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.Locale
@@ -68,11 +69,28 @@ class ProfileRepository(
     suspend fun setTheme(theme: Theme) =
         update { it.copy(theme = theme.takeIf { chosen -> chosen != Theme.SYSTEM }?.name) }
 
-    /** Whether the first-session tip has been dismissed, which it is only ever once. */
-    fun observeCoachMarkSeen(): Flow<Boolean> = profiles.observe().map { it?.coachMarkSeen ?: false }
+    /** The workout tips already seen or used, which never show again until asked for (#156). */
+    fun observeTipsDone(): Flow<Set<WorkoutTip>> = profiles.observe().map { row ->
+        buildSet {
+            if (row?.tipTapToTypeDone == true) add(WorkoutTip.TAP_TO_TYPE)
+            if (row?.tipSwitchUnitDone == true) add(WorkoutTip.SWITCH_UNIT)
+            if (row?.tipSwipeForWorkoutDone == true) add(WorkoutTip.SWIPE_FOR_WORKOUT)
+        }
+    }
 
-    /** Dismisses the first-session tip for good. */
-    suspend fun dismissCoachMark() = update { it.copy(coachMarkSeen = true) }
+    /** Records that [tip] was seen or its gesture used, so it does not show again. */
+    suspend fun tipDone(tip: WorkoutTip) = update {
+        when (tip) {
+            WorkoutTip.TAP_TO_TYPE -> it.copy(tipTapToTypeDone = true)
+            WorkoutTip.SWITCH_UNIT -> it.copy(tipSwitchUnitDone = true)
+            WorkoutTip.SWIPE_FOR_WORKOUT -> it.copy(tipSwipeForWorkoutDone = true)
+        }
+    }
+
+    /** Brings all three workout tips back, from Settings' Show tips again. */
+    suspend fun showTipsAgain() = update {
+        it.copy(tipTapToTypeDone = false, tipSwitchUnitDone = false, tipSwipeForWorkoutDone = false)
+    }
 
     /** Records the lifter's sex, or withdraws it with null. */
     suspend fun setSex(sex: Sex?) = update { it.copy(sex = sex?.name) }

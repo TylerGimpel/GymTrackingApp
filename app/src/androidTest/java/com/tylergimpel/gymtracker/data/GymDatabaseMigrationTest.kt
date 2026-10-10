@@ -949,6 +949,7 @@ class GymDatabaseMigrationTest {
         const val THIRTY_FIRST_DATABASE = "migration-thirty-first.db"
         const val THIRTY_SECOND_DATABASE = "migration-thirty-second.db"
         const val THIRTY_THIRD_DATABASE = "migration-thirty-third.db"
+        const val THIRTY_FOURTH_DATABASE = "migration-thirty-fourth.db"
     }
 
     /**
@@ -1376,6 +1377,53 @@ class GymDatabaseMigrationTest {
             db.query("SELECT session_minutes FROM routine WHERE id = 1").use {
                 it.moveToFirst()
                 assertEquals(90, it.getInt(0))
+            }
+        }
+    }
+
+    /**
+     * Version 35 remembers each workout tip on its own (#156). The old card taught the unit and the
+     * swipe, so somebody who dismissed it has seen those; typing was never on it. Everything else
+     * the lifter said about themselves comes through the rebuild as it was.
+     */
+    @Test
+    fun migratesTheOldTipToTheTwoItTaught() {
+        helper.createDatabase(THIRTY_FOURTH_DATABASE, 34).use { version34 ->
+            version34.execSQL(
+                "INSERT INTO profile (id, display_unit, bar_kg, experience, sex, birth_year, height_cm, theme, " +
+                    "coach_mark_seen) VALUES (1, 'lb', 20.0, 'NOVICE', 'FEMALE', 1990, 170.0, 'DARK', 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(THIRTY_FOURTH_DATABASE, 35, true, MIGRATION_34_35).use { db ->
+            db.query(
+                "SELECT display_unit, bar_kg, experience, sex, birth_year, height_cm, theme, tip_tap_to_type_done, " +
+                    "tip_switch_unit_done, tip_swipe_for_workout_done FROM profile WHERE id = 1",
+            ).use {
+                it.moveToFirst()
+                assertEquals("lb", it.getString(0))
+                assertEquals(20.0, it.getDouble(1), 0.0)
+                assertEquals("NOVICE", it.getString(2))
+                assertEquals("FEMALE", it.getString(3))
+                assertEquals(1990, it.getInt(4))
+                assertEquals(170.0, it.getDouble(5), 0.0)
+                assertEquals("DARK", it.getString(6))
+                assertEquals(listOf(0, 1, 1), listOf(it.getInt(7), it.getInt(8), it.getInt(9)))
+            }
+        }
+    }
+
+    /** Somebody who never dismissed the old card has all three tips still to come. */
+    @Test
+    fun migratesToEveryTipStillToComeForSomebodyWhoNeverDismissedTheOldOne() {
+        helper.createDatabase(THIRTY_FOURTH_DATABASE, 34).use { version34 ->
+            version34.execSQL("INSERT INTO profile (id, experience, coach_mark_seen) VALUES (1, 'TRAINED', 0)")
+        }
+
+        helper.runMigrationsAndValidate(THIRTY_FOURTH_DATABASE, 35, true, MIGRATION_34_35).use { db ->
+            db.query("SELECT tip_tap_to_type_done, tip_switch_unit_done, tip_swipe_for_workout_done FROM profile").use {
+                it.moveToFirst()
+                assertEquals(listOf(0, 0, 0), listOf(it.getInt(0), it.getInt(1), it.getInt(2)))
             }
         }
     }

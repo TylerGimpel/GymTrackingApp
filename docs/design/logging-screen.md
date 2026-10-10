@@ -42,7 +42,23 @@ Warm-up and calibration sets get **no range line at all**. Neither is progressed
 - **Tapping a value types it.** Necessary because stepping from 20 to 60 is absurd, and overriding is the *expected* path while calibrating, not the exception.
 - **Tapping the unit toggles kg/lb for that exercise**, and the choice is remembered. Storage stays canonical kg; this is display conversion only, so a machine labelled in lb and one labelled in kg can sit in the same routine without putting a false step in the progress graph.
 
-The unit is tappable but carries no underline or other decoration. The affordance is taught once during onboarding rather than advertised on every set.
+The unit is tappable but carries no underline or other decoration. The affordance is taught once, by a tip during the first workout, rather than advertised on every set.
+
+## The tips
+
+The screen's hidden gestures are taught by **three tips during the first workout** ([#145](https://github.com/TylerGimpel/GymTrackingApp/issues/145)), each on the real screen at the moment it is useful. There is no setup page for them: that would teach before there is anything to use the gesture on.
+
+| Tip | Points at | Appears |
+|---|---|---|
+| **Tap to type** | the first set's number | when the workout opens |
+| **Tap to switch kg/lb** | the unit | after the first set is logged |
+| **Swipe for your whole workout →** | the drawer | when the first exercise is done and the next begins |
+
+- **A small bubble pointing at the thing, one at a time.** It never blocks the screen and never covers Log: everything round it keeps taking taps.
+- **It goes when the lifter does the gesture or taps the bubble.** A gesture used before its tip appears means that tip never shows.
+- **Each tip is remembered on its own**, seen or used, and a restored backup keeps that. **Show tips again** in Settings brings all three back.
+
+Every gesture keeps a visible alternative — the steppers, the drawer button, the ▾ on the name, the lift's Settings tab — so a tip missed costs nothing. The name's menu has its ▾ already, and the drawer also closes by tapping outside or Back, so neither gets a tip.
 
 ## What the screen says, and when
 

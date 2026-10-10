@@ -152,7 +152,7 @@ class BackupRepository(
     /**
      * What restoring now would replace, so the lifter can be told before it happens (#104).
      *
-     * A profile row only counts where it holds an answer: dismissing the first-session tip or
+     * A profile row only counts where it holds an answer: a workout tip going away or
      * choosing a theme writes one too, and neither is training a lifter could lose.
      */
     suspend fun wouldReplace(): WouldReplace = withContext(Dispatchers.IO) {

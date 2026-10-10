@@ -58,7 +58,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun importBatchDao(): ImportBatchDao
 
     companion object {
-        const val VERSION = 34
+        const val VERSION = 35
 
         /** Path inside assets, written there at build time by `generate<Variant>ExerciseBank`. */
         const val ASSET_PATH = "databases/gym-bank.db"

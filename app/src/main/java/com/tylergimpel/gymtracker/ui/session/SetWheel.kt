@@ -34,6 +34,7 @@ import com.tylergimpel.gymtracker.domain.Recommendation
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.WorkoutTip
 import com.tylergimpel.gymtracker.domain.asTimeText
 import com.tylergimpel.gymtracker.ui.label
 import com.tylergimpel.gymtracker.ui.theme.ControlShape
@@ -238,6 +239,7 @@ private fun UnitLabel(text: String, onClick: () -> Unit) {
         modifier = Modifier
             .clickable(onClickLabel = stringResource(R.string.workout_switch_unit), onClick = onClick)
             .testTag(UNIT_TOGGLE)
+            .then(rememberTipAnchor(WorkoutTip.SWITCH_UNIT))
             .padding(start = 2.dp, bottom = 8.dp),
     )
 }

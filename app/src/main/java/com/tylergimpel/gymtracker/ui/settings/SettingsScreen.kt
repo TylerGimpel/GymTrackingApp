@@ -11,6 +11,7 @@ import com.tylergimpel.gymtracker.ui.theme.SectionLabel
 import com.tylergimpel.gymtracker.ui.theme.RowDivider
 import com.tylergimpel.gymtracker.ui.theme.CardRow
 import com.tylergimpel.gymtracker.ui.theme.AppCard
+import androidx.compose.ui.platform.testTag
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -125,6 +126,7 @@ fun SettingsScreen(
         onOpenExcluded = onOpenExcluded,
         onDisplayUnit = viewModel::setDisplayUnit,
         onTheme = viewModel::setTheme,
+        onShowTipsAgain = viewModel::showTipsAgain,
         onFixRestAlerts = { fix -> context.startActivity(settingsFor(fix, context)) },
         onExportForSpreadsheets = {
             exportForSpreadsheets.launch("gym-tracker-export-${LocalDate.now()}.csv")
@@ -159,6 +161,7 @@ fun SettingsScreen(
     onOpenExcluded: () -> Unit = {},
     onDisplayUnit: (WeightUnit) -> Unit = {},
     onTheme: (Theme) -> Unit = {},
+    onShowTipsAgain: () -> Unit = {},
     onFixRestAlerts: (RestFix) -> Unit = {},
     onExportForSpreadsheets: () -> Unit = {},
     onBackUp: () -> Unit = {},
@@ -238,6 +241,17 @@ fun SettingsScreen(
                     brokenText = R.string.rest_countdown_hidden,
                     fixText = R.string.rest_allow_notifications,
                     onFix = { onFixRestAlerts(RestFix.NOTIFICATIONS) },
+                )
+            }
+
+            // The workout's three tips, back for the next workout (#156). Once they are all
+            // showing again there is nothing to bring back, and the row says when they will be.
+            AppCard(Modifier.fillMaxWidth()) {
+                CardRow(
+                    stringResource(R.string.settings_show_tips),
+                    subtitle = if (state.tipsGone) null else stringResource(R.string.settings_tips_back),
+                    onClick = if (state.tipsGone) onShowTipsAgain else null,
+                    modifier = Modifier.testTag(SHOW_TIPS_AGAIN),
                 )
             }
 
@@ -476,3 +490,6 @@ internal fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
         }
     }
 }
+
+/** Handle for the tests. */
+const val SHOW_TIPS_AGAIN = "show-tips-again"

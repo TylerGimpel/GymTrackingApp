@@ -44,6 +44,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,6 +94,8 @@ import com.tylergimpel.gymtracker.domain.SessionExercise
 import com.tylergimpel.gymtracker.domain.SessionPosition
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.WorkoutTip
+import com.tylergimpel.gymtracker.domain.workoutTip
 import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.asTimeText
@@ -129,10 +132,9 @@ fun SessionScreen(
     viewModel: SessionViewModel = viewModel(),
 ) {
     val loaded by viewModel.state.collectAsStateWithLifecycle()
-    val coachMarkSeen by viewModel.coachMarkSeen.collectAsStateWithLifecycle()
-    // The tip belongs beside an exercise, since that is where the unit and the drawer are, and
-    // only until it has been dismissed once (#92).
-    val state = loaded.copy(showCoachMark = !coachMarkSeen && loaded.selected != null)
+    val tipsDone by viewModel.tipsDone.collectAsStateWithLifecycle()
+    // One tip at a time, each at its moment and only until it is seen or used (#156).
+    val state = loaded.copy(tip = workoutTip(tipsDone, loaded.tipMoment()))
     val context = LocalContext.current
 
     val askAboutNotifications = rememberLauncherForActivityResult(
@@ -242,7 +244,7 @@ fun SessionScreen(
             onUngroup = viewModel::ungroup,
             onSetAutoJump = viewModel::setAutoJump,
             onSessionNoteChange = viewModel::noteSession,
-            onDismissCoachMark = viewModel::dismissCoachMark,
+            onTipDone = viewModel::tipDone,
             onLeave = onLeave,
         ),
     )
@@ -329,8 +331,8 @@ data class SessionActions(
     val onUngroup: (Long) -> Unit = {},
     val onSetAutoJump: (Long, Boolean) -> Unit = { _, _ -> },
     val onSessionNoteChange: (String) -> Unit = {},
-    /** Dismisses the first-session tip, for good (#92). */
-    val onDismissCoachMark: () -> Unit = {},
+    /** A workout tip was tapped away or its gesture used: it does not show again (#156). */
+    val onTipDone: (WorkoutTip) -> Unit = {},
     /** Back to Today with the workout still running. */
     val onLeave: () -> Unit = {},
 )
@@ -347,6 +349,7 @@ fun SessionScreen(
 ) {
     val colors = LocalGymColors.current
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    val anchors = remember { TipAnchors() }
     val scope = rememberCoroutineScope()
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     var leaving by rememberSaveable { mutableStateOf(false) }
@@ -376,84 +379,89 @@ fun SessionScreen(
     var dragged by remember { mutableFloatStateOf(0f) }
     val dragToOpen = with(LocalDensity.current) { DRAG_TO_OPEN.toPx() }
 
-    ModalNavigationDrawer(
-        drawerState = drawer,
-        // **Never from the edge**, where gesture navigation's Back lives: the drawer opens from
-        // the strip, or a sideways swipe anywhere. Once open it follows a finger dragging it shut.
-        gesturesEnabled = drawer.isOpen,
-        drawerContent = {
-            WorkoutDrawer(
-                state = state,
-                onJumpTo = { exercise ->
-                    exercises.onJumpTo(exercise)
-                    scope.launch { drawer.close() }
-                },
-                onSwap = { exercise ->
-                    scope.launch { drawer.close() }
-                    exercises.onSwapAt(exercise)
-                },
-                onAdd = {
-                    scope.launch { drawer.close() }
-                    exercises.onAdd()
-                },
-                onRefile = cycle.onStartRefiling,
-                onNoteChange = wholeSession.onSessionNoteChange,
-            )
-        },
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(colors.bg)
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    state = rememberDraggableState { delta -> dragged += delta },
-                    onDragStarted = { dragged = 0f },
-                    onDragStopped = { velocity ->
-                        // Either direction, thrown or pulled: a phone is held in whichever hand
-                        // is free, and a thumb resting on the glass has no velocity to give.
-                        if (velocity > SWIPE_TO_OPEN || velocity < -SWIPE_TO_OPEN ||
-                            dragged > dragToOpen || dragged < -dragToOpen
-                        ) {
-                            drawer.open()
-                        }
+    CompositionLocalProvider(LocalTipAnchors provides anchors) {
+        ModalNavigationDrawer(
+            drawerState = drawer,
+            // **Never from the edge**, where gesture navigation's Back lives: the drawer opens from
+            // the strip, or a sideways swipe anywhere. Once open it follows a finger dragging it shut.
+            gesturesEnabled = drawer.isOpen,
+            drawerContent = {
+                WorkoutDrawer(
+                    state = state,
+                    onJumpTo = { exercise ->
+                        exercises.onJumpTo(exercise)
+                        scope.launch { drawer.close() }
                     },
-                ),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Strip(state, onOpenDrawer = { scope.launch { drawer.open() } }, onFinish = cycle.onFinish)
-                val selected = state.selected
-                if (selected == null) {
-                    NothingChosen(onAdd = exercises.onAdd, onPickExercise = exercises.onPickExercise)
-                } else {
-                    Head(state, selected, onOpenMenu = { menuOpen = true })
-                    Notices(state, rest.onFixRestAlerts, wholeSession.onDismissCoachMark, exercises)
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
-                        Wheel(state, selected, entry)
-                    }
-                    Hints(state, selected)
-                    Controls(state, entry)
-                }
-            }
-
-            state.resting?.let { resting ->
-                RestBar(
-                    resting = resting,
-                    after = state.restAfter,
-                    onAdd = rest.onAddRest,
-                    onSkip = rest.onEndRest,
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    onSwap = { exercise ->
+                        scope.launch { drawer.close() }
+                        exercises.onSwapAt(exercise)
+                    },
+                    onAdd = {
+                        scope.launch { drawer.close() }
+                        exercises.onAdd()
+                    },
+                    onRefile = cycle.onStartRefiling,
+                    onNoteChange = wholeSession.onSessionNoteChange,
                 )
+            },
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(colors.bg)
+                    .draggable(
+                        orientation = Orientation.Horizontal,
+                        state = rememberDraggableState { delta -> dragged += delta },
+                        onDragStarted = { dragged = 0f },
+                        onDragStopped = { velocity ->
+                            // Either direction, thrown or pulled: a phone is held in whichever hand
+                            // is free, and a thumb resting on the glass has no velocity to give.
+                            if (velocity > SWIPE_TO_OPEN || velocity < -SWIPE_TO_OPEN ||
+                                dragged > dragToOpen || dragged < -dragToOpen
+                            ) {
+                                wholeSession.onTipDone(WorkoutTip.SWIPE_FOR_WORKOUT)
+                                drawer.open()
+                            }
+                        },
+                    ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Strip(state, onOpenDrawer = { scope.launch { drawer.open() } }, onFinish = cycle.onFinish)
+                    val selected = state.selected
+                    if (selected == null) {
+                        NothingChosen(onAdd = exercises.onAdd, onPickExercise = exercises.onPickExercise)
+                    } else {
+                        Head(state, selected, onOpenMenu = { menuOpen = true })
+                        Notices(state, rest.onFixRestAlerts, exercises)
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            Wheel(state, selected, entry, onSwitchedUnit = { wholeSession.onTipDone(WorkoutTip.SWITCH_UNIT) })
+                        }
+                        Hints(state, selected)
+                        Controls(state, entry, onTyped = { wholeSession.onTipDone(WorkoutTip.TAP_TO_TYPE) })
+                    }
+                }
+
+                state.resting?.let { resting ->
+                    RestBar(
+                        resting = resting,
+                        after = state.restAfter,
+                        onAdd = rest.onAddRest,
+                        onSkip = rest.onEndRest,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
+                SnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
+                // Last, so it sits over the rest bar too; it covers nothing but itself.
+                state.tip?.let { tip -> TipBubble(tip, anchors, onDismiss = { wholeSession.onTipDone(tip) }) }
             }
-            SnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
         }
     }
 
@@ -578,7 +586,10 @@ private fun Strip(state: SessionUiState, onOpenDrawer: () -> Unit, onFinish: () 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StripButton(onClick = onOpenDrawer, modifier = Modifier.testTag(DRAWER_BUTTON)) {
+        StripButton(
+            onClick = onOpenDrawer,
+            modifier = Modifier.testTag(DRAWER_BUTTON).then(rememberTipAnchor(WorkoutTip.SWIPE_FOR_WORKOUT)),
+        ) {
             Icon(AppIcons.List, contentDescription = stringResource(R.string.drawer_open), modifier = Modifier.size(22.dp))
             if (state.lineup.isNotEmpty() && position >= 0) {
                 Text("${position + 1}/${state.lineup.size}", fontWeight = FontWeight.SemiBold)
@@ -672,12 +683,11 @@ private fun counterText(state: SessionUiState): String? {
     return "$set · $tail"
 }
 
-/** The few things said above the wheel: failures that are otherwise silent, and the one tip. */
+/** The few things said above the wheel: failures that are otherwise silent, and an offer. */
 @Composable
 private fun Notices(
     state: SessionUiState,
     onFixRestAlerts: (RestFix) -> Unit,
-    onDismissCoachMark: () -> Unit,
     exercises: ExerciseActions,
 ) {
     if (!state.restAlarmsAreReliable) {
@@ -688,13 +698,12 @@ private fun Notices(
             onFixRestAlerts(RestFix.NOTIFICATIONS)
         }
     }
-    if (state.showCoachMark) CoachMark(onDismissCoachMark)
     if (state.offerResetEstimate) ResetEstimateOffer(exercises.onResetEstimate, exercises.onKeepEstimate)
 }
 
 /** The wheel: the sets done, the one to do, and the way to one more once the plan is met. */
 @Composable
-private fun Wheel(state: SessionUiState, exercise: Exercise, entry: SetEntryActions) {
+private fun Wheel(state: SessionUiState, exercise: Exercise, entry: SetEntryActions, onSwitchedUnit: () -> Unit) {
     val complete = state.lineup.firstOrNull { it.exercise.id == exercise.id }
         ?.let { it.planned != null && it.done >= it.planned } == true
     var extra by remember(exercise.id, state.wheel.size) { mutableStateOf(false) }
@@ -710,7 +719,11 @@ private fun Wheel(state: SessionUiState, exercise: Exercise, entry: SetEntryActi
             }
             if (performed != null) entry.onEditEffort(performed, logged.set, logged.set.efforts.first())
         },
-        onReadIn = entry.onReadIn,
+        // Tapping the unit on the wheel is the gesture its tip teaches; the menu's way is not.
+        onReadIn = {
+            onSwitchedUnit()
+            entry.onReadIn(it)
+        },
         onAddSet = if (complete && !extra) { { extra = true } } else null,
         modifier = Modifier.fillMaxSize(),
     )
@@ -755,16 +768,16 @@ private fun Hints(state: SessionUiState, exercise: Exercise) {
  * The controls a thumb acts on, fixed below the wheel: the steppers, then Log.
  *
  * The same place every set, because a control that moves between sets is one you have to look
- * at. Each number is typed by tapping it.
+ * at. Each number is typed by tapping it, which is what [onTyped] hears about.
  */
 @Composable
-private fun Controls(state: SessionUiState, entry: SetEntryActions) {
+private fun Controls(state: SessionUiState, entry: SetEntryActions, onTyped: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (state.perSide) SectionLabel(stringResource(R.string.set_side_left))
-        Steppers(state.draft, entry.onDraftChange, tagged = true)
+        Steppers(state.draft, entry.onDraftChange, tagged = true, onTyped)
         if (state.perSide) {
             SectionLabel(stringResource(R.string.set_side_right))
-            Steppers(state.rightDraft, entry.onRightDraftChange, tagged = false)
+            Steppers(state.rightDraft, entry.onRightDraftChange, tagged = false, onTyped)
         }
         MainButton(
             text = stringResource(R.string.session_log_set),
@@ -775,27 +788,32 @@ private fun Controls(state: SessionUiState, entry: SetEntryActions) {
     }
 }
 
-/** A stepper for each thing this exercise records, two to a row. */
+/**
+ * A stepper for each thing this exercise records, two to a row.
+ *
+ * The [tagged] row's first number is the one the tap-to-type tip points at.
+ */
 @Composable
-private fun Steppers(draft: SetDraft, onChange: (SetDraft) -> Unit, tagged: Boolean) {
+private fun Steppers(draft: SetDraft, onChange: (SetDraft) -> Unit, tagged: Boolean, onTyped: () -> Unit) {
     val type = draft.loggingType
     val unit = stringResource(draft.displayUnit.label)
     val steppers = buildList<@Composable (Modifier) -> Unit> {
         if (type.recordsWeight) add { m ->
-            Stepper(draft.weightText, unit, { onChange(draft.copy(weightText = it)) }, { onChange(draft.stepWeight(it)) }, KeyboardType.Decimal, m, if (tagged) WEIGHT_FIELD else null)
+            Stepper(onTyped, draft.weightText, unit, { onChange(draft.copy(weightText = it)) }, { onChange(draft.stepWeight(it)) }, KeyboardType.Decimal, m, if (tagged) WEIGHT_FIELD else null)
         }
         if (type.recordsAddedWeight || type.recordsAssistance) add { m ->
             val label = stringResource(if (type.recordsAssistance) R.string.workout_help else R.string.workout_added, unit)
-            Stepper(draft.addedWeightText, label, { onChange(draft.copy(addedWeightText = it)) }, { onChange(draft.copy(addedWeightText = stepped(draft.addedWeightText, draft.displayUnit.step * it))) }, KeyboardType.Decimal, m)
+            Stepper(onTyped, draft.addedWeightText, label, { onChange(draft.copy(addedWeightText = it)) }, { onChange(draft.copy(addedWeightText = stepped(draft.addedWeightText, draft.displayUnit.step * it))) }, KeyboardType.Decimal, m)
         }
         if (type.recordsReps) add { m ->
-            Stepper(draft.repsText, stringResource(R.string.set_reps), { onChange(draft.copy(repsText = it)) }, { onChange(draft.copy(repsText = stepped(draft.repsText, it.toDouble(), whole = true))) }, KeyboardType.Number, m)
+            Stepper(onTyped, draft.repsText, stringResource(R.string.set_reps), { onChange(draft.copy(repsText = it)) }, { onChange(draft.copy(repsText = stepped(draft.repsText, it.toDouble(), whole = true))) }, KeyboardType.Number, m)
         }
         if (type.recordsDistance) add { m ->
-            Stepper(draft.distanceText, stringResource(draft.distanceUnit.label), { onChange(draft.copy(distanceText = it)) }, { onChange(draft.copy(distanceText = stepped(draft.distanceText, 0.5 * it))) }, KeyboardType.Decimal, m)
+            Stepper(onTyped, draft.distanceText, stringResource(draft.distanceUnit.label), { onChange(draft.copy(distanceText = it)) }, { onChange(draft.copy(distanceText = stepped(draft.distanceText, 0.5 * it))) }, KeyboardType.Decimal, m)
         }
         if (type.recordsDuration) add { m ->
             Stepper(
+                onTyped,
                 draft.durationText,
                 draft.duration?.asTimeText() ?: stringResource(R.string.set_seconds),
                 { onChange(draft.copy(durationText = it)) },
@@ -805,9 +823,12 @@ private fun Steppers(draft: SetDraft, onChange: (SetDraft) -> Unit, tagged: Bool
             )
         }
     }
-    steppers.chunked(2).forEach { row ->
+    val anchor = if (tagged) rememberTipAnchor(WorkoutTip.TAP_TO_TYPE) else Modifier
+    steppers.chunked(2).forEachIndexed { r, row ->
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            row.forEach { it(Modifier.weight(1f)) }
+            row.forEachIndexed { i, stepper ->
+                stepper(Modifier.weight(1f).let { if (r == 0 && i == 0) it.then(anchor) else it })
+            }
         }
     }
 }
@@ -819,9 +840,10 @@ private fun stepped(text: String, by: Double, whole: Boolean = false): String {
     return if (whole) next.toLong().toString() else next.asAmountText()
 }
 
-/** − value + , where tapping the value types it. */
+/** − value + , where tapping the value types it, which [onTyped] hears about. */
 @Composable
 private fun Stepper(
+    onTyped: () -> Unit,
     value: String,
     label: String,
     onType: (String) -> Unit,
@@ -844,7 +866,10 @@ private fun Stepper(
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 64.dp)
-                .clickable(onClickLabel = stringResource(R.string.workout_type_it)) { typing = true }
+                .clickable(onClickLabel = stringResource(R.string.workout_type_it)) {
+                    typing = true
+                    onTyped()
+                }
                 .let { if (tag != null) it.testTag(tag) else it },
             contentAlignment = Alignment.Center,
         ) {
