@@ -3,6 +3,7 @@ package com.tylergimpel.gymtracker.ui.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.tylergimpel.gymtracker.data.ExerciseAliasStore
 import com.tylergimpel.gymtracker.data.GymDatabase
 import com.tylergimpel.gymtracker.data.profileRepository
 import com.tylergimpel.gymtracker.domain.Theme
@@ -32,7 +33,6 @@ import com.tylergimpel.gymtracker.data.ImportOutcome
 import com.tylergimpel.gymtracker.data.ListedImport
 import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.NameDecision
-import com.tylergimpel.gymtracker.domain.previewOf
 import java.time.Instant
 import java.io.File
 import com.tylergimpel.gymtracker.domain.spreadsheetExport
@@ -135,7 +135,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val dataMessage = MutableStateFlow<DataMessage?>(null)
     private val confirming = MutableStateFlow<ConfirmRestore?>(null)
 
-    private val importer = ImportRepository(database, profile = profile)
+    private val importer = ImportRepository(
+        database,
+        profile = profile,
+        formerNames = { ExerciseAliasStore(application).loadFormerNames() },
+    )
     private val confirmingUndo = MutableStateFlow<ListedImport?>(null)
     private val previewing = MutableStateFlow<Previewing?>(null)
 
@@ -278,7 +282,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 // A file already in is said so at once, rather than previewed and decided for nothing.
                 importer.importedAt(records.fingerprint)?.let { DataMessage.AlreadyImported(it) } ?: run {
                     // Nothing is written until the lifter has seen what will be and gone ahead (#103).
-                    val preview = previewOf(records, bank, importer.alreadyHere(records.source))
+                    val preview = importer.preview(records, bank)
                     previewing.value = Previewing(
                         records = records,
                         preview = preview,

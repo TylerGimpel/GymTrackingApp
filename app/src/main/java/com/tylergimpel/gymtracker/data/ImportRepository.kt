@@ -2,6 +2,9 @@ package com.tylergimpel.gymtracker.data
 
 import androidx.room.withTransaction
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.FormerNames
+import com.tylergimpel.gymtracker.domain.ImportPreview
+import com.tylergimpel.gymtracker.domain.previewOf
 import com.tylergimpel.gymtracker.domain.ImportedSet
 import com.tylergimpel.gymtracker.domain.NeutralImport
 import com.tylergimpel.gymtracker.domain.Performance
@@ -69,6 +72,11 @@ class ImportRepository(
     private val zone: ZoneId = ZoneId.systemDefault(),
     /** The lifter's **Preferred unit**, which an exercise with no **Display unit** of its own follows. */
     private val profile: ProfileRepository = database.profileRepository(),
+    /**
+     * What renamed bank rows were called before (#149), which a source may still call them: a
+     * FitNotes history logged as "Barbell Squat" is the bank's "Back Squat", exactly.
+     */
+    private val formerNames: suspend () -> FormerNames = { emptyMap() },
 ) {
     private val sessions = database.sessionDao()
     private val exercises = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
@@ -95,6 +103,10 @@ class ImportRepository(
         val here = alreadyHere(records.source)
         ImportOutcome.Imported(write(records.without(here), bank, decisions).copy(alreadyHere = records.sessionsOn(here)))
     }
+
+    /** What bringing [records] in would do, shown before anything is written (#103). */
+    suspend fun preview(records: NeutralImport, bank: List<Exercise>): ImportPreview =
+        previewOf(records, bank, alreadyHere(records.source), formerNames())
 
     /** The dates a still-standing import from [source] already brought in (#116). */
     suspend fun alreadyHere(source: ImportSource): Set<LocalDate> =
@@ -141,7 +153,7 @@ class ImportRepository(
         )
 
         // Exactly or not at all, and then what the lifter decided for the rest: never a guess.
-        val exact = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank)
+        val exact = matchExactly(records.sets.map(ImportedSet::exerciseName).toSet(), bank, formerNames())
         val created = mutableListOf<Exercise>()
         val matches: Map<String, Exercise?> = exact.mapValues { (name, found) ->
             found ?: when (val decision = decisions[name]) {

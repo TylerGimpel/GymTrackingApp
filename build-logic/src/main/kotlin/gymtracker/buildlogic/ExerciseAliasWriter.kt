@@ -13,6 +13,7 @@ object ExerciseAliasWriter {
 
     private val gson = GsonBuilder().setPrettyPrinting().create()
 
-    fun toJson(aliases: Map<String, List<String>>): String =
+    /** Also writes the former names, which share the shape: a name to what it leads to. */
+    fun toJson(aliases: Map<String, *>): String =
         gson.toJson(aliases.toSortedMap()) + "\n"
 }

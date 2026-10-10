@@ -37,6 +37,13 @@ data class ExerciseBank(
     val exercises: List<BankExercise>,
     /** Alias to the names it resolves to, which may be several. */
     val aliases: Map<String, List<String>>,
+    /**
+     * A name a row shipped under before it was renamed, to the name it ships under now.
+     *
+     * Kept apart from [aliases] because it means something stricter: not shorthand but the same
+     * exercise's earlier name, which an import may match exactly (ADR 0007) and an alias never.
+     */
+    val formerNames: Map<String, String> = emptyMap(),
 )
 
 /** Thrown when the source data cannot produce a valid bank. Carries every problem, not just the first. */
@@ -69,6 +76,9 @@ object ExerciseBankBuilder {
      */
     private val FORBIDDEN_FIELDS = listOf("instructions", "images")
 
+    /** The kinds of correction `bank-patches.json` holds, any of which may be absent. */
+    private val CORRECTION_KINDS = listOf("patches", "superseded", "renamed")
+
     /**
      * Name fragments that mark an exercise as trained one side at a time. Deliberately literal: only
      * explicit one-side wording counts, because "alternating" and "split" describe how a set is
@@ -95,12 +105,13 @@ object ExerciseBankBuilder {
             .mapNotNull { it.toAuthoredExercise(problems) }
         val patches = readPatches(bankPatchesJson, problems)
         val superseded = readSupersessions(bankPatchesJson, upstream, problems)
+        val renamed = readRenames(bankPatchesJson, upstream + authored, superseded, problems)
 
         checkCollisions(upstream, authored, problems)
         val patched = applyPatches(upstream, patches, problems)
             .filterNot { it.id in superseded }
 
-        val exercises = (patched + authored)
+        val exercises = applyRenames(patched + authored, renamed, problems)
             // Derived here rather than where each row is read, because it follows the logging type
             // and a patch can still change that: `bank-patches.json` moves rows onto `distance_time`
             // long after the upstream branch guessed at one.
@@ -108,13 +119,110 @@ object ExerciseBankBuilder {
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         // A superseded row's own name becomes shorthand for what replaced it, and any shorthand
         // that already named it follows the same redirect: the exercise was merged, not lost.
-        val redirects = supersessionAliases(superseded, upstream, exercises)
-        val aliases = redirects + readAliases(aliasesJson, exercises, redirects, problems)
+        // A renamed row's old name works the same way: the lifter who learned it as "Standing
+        // Military Press" types that, and the shorthand written against the old name still lands.
+        val formerNames = formerNames(renamed, upstream + authored, exercises)
+        val redirects = supersessionAliases(superseded, upstream, exercises) +
+            formerNames.entries.associate { (former, current) -> former.lowercase() to listOf(current) }
+        val aliases = merge(redirects, readAliases(aliasesJson, exercises, redirects, problems))
 
         if (problems.isNotEmpty()) throw ExerciseBankException(problems)
 
-        return ExerciseBank(exercises, aliases)
+        return ExerciseBank(exercises, aliases, formerNames)
     }
+
+    /**
+     * Reads which rows ship under a plainer name than their source gave them, and what it is.
+     *
+     * The source's names are often not what anyone calls the lift — "Standing Military Press" for
+     * the overhead press, "Butterfly" for the pec deck — and a lifter reading a routine has to
+     * recognise every one of them (ADR 0013). The id stays, which is what history points at.
+     */
+    private fun readRenames(
+        json: String,
+        rows: List<BankExercise>,
+        superseded: Map<String, String>,
+        problems: MutableList<String>,
+    ): Map<String, String> {
+        val renamed = JsonParser.parseString(json)
+            .takeIf { it.isJsonObject }
+            ?.asJsonObject
+            ?.getAsJsonObject("renamed")
+            ?: return emptyMap()
+
+        val ids = rows.mapTo(mutableSetOf()) { it.id }
+        return renamed.entrySet().mapNotNull { (id, value) ->
+            val name = value.stringOrNull()
+            when {
+                id !in ids -> {
+                    problems += "bank-patches.json: `$id` is renamed but is not in the bank"
+                    null
+                }
+
+                id in superseded -> {
+                    problems += "bank-patches.json: `$id` is renamed but is also superseded, so it never ships"
+                    null
+                }
+
+                name.isNullOrBlank() -> {
+                    problems += "bank-patches.json: `$id` is renamed to `$value`, which is not a name"
+                    null
+                }
+
+                else -> id to name
+            }
+        }.toMap()
+    }
+
+    /**
+     * [rows] under their new names, refusing any name that would then belong to two rows.
+     *
+     * Checked after renaming rather than against the source, because the collision that matters is
+     * in what ships: two rows under one name make search, the picker and an import each pick one.
+     */
+    private fun applyRenames(
+        rows: List<BankExercise>,
+        renamed: Map<String, String>,
+        problems: MutableList<String>,
+    ): List<BankExercise> {
+        val shipped = rows.map { row -> renamed[row.id]?.let { row.copy(name = it) } ?: row }
+        shipped.groupBy { it.name.lowercase() }
+            .filterValues { holders -> holders.size > 1 && holders.any { it.id in renamed } }
+            .forEach { (_, holders) ->
+                problems += "bank-patches.json: renaming to `${holders.first { it.id in renamed }.name}` " +
+                    "gives it to ${holders.joinToString { "`${it.id}`" }}, but a name is already one exercise's"
+            }
+        return shipped
+    }
+
+    /** Each renamed row's old name, to the name it ships under now. */
+    private fun formerNames(
+        renamed: Map<String, String>,
+        rows: List<BankExercise>,
+        shipped: List<BankExercise>,
+    ): Map<String, String> {
+        val before = rows.associateBy { it.id }
+        val after = shipped.associateBy { it.id }
+        return renamed.keys.mapNotNull { id ->
+            val old = before[id] ?: return@mapNotNull null
+            val new = after[id] ?: return@mapNotNull null
+            old.name to new.name
+        }.toMap()
+    }
+
+    /**
+     * Both sets of shorthand at once, without either losing a target to the other.
+     *
+     * An old name can already be shorthand of its own — "butterfly" might also mean a cable fly —
+     * and keeping only one side would quietly drop the other.
+     */
+    private fun merge(
+        first: Map<String, List<String>>,
+        second: Map<String, List<String>>,
+    ): Map<String, List<String>> =
+        (first.keys + second.keys).associateWith { key ->
+            (first[key].orEmpty() + second[key].orEmpty()).distinct()
+        }
 
     /**
      * Reads which rows a better one already covers, and what covers them.
@@ -245,14 +353,14 @@ object ExerciseBankBuilder {
     /**
      * Reads the re-tagging half of the corrections file.
      *
-     * Either half may be absent — a file that only supersedes rows re-tags none — but a file with
-     * neither says nothing at all, which is far more likely to be a malformed file than an empty
+     * Any kind may be absent — a file that only supersedes rows re-tags none — but a file with
+     * none says nothing at all, which is far more likely to be a malformed file than an empty
      * intention, and would otherwise apply no corrections and report nothing.
      */
     private fun readPatches(json: String, problems: MutableList<String>): Map<String, JsonObject> {
         val corrections = JsonParser.parseString(json).takeIf { it.isJsonObject }?.asJsonObject
-        if (corrections == null || !corrections.has("patches") && !corrections.has("superseded")) {
-            problems += "bank-patches.json: expected an object with a `patches` or `superseded` member"
+        if (corrections == null || CORRECTION_KINDS.none(corrections::has)) {
+            problems += "bank-patches.json: expected an object with a `patches`, `superseded` or `renamed` member"
             return emptyMap()
         }
         val patches = corrections.getAsJsonObject("patches") ?: return emptyMap()

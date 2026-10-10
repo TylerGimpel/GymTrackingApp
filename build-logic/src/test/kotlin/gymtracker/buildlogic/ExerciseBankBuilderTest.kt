@@ -283,6 +283,94 @@ class ExerciseBankBuilderTest {
     }
 
     @Test
+    fun `a renamed row ships under its plain name, and its old name still finds it`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = upstream(
+                row(id = "Standing_Military_Press", name = "Standing Military Press"),
+                row(id = "One-Arm_Dumbbell_Row", name = "One-Arm Dumbbell Row"),
+            ),
+            authoredJson = authored(row(id = "Chest_Supported_Row_Machine", name = "Chest-Supported Row Machine")),
+            bankPatchesJson = """
+                {"renamed": {
+                  "Standing_Military_Press": "Overhead Press",
+                  "One-Arm_Dumbbell_Row": "Dumbbell Row",
+                  "Chest_Supported_Row_Machine": "Chest-Supported Row"
+                }}
+            """.trimIndent(),
+            aliasesJson = """{"ohp": "Standing Military Press", "military press": ["Standing Military Press"]}""",
+        )
+
+        assertEquals(
+            listOf("Chest-Supported Row", "Dumbbell Row", "Overhead Press"),
+            bank.exercises.map { it.name },
+        )
+        // The id is what history points at, so a rename moves nothing a lifter logged.
+        assertEquals("Standing_Military_Press", bank.exercises.single { it.name == "Overhead Press" }.id)
+        // Derived from the name it shipped with: "Dumbbell Row" alone no longer says one side.
+        assertTrue(bank.exercises.single { it.name == "Dumbbell Row" }.unilateral)
+        // The old name is shorthand now, and shorthand that named it follows the rename.
+        assertEquals(listOf("Overhead Press"), bank.aliases.getValue("standing military press"))
+        assertEquals(listOf("Overhead Press"), bank.aliases.getValue("ohp"))
+        assertEquals(listOf("Overhead Press"), bank.aliases.getValue("military press"))
+        // And an import that knew it by its old name still lands on the same exercise.
+        assertEquals("Overhead Press", bank.formerNames.getValue("Standing Military Press"))
+        assertEquals("Chest-Supported Row", bank.formerNames.getValue("Chest-Supported Row Machine"))
+    }
+
+    @Test
+    fun `an old name that is already shorthand keeps what it named, and gains the rename`() {
+        val bank = ExerciseBankBuilder.build(
+            upstreamJson = upstream(
+                row(id = "Butterfly", name = "Butterfly"),
+                row(id = "Cable_Crossover", name = "Cable Crossover"),
+            ),
+            authoredJson = "[]",
+            bankPatchesJson = """{"renamed": {"Butterfly": "Pec Deck"}}""",
+            aliasesJson = """{"butterfly": ["Cable Crossover"]}""",
+        )
+
+        assertEquals(listOf("Pec Deck", "Cable Crossover"), bank.aliases.getValue("butterfly"))
+    }
+
+    @Test
+    fun `a rename onto a name the bank already uses fails the build`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(
+                row(id = "Alternate_Incline_Dumbbell_Curl", name = "Alternate Incline Dumbbell Curl"),
+                row(id = "Incline_Dumbbell_Curl", name = "Incline Dumbbell Curl"),
+            ),
+            bankPatchesJson = """{"renamed": {"Alternate_Incline_Dumbbell_Curl": "incline dumbbell curl"}}""",
+        )
+
+        // Two rows under one name would make search, the picker and an import all pick one at random.
+        assertTrue(problems.toString(), problems.single().contains("already"))
+    }
+
+    @Test
+    fun `two renames onto one name fail the build`() {
+        val problems = problemsFrom(
+            upstreamJson = upstream(
+                row(id = "Machine_Bench_Press", name = "Machine Bench Press"),
+                row(id = "Leverage_Chest_Press", name = "Leverage Chest Press"),
+            ),
+            bankPatchesJson = """
+                {"renamed": {"Machine_Bench_Press": "Machine Chest Press", "Leverage_Chest_Press": "Machine Chest Press"}}
+            """.trimIndent(),
+        )
+
+        assertTrue(problems.toString(), problems.any { it.contains("Machine Chest Press") })
+    }
+
+    @Test
+    fun `a rename naming a row that is not there fails the build`() {
+        val problems = problemsFrom(
+            bankPatchesJson = """{"renamed": {"Pullups": "Pull-Up"}}""",
+        )
+
+        assertTrue(problems.toString(), problems.single().contains("`Pullups`"))
+    }
+
+    @Test
     fun `an exercise with a load advances by double progression, and one without is never prescribed`() {
         val derive = ExerciseBankBuilder::deriveProgressionModel
 

@@ -28,6 +28,9 @@ interface ExerciseBankExtension {
 
     /** Path inside assets for the shorthand, which travels beside the database. */
     val aliasAssetPath: Property<String>
+
+    /** Path inside assets for the names renamed rows shipped under before, which an import still matches. */
+    val formerNameAssetPath: Property<String>
 }
 
 /**
@@ -45,6 +48,7 @@ class ExerciseBankPlugin : Plugin<Project> {
         val extension = project.extensions.create(EXTENSION_NAME, ExerciseBankExtension::class.java)
         extension.assetPath.convention(DEFAULT_ASSET_PATH)
         extension.aliasAssetPath.convention(DEFAULT_ALIAS_ASSET_PATH)
+        extension.formerNameAssetPath.convention(DEFAULT_FORMER_NAME_ASSET_PATH)
         extension.sourceDataDirectory.convention(
             project.rootProject.layout.projectDirectory.dir(DEFAULT_SOURCE_DATA_DIRECTORY),
         )
@@ -73,6 +77,7 @@ class ExerciseBankPlugin : Plugin<Project> {
                     aliases.set(extension.sourceDataDirectory.file("aliases.json"))
                     assetPath.set(extension.assetPath)
                     aliasAssetPath.set(extension.aliasAssetPath)
+                    formerNameAssetPath.set(extension.formerNameAssetPath)
                 }
                 variant.sources.assets?.addGeneratedSourceDirectory(
                     generate,
@@ -87,6 +92,7 @@ class ExerciseBankPlugin : Plugin<Project> {
         const val ROOM_SCHEMA_TASK = "copyRoomSchemas"
         const val DEFAULT_ASSET_PATH = "databases/gym-bank.db"
         const val DEFAULT_ALIAS_ASSET_PATH = "exercise-aliases.json"
+        const val DEFAULT_FORMER_NAME_ASSET_PATH = "exercise-former-names.json"
         const val DEFAULT_SOURCE_DATA_DIRECTORY = "data"
     }
 }

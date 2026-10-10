@@ -113,7 +113,7 @@ class SessionPersistenceTest {
 
         val logged = currentSession()
 
-        assertEquals(listOf("Barbell Bench Press - Medium Grip", "Barbell Squat"), logged.exercises.map { it.exercise.name })
+        assertEquals(listOf("Bench Press", "Back Squat"), logged.exercises.map { it.exercise.name })
         assertEquals(listOf(1, 2), logged.exercises[0].sets.map(PerformedSet::setIndex))
         assertEquals(listOf(1), logged.exercises[1].sets.map(PerformedSet::setIndex))
     }
