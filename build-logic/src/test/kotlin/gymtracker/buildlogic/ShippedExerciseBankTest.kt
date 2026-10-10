@@ -26,8 +26,9 @@ class ShippedExerciseBankTest {
         // optional added weight, plus the 20 authored ones.
         assertEquals(893, bank.exercises.size)
         // The 133 hand-written aliases, the 3 superseded rows' own names redirecting to what
-        // replaced them, and the assisted dip shorthand.
-        assertEquals(137, bank.aliases.size)
+        // replaced them, the assisted dip shorthand, and the 54 renamed rows' old names.
+        assertEquals(191, bank.aliases.size)
+        assertEquals(54, bank.formerNames.size)
     }
 
     @Test
@@ -44,12 +45,38 @@ class ShippedExerciseBankTest {
     fun `the shorthand this ticket was written for resolves`() {
         // The three examples the ticket names. A test rather than a manual check, because the whole
         // point of the alias list is that nobody would think to look for these by their bank names.
-        assertEquals(listOf("Butterfly"), bank.aliases["pec deck"])
+        assertEquals(listOf("Pec Deck"), bank.aliases["pec deck"])
         assertEquals(listOf("Romanian Deadlift"), bank.aliases["rdl"])
         assertTrue(
             bank.aliases.getValue("ohp").toString(),
             bank.aliases.getValue("ohp").any { "Press" in it },
         )
+    }
+
+    @Test
+    fun `the staples ship under the names programs use, and their old names still find them`() {
+        // A sample of #149's renames, the ones a routine shows most. The id is unchanged, which is
+        // what keeps every logged set and routine pointing at the same exercise.
+        mapOf(
+            "Standing_Military_Press" to "Overhead Press",
+            "Barbell_Bench_Press_-_Medium_Grip" to "Bench Press",
+            "Barbell_Squat" to "Back Squat",
+            "Pullups" to "Pull-Up",
+            "Butterfly" to "Pec Deck",
+        ).forEach { (id, name) ->
+            assertEquals(id, name, bank.exercises.single { it.id == id }.name)
+        }
+        assertEquals(listOf("Overhead Press"), bank.aliases["standing military press"])
+        assertEquals("Overhead Press", bank.formerNames["Standing Military Press"])
+        // The weighted twin's redirect follows the rename rather than naming a row that is gone.
+        assertEquals(listOf("Pull-Up"), bank.aliases["weighted pull ups"])
+    }
+
+    @Test
+    fun `every former name leads to an exercise that ships`() {
+        val names = bank.exercises.mapTo(mutableSetOf()) { it.name }
+
+        assertEquals(emptyMap<String, String>(), bank.formerNames.filterValues { it !in names })
     }
 
     private fun data(name: String): String {
