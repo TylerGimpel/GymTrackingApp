@@ -753,6 +753,35 @@ internal val MIGRATION_33_34 = object : Migration(33, 34) {
     }
 }
 
+/**
+ * Version 35 remembers each workout tip on its own (#156), in place of the one first-session tip.
+ *
+ * SQLite cannot drop a column on every Android this runs on, so `profile` is rebuilt. The old
+ * card taught the unit and the swipe, so a lifter who dismissed it has seen those two already;
+ * typing a number was never on it, and is still to come for everybody.
+ */
+internal val MIGRATION_34_35 = object : Migration(34, 35) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `_new_profile` (`id` INTEGER NOT NULL, `display_unit` TEXT, " +
+                "`bar_kg` REAL, `experience` TEXT NOT NULL DEFAULT 'TRAINED', `sex` TEXT, " +
+                "`birth_year` INTEGER, `height_cm` REAL, `theme` TEXT, " +
+                "`tip_tap_to_type_done` INTEGER NOT NULL DEFAULT 0, " +
+                "`tip_switch_unit_done` INTEGER NOT NULL DEFAULT 0, " +
+                "`tip_swipe_for_workout_done` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        )
+        db.execSQL(
+            "INSERT INTO `_new_profile` (`id`, `display_unit`, `bar_kg`, `experience`, `sex`, " +
+                "`birth_year`, `height_cm`, `theme`, `tip_tap_to_type_done`, `tip_switch_unit_done`, " +
+                "`tip_swipe_for_workout_done`) SELECT `id`, `display_unit`, `bar_kg`, `experience`, " +
+                "`sex`, `birth_year`, `height_cm`, `theme`, 0, `coach_mark_seen`, `coach_mark_seen` " +
+                "FROM `profile`",
+        )
+        db.execSQL("DROP TABLE `profile`")
+        db.execSQL("ALTER TABLE `_new_profile` RENAME TO `profile`")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -787,6 +816,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_31_32,
     MIGRATION_32_33,
     MIGRATION_33_34,
+    MIGRATION_34_35,
 )
 
 /**

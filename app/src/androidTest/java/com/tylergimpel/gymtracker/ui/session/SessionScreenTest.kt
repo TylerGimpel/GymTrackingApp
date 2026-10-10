@@ -30,6 +30,7 @@ import com.tylergimpel.gymtracker.domain.Session
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.SetType
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.WorkoutTip
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -132,33 +133,46 @@ class SessionScreenTest {
     }
 
     @Test
-    fun theFirstSessionPointsOutTheUnitAndTheDrawerOnce() {
-        var dismissed = 0
+    fun aTipPointsAtItsThingWithoutGettingInTheWay() {
+        val done = mutableListOf<WorkoutTip>()
         var logged = 0
         compose.setContent {
             SessionScreen(
-                state = state().copy(showCoachMark = true),
+                state = state().copy(tip = WorkoutTip.TAP_TO_TYPE),
                 entry = SetEntryActions(onLogSet = { logged++ }),
-                wholeSession = SessionActions(onDismissCoachMark = { dismissed++ }),
+                wholeSession = SessionActions(onTipDone = { done += it }),
             )
         }
 
-        compose.onNodeWithText("Tap kg or lb", substring = true).assertExists()
-        compose.onNodeWithText("Swipe sideways", substring = true).assertExists()
+        compose.onNodeWithTag(TIP).assertIsDisplayed()
+        compose.onNodeWithText("Tap to type").assertIsDisplayed()
 
         // Never in the way: a set logs with the tip still up.
         compose.onNodeWithTag(LOG_SET).performClick()
         assertEquals(1, logged)
 
-        compose.onNodeWithText("Got it").performClick()
-        assertEquals(1, dismissed)
+        // Tapping the bubble is one way it goes.
+        compose.onNodeWithTag(TIP).performClick()
+        assertEquals(listOf(WorkoutTip.TAP_TO_TYPE), done)
     }
 
     @Test
-    fun aDismissedTipIsNotShownAgain() {
-        compose.setContent { SessionScreen(state = state().copy(showCoachMark = false)) }
+    fun usingAGestureCountsAsItsTip() {
+        val done = mutableListOf<WorkoutTip>()
+        compose.setContent { SessionScreen(state = state(), wholeSession = SessionActions(onTipDone = { done += it })) }
 
-        compose.onNodeWithText("Got it").assertDoesNotExist()
+        // Whether or not its tip is showing: a gesture used before its tip comes means it never does.
+        compose.onNodeWithTag(WEIGHT_FIELD).performClick()
+        compose.onNodeWithTag(UNIT_TOGGLE).performSemanticsAction(SemanticsActions.OnClick)
+
+        assertEquals(listOf(WorkoutTip.TAP_TO_TYPE, WorkoutTip.SWITCH_UNIT), done)
+    }
+
+    @Test
+    fun noTipNoBubble() {
+        compose.setContent { SessionScreen(state = state().copy(tip = null)) }
+
+        compose.onNodeWithTag(TIP).assertDoesNotExist()
     }
 
     @Test

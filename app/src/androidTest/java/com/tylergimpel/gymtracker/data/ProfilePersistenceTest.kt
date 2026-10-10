@@ -9,6 +9,7 @@ import com.tylergimpel.gymtracker.domain.Kilograms
 import com.tylergimpel.gymtracker.domain.Sex
 import com.tylergimpel.gymtracker.domain.Theme
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.WorkoutTip
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -97,14 +98,22 @@ class ProfilePersistenceTest {
     }
 
     @Test
-    fun theTipIsShownUntilItIsDismissedAndNeverAfter() = runBlocking {
-        assertEquals(false, profile(seededWith = WeightUnit.KILOGRAMS).observeCoachMarkSeen().first())
+    fun eachTipIsRememberedOnItsOwnUntilTheLifterAsksForThemBack() = runBlocking {
+        assertEquals(emptySet<WorkoutTip>(), profile(seededWith = WeightUnit.KILOGRAMS).observeTipsDone().first())
 
-        profile(seededWith = WeightUnit.KILOGRAMS).dismissCoachMark()
+        profile(seededWith = WeightUnit.KILOGRAMS).tipDone(WorkoutTip.SWITCH_UNIT)
 
-        // A repository built fresh over the same database is the app opened again: the tip does
-        // not come back after a restart, which is the whole of "taught once" (#92).
-        assertEquals(true, profile(seededWith = WeightUnit.KILOGRAMS).observeCoachMarkSeen().first())
+        // A repository built fresh over the same database is the app opened again: a tip gone
+        // stays gone after a restart, and takes none of the others with it (#156).
+        assertEquals(setOf(WorkoutTip.SWITCH_UNIT), profile(seededWith = WeightUnit.KILOGRAMS).observeTipsDone().first())
+
+        profile(seededWith = WeightUnit.KILOGRAMS).tipDone(WorkoutTip.TAP_TO_TYPE)
+        profile(seededWith = WeightUnit.KILOGRAMS).setTheme(Theme.DARK)
+        profile(seededWith = WeightUnit.KILOGRAMS).showTipsAgain()
+
+        // Show tips again brings all of them back, and nothing else about the lifter with it.
+        assertEquals(emptySet<WorkoutTip>(), profile(seededWith = WeightUnit.KILOGRAMS).observeTipsDone().first())
+        assertEquals(Theme.DARK, profile(seededWith = WeightUnit.KILOGRAMS).observeTheme().first())
     }
 
     @Test

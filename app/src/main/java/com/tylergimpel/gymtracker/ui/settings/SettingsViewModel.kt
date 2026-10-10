@@ -63,6 +63,8 @@ data class SettingsUiState(
     val confirmingUndo: ListedImport? = null,
     /** A file read and previewed, waiting on the lifter to go ahead or back out (#99, #103). */
     val previewing: Previewing? = null,
+    /** Whether any workout tip has gone, so Show tips again has something to bring back (#156). */
+    val tipsGone: Boolean = false,
 )
 
 /** A backup ready to restore, and what restoring it would replace. */
@@ -156,8 +158,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         importer.observeListed(),
         confirmingUndo,
         previewing,
-    ) { settings, imports, undoing, pending ->
-        settings.copy(imports = imports, confirmingUndo = undoing, previewing = pending)
+        profile.observeTipsDone(),
+    ) { settings, imports, undoing, pending, tipsDone ->
+        settings.copy(imports = imports, confirmingUndo = undoing, previewing = pending, tipsGone = tipsDone.isNotEmpty())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState())
 
     fun setDisplayUnit(unit: WeightUnit) {
@@ -166,6 +169,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setTheme(theme: Theme) {
         viewModelScope.launch { profile.setTheme(theme) }
+    }
+
+    /** Brings all three workout tips back for the next workout (#156). */
+    fun showTipsAgain() {
+        viewModelScope.launch { profile.showTipsAgain() }
     }
 
     /**

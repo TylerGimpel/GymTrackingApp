@@ -48,6 +48,7 @@ import com.tylergimpel.gymtracker.domain.SessionPlan
 import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.swapCandidatesFor
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.WorkoutTip
 import com.tylergimpel.gymtracker.domain.asAmountText
 import com.tylergimpel.gymtracker.domain.asTextIn
 import com.tylergimpel.gymtracker.domain.distanceOrNull
@@ -353,11 +354,10 @@ data class SessionUiState(
     /** Whether to ask, now, to show the rest countdown: true once, on the first rest that needs it. */
     val askToShowRestCountdown: Boolean = false,
     /**
-     * Whether to point out the unit and the routine drawer, which the screen leaves undecorated.
-     *
-     * Only with an exercise on screen, since that is where both are, and only until dismissed.
+     * The workout tip pointing at something now, if any (#156): one at a time, each at its moment,
+     * and only until it has been seen or its gesture used.
      */
-    val showCoachMark: Boolean = false,
+    val tip: WorkoutTip? = null,
     /**
      * Whether the countdown will actually appear.
      *
@@ -866,17 +866,22 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     fun recheckRestAlerts() = restTimer.recheckAlerts()
 
     /**
-     * Whether the first-session tip has been dismissed.
+     * The workout tips already seen or used (#156).
      *
-     * Starts as dismissed, so the tip never flashes up for somebody who dismissed it long ago in the
+     * Starts as all of them, so a tip never flashes up for somebody who saw it long ago in the
      * moment before the stored answer has been read.
      */
-    val coachMarkSeen: StateFlow<Boolean> = profile.observeCoachMarkSeen()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), true)
+    val tipsDone: StateFlow<Set<WorkoutTip>> = profile.observeTipsDone()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), WorkoutTip.entries.toSet())
 
-    /** Dismisses the first-session tip, for good. */
-    fun dismissCoachMark() {
-        viewModelScope.launch { profile.dismissCoachMark() }
+    /**
+     * [tip] was seen, or its gesture used, which is the same thing: it does not show again.
+     *
+     * Written only the first time, since the gestures that call this are used all workout long.
+     */
+    fun tipDone(tip: WorkoutTip) {
+        if (tip in tipsDone.value) return
+        viewModelScope.launch { profile.tipDone(tip) }
     }
 
     /** The screen has asked to show the rest countdown, whatever the lifter answered. */

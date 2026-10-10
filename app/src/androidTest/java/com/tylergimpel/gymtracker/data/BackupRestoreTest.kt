@@ -19,6 +19,7 @@ import com.tylergimpel.gymtracker.domain.SetDraft
 import com.tylergimpel.gymtracker.domain.Sex
 import com.tylergimpel.gymtracker.domain.Theme
 import com.tylergimpel.gymtracker.domain.WeightUnit
+import com.tylergimpel.gymtracker.domain.WorkoutTip
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -90,6 +91,25 @@ class BackupRestoreTest {
         val after = everyTable().associateWith(::rowsOf)
         assertEquals(before.keys, after.keys)
         before.forEach { (table, rows) -> assertEquals("table $table", rows, after.getValue(table)) }
+    }
+
+    /** Each workout tip is remembered on its own, and a restore keeps which ones have gone (#156). */
+    @Test
+    fun theTipsAlreadySeenStaySeenAfterARestore() = runBlocking {
+        val profile = ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS)
+        profile.tipDone(WorkoutTip.SWITCH_UNIT)
+        val file = ByteArrayOutputStream().also { BackupRepository(database, clock).write(it) }.toByteArray()
+
+        database.close()
+        context.deleteDatabase(TEST_DATABASE)
+        database = fresh()
+        val restoring = BackupRepository(database, clock)
+        restoring.restore(restoring.read(ByteArrayInputStream(file)))
+
+        assertEquals(
+            setOf(WorkoutTip.SWITCH_UNIT),
+            ProfileRepository(database.profileDao(), WeightUnit.KILOGRAMS).observeTipsDone().first(),
+        )
     }
 
     @Test
@@ -246,7 +266,8 @@ class BackupRestoreTest {
         profile.setHeightCm(170.0)
         profile.setExperience(Experience.NOVICE)
         profile.setTheme(Theme.DARK)
-        profile.dismissCoachMark()
+        profile.tipDone(WorkoutTip.TAP_TO_TYPE)
+        profile.tipDone(WorkoutTip.SWIPE_FOR_WORKOUT)
         profile.setBar(Kilograms(20.0))
         PlateRepository(database.plateDao(), profile).setPairs(Kilograms(20.0), 3)
 

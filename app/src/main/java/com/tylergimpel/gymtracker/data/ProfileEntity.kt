@@ -78,13 +78,20 @@ data class ProfileEntity(
     val theme: String? = null,
 
     /**
-     * Whether the first-session tip has been dismissed.
+     * Whether each of the workout's tips has been seen or used, one column a tip (#156).
      *
-     * Once, then never again — including after a restart, which is why it is stored rather than
-     * held on screen. The tip is a nicety: both things it teaches have other routes (#92).
+     * Each on its own, because each goes on its own: a lifter who switches the unit before its
+     * tip comes has learned that one and not the swipe. Stored rather than held on screen, so a
+     * tip gone stays gone after a restart, and in a backup. Show tips again clears all three.
      */
-    @ColumnInfo(name = "coach_mark_seen", defaultValue = "0")
-    val coachMarkSeen: Boolean = false,
+    @ColumnInfo(name = "tip_tap_to_type_done", defaultValue = "0")
+    val tipTapToTypeDone: Boolean = false,
+
+    @ColumnInfo(name = "tip_switch_unit_done", defaultValue = "0")
+    val tipSwitchUnitDone: Boolean = false,
+
+    @ColumnInfo(name = "tip_swipe_for_workout_done", defaultValue = "0")
+    val tipSwipeForWorkoutDone: Boolean = false,
 ) {
     companion object {
         /** There is one lifter, so there is one row, and it has a known id to be written over. */

@@ -1,6 +1,5 @@
 package com.tylergimpel.gymtracker.ui.session
 
-import androidx.compose.foundation.background
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import com.tylergimpel.gymtracker.domain.asTextIn
@@ -8,7 +7,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
-import com.tylergimpel.gymtracker.ui.theme.LocalGymColors
 import androidx.compose.material3.Surface
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
@@ -315,25 +313,6 @@ internal fun WhichDayDialog(
     )
 }
 
-/**
- * One tip on the first session, covering the two things the screen leaves undecorated: the unit is
- * tapped to switch it, and the drawer opens with a sideways swipe. Neither depends on it: the unit
- * is also set from the exercise's settings, and the drawer opens from the strip too.
- */
-@Composable
-internal fun CoachMark(onDismiss: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().background(LocalGymColors.current.raised, MaterialTheme.shapes.small).padding(start = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-            Text(stringResource(R.string.coach_unit), fontSize = 14.sp, lineHeight = 17.sp)
-            Text(stringResource(R.string.coach_drawer), fontSize = 14.sp, lineHeight = 17.sp)
-        }
-        TextButton(onClick = onDismiss) { Text(stringResource(R.string.coach_dismiss), fontSize = 14.sp) }
-    }
-}
-
 /** What the lifter can say about an exercise, as fields: shared by the dialog and the exercise page (#148). */
 @Composable
 internal fun ExerciseDetailsFields(details: ExerciseDetails, onChange: (ExerciseDetails) -> Unit) {
@@ -389,7 +368,7 @@ Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         )
     }
     // The settled unit for this exercise, and the same setting the logging screen's
-    // chip changes. That chip is undecorated and taught once; this is where anybody who
+    // chip changes. That chip is undecorated and taught by a tip; this is where anybody who
     // missed the tip finds it, beside everything else about the exercise.
     Text(
         text = stringResource(R.string.exercise_unit),
