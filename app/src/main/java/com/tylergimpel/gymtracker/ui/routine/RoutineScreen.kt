@@ -163,6 +163,7 @@ fun RoutineScreen(
             planned = open.planned,
             onDismiss = { sheet = null },
             onReplace = { viewModel.startReplacing(open.day.id, open.planned.exercise) },
+            onBuildAgain = { viewModel.buildAgainOne(open.day.id, open.planned.exercise.id) },
             onKeep = { viewModel.setPinned(open.day.id, open.planned.exercise.id, !open.planned.pinned) },
             onRemove = { viewModel.removeExerciseFromDay(open.day.id, open.planned.exercise.id) },
         )
@@ -207,6 +208,16 @@ fun RoutineScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             AppOutlinedButton(stringResource(R.string.routine_keep_it), onClick = { sheet = null }, modifier = Modifier.fillMaxWidth())
+        }
+    }
+
+    // Once, for a routine generated before day recipes (#150). Hand-built ones never see it.
+    if (routine?.offersRecipes == true && state.offeringRebuild == null) {
+        Sheet(onDismiss = viewModel::keepWithoutRecipes) {
+            SheetTitle(stringResource(R.string.routine_recipes_title))
+            Text(stringResource(R.string.routine_recipes_body), color = LocalGymColors.current.dim)
+            MainButton(stringResource(R.string.routine_offer_accept), onClick = viewModel::acceptRecipes, modifier = Modifier.fillMaxWidth().testTag(ROUTINE_RECIPES_ACCEPT))
+            AppOutlinedButton(stringResource(R.string.routine_offer_decline), onClick = viewModel::keepWithoutRecipes, modifier = Modifier.fillMaxWidth())
         }
     }
 
@@ -673,13 +684,14 @@ internal fun Routine.asSetupAnswers(): SetupAnswers = SetupAnswers(
     },
 )
 
-/** The lift's own sheet: its equipment, sets and muscles, and Replace, Keep and Remove. */
+/** The lift's own sheet: its equipment, sets and muscles, and Replace, Build it again, Keep and Remove. */
 @Composable
 private fun LiftSheet(
     day: RoutineDay,
     planned: PlannedExercise,
     onDismiss: () -> Unit,
     onReplace: () -> Unit,
+    onBuildAgain: () -> Unit,
     onKeep: () -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -708,6 +720,12 @@ private fun LiftSheet(
             color = colors.dim,
         )
         SheetAction(AppIcons.Swap, stringResource(R.string.routine_replace), onClick = then(onReplace))
+        SheetAction(
+            AppIcons.Again,
+            stringResource(R.string.routine_offer_accept),
+            sub = stringResource(R.string.routine_build_one_sub),
+            onClick = then(onBuildAgain),
+        )
         SheetAction(
             AppIcons.Pin,
             stringResource(if (planned.pinned) R.string.routine_kept else R.string.routine_keep),
@@ -867,3 +885,4 @@ const val ROUTINE_EDIT = "routine-edit"
 const val ROUTINE_PAGE = "routine-page"
 const val ROUTINE_MUSCLES = "routine-muscles"
 const val ROUTINE_BUILD_AGAIN = "routine-build-again"
+const val ROUTINE_RECIPES_ACCEPT = "routine_recipes_accept"

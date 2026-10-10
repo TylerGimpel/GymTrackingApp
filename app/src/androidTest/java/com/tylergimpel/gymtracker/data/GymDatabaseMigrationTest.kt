@@ -950,6 +950,7 @@ class GymDatabaseMigrationTest {
         const val THIRTY_SECOND_DATABASE = "migration-thirty-second.db"
         const val THIRTY_THIRD_DATABASE = "migration-thirty-third.db"
         const val THIRTY_FOURTH_DATABASE = "migration-thirty-fourth.db"
+        const val THIRTY_FIFTH_DATABASE = "migration-thirty-fifth.db"
     }
 
     /**
@@ -1424,6 +1425,29 @@ class GymDatabaseMigrationTest {
             db.query("SELECT tip_tap_to_type_done, tip_switch_unit_done, tip_swipe_for_workout_done FROM profile").use {
                 it.moveToFirst()
                 assertEquals(listOf(0, 0, 0), listOf(it.getInt(0), it.getInt(1), it.getInt(2)))
+            }
+        }
+    }
+
+    /**
+     * Version 36 remembers whether a routine's lifts came from day recipes (#150). Every routine
+     * already here came from the old generator, so each is still to be offered the rebuild.
+     */
+    @Test
+    fun migratesToRoutinesNotYetOfferedRecipes() {
+        helper.createDatabase(THIRTY_FIFTH_DATABASE, 35).use { version35 ->
+            version35.execSQL(
+                "INSERT INTO routine (id, name, goal, cadence, equipment, rep_preference, cardio, shape_id, seed) " +
+                    "VALUES (1, 'Push / Pull / Legs', 'HYPERTROPHY', 3, '', 'MODERATE', 'NONE', 'push-pull-legs-3', 2)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(THIRTY_FIFTH_DATABASE, 36, true, MIGRATION_35_36).use { db ->
+            db.query("SELECT built_with_recipes, seed, shape_id FROM routine WHERE id = 1").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+                assertEquals(2, it.getInt(1))
+                assertEquals("push-pull-legs-3", it.getString(2))
             }
         }
     }

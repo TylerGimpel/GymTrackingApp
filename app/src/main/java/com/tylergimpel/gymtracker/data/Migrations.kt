@@ -782,6 +782,18 @@ internal val MIGRATION_34_35 = object : Migration(34, 35) {
     }
 }
 
+/**
+ * Version 36 remembers whether a routine's lifts came from day recipes (#150).
+ *
+ * Every routine already here was filled the old way, so each starts at no; the one that was
+ * generated is offered one rebuild, and one built by hand never is.
+ */
+internal val MIGRATION_35_36 = object : Migration(35, 36) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `routine` ADD COLUMN `built_with_recipes` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -817,6 +829,7 @@ internal val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_32_33,
     MIGRATION_33_34,
     MIGRATION_34_35,
+    MIGRATION_35_36,
 )
 
 /**

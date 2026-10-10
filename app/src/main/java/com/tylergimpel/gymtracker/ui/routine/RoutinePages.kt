@@ -52,6 +52,8 @@ import com.tylergimpel.gymtracker.domain.Exercise
 import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.bindingOn
 import com.tylergimpel.gymtracker.domain.offeredFor
+import com.tylergimpel.gymtracker.domain.rankedFor
+import com.tylergimpel.gymtracker.domain.commonFirst
 import com.tylergimpel.gymtracker.domain.weeklyVolumeTargetFor
 import com.tylergimpel.gymtracker.domain.whatItTrains
 import com.tylergimpel.gymtracker.domain.MAIN_MUSCLES
@@ -90,9 +92,17 @@ internal fun LiftPicker(
         picking.bank
             .offeredFor(equipment = equipment, query = query, muscle = null, ownEquipmentOnly = myGym)
             .filter { it.id !in inDay }
+            // The lifts programs use first, by the generator's own ranking (ADR 0013), and the
+            // rest after in the bank's order, so nothing becomes harder to find by name.
+            .commonFirst(picking.experience)
     }
     val atGym: (Exercise) -> Boolean = { equipment.isEmpty() || it.equipment == null || it.equipment in equipment }
-    val sameMuscle = if (replacing == null) emptyList() else offered.filter { it.primaryMuscles.firstOrNull() == replacing.primaryMuscles.firstOrNull() }
+    // Ranked the way a slot would fill it, with nothing that could never be generated suggested;
+    // those are still in the list below and found by typing.
+    val sameMuscle = remember(offered, replacing) {
+        val muscle = replacing?.primaryMuscles?.firstOrNull()
+        if (muscle == null) emptyList() else offered.rankedFor(muscle, picking.experience)
+    }
     val others = offered - sameMuscle.toSet()
 
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {

@@ -83,26 +83,6 @@ class SetBudgetTest {
         assertTrue(setsAcross(exercises = 4, sets = 2.0).all { it >= 1 })
     }
 
-    @Test
-    fun `training for strength puts the compound first`() {
-        val ordered = listOf(curl, bench, pushdown, squat).orderedFor(RoutineGoal.STRENGTH)
-
-        // A lifter training for strength wants the priority lift while they are freshest. The
-        // compounds move up; within each group nothing is re-sorted, because nothing justifies it.
-        assertEquals(listOf("Bench", "Squat", "Curl", "Pushdown"), ordered.map { it.id })
-    }
-
-    @Test
-    fun `no ordering claim is made for anything else`() {
-        val asChosen = listOf(curl, bench, pushdown, squat)
-
-        // Ordering has no hypertrophy effect, so applying it universally would be inventing a
-        // rule the evidence does not support. The day is trained in the order it was built.
-        listOf(RoutineGoal.HYPERTROPHY, RoutineGoal.ENDURANCE).forEach { goal ->
-            assertEquals(asChosen.map { it.id }, asChosen.orderedFor(goal).map { it.id })
-        }
-    }
-
     private companion object {
         fun exercise(id: String, mechanic: String) = Exercise(
             id = id,

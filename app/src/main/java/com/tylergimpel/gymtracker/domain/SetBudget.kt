@@ -51,21 +51,6 @@ fun setsAcross(exercises: Int, sets: Double): List<Int> {
 }
 
 /**
- * These exercises in the order they should be trained, given what the lifter is training for.
- *
- * **Compound before isolation, and only for strength.** A lifter training for strength wants the
- * priority lift while they are freshest, and that is the one goal the order is known to matter to.
- * Ordering has no hypertrophy effect, so applying it everywhere would be inventing a rule the
- * evidence does not support — every other goal trains the day in the order it was built.
- *
- * Stable within each group, because nothing justifies re-sorting beyond the one distinction.
- */
-fun List<Exercise>.orderedFor(goal: RoutineGoal): List<Exercise> = when (goal) {
-    RoutineGoal.STRENGTH -> sortedByDescending { it.isCompound }
-    RoutineGoal.HYPERTROPHY, RoutineGoal.ENDURANCE -> this
-}
-
-/**
  * How far above the bottom of the target band the set budget aims, in fractional sets a week.
  *
  * **Invented**, like the constants above. One set is enough headroom that whole-set rounding does

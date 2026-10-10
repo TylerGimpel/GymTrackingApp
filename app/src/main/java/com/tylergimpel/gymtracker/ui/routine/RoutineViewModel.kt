@@ -36,6 +36,8 @@ data class PickingFor(
     val bank: List<Exercise>,
     /** The exercise being replaced, or null when adding one. */
     val replacing: Exercise? = null,
+    /** Whose ranking the lists follow: an advanced lifter's reaches the second tier (ADR 0013). */
+    val experience: Experience = Experience.TRAINED,
 )
 
 /**
@@ -363,8 +365,9 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 repPreference = routine.repPreference,
                 cardio = routine.cardio,
                 bank = exercises.observeBank().first(),
+                // Theirs, not the usual: the new days are trimmed to the length they chose.
+                sessionMinutes = routine.sessionMinutes,
             )
-            repository.setSessionMinutes(routine.sessionMinutes)
         }
     }
 
@@ -395,7 +398,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         val day = state.value.progress?.routine?.rotation?.firstOrNull { it.id == dayId } ?: return
         viewModelScope.launch {
             val bank = exercises.observeBank().first()
-            held.update { it.copy(picking = PickingFor(dayId, day.name, bank)) }
+            held.update { it.copy(picking = PickingFor(dayId, day.name, bank, experience = state.value.experience)) }
         }
     }
 
@@ -406,7 +409,9 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         val day = state.value.progress?.routine?.rotation?.firstOrNull { it.id == dayId } ?: return
         viewModelScope.launch {
             val bank = exercises.observeBank().first()
-            held.update { it.copy(picking = PickingFor(dayId, day.name, bank, replacing = exercise)) }
+            held.update {
+                it.copy(picking = PickingFor(dayId, day.name, bank, replacing = exercise, experience = state.value.experience))
+            }
         }
     }
 
@@ -426,8 +431,32 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun regenerate() {
         val shape = state.value.progress?.routine?.shape ?: return
         viewModelScope.launch {
-            repository.regenerate(shape, exercises.observeBank().first())
+            repository.regenerate(shape, exercises.observeBank().first(), state.value.experience)
             held.update { it.copy(builtAgain = true) }
+        }
+    }
+
+    /**
+     * Takes the one-time offer to rebuild a routine from before day recipes (#150): the best-ranked
+     * lifts, kept lifts staying, with the same Undo as any Build it again.
+     */
+    fun acceptRecipes() {
+        val shape = state.value.progress?.routine?.shape ?: return
+        viewModelScope.launch {
+            repository.regenerate(shape, exercises.observeBank().first(), state.value.experience, fresh = true)
+            held.update { it.copy(builtAgain = true) }
+        }
+    }
+
+    /** Turns the offer down for good, leaving the routine exactly as it is. */
+    fun keepWithoutRecipes() {
+        viewModelScope.launch { repository.keepWithoutRecipes() }
+    }
+
+    /** Puts the next lift for its muscle in place of [exerciseId], in its place and with its sets. */
+    fun buildAgainOne(dayId: Long, exerciseId: String) {
+        viewModelScope.launch {
+            repository.buildAgainOne(dayId, exerciseId, exercises.observeBank().first(), state.value.experience)
         }
     }
 

@@ -8,6 +8,8 @@ import com.tylergimpel.gymtracker.domain.Routine
 import com.tylergimpel.gymtracker.domain.RoutineDay
 import com.tylergimpel.gymtracker.domain.RoutineGoal
 import com.tylergimpel.gymtracker.domain.Exercise
+import com.tylergimpel.gymtracker.domain.nextFor
+import com.tylergimpel.gymtracker.domain.Experience
 import com.tylergimpel.gymtracker.domain.PlannedExercise
 import com.tylergimpel.gymtracker.domain.RecoveredDay
 import com.tylergimpel.gymtracker.domain.SplitShape
@@ -136,14 +138,20 @@ class RoutineRepository(
          * exercise themselves gets the rotation and an empty day under each name.
          */
         bank: List<Exercise> = emptyList(),
+        /** How long a session may run, which the days are trimmed to fit (ADR 0013). */
+        sessionMinutes: Int = Routine.USUAL_SESSION_MINUTES,
     ): Long = database.withTransaction {
         // Zero because that is the seed the days below are filled at. Stored rather than assumed,
         // so asking for variety climbs from what this routine actually is.
         val id = createRoutine(
             name, goal, cadence, equipment, repPreference, cardio, shape.id, seed = FIRST_SEED,
         )
-        val filled = fillDays(shape, bank, equipment, goal, cadence, seed = FIRST_SEED)
-            .associateBy { it.shape.name }
+        routines.routine()?.takeIf { it.id == id }
+            ?.let { routines.update(it.copy(sessionMinutes = sessionMinutes, builtWithRecipes = true)) }
+        val filled = fillDays(
+            shape, bank, equipment, goal, cadence,
+            seed = FIRST_SEED, sessionMinutes = sessionMinutes, cardio = cardio,
+        ).associateBy { it.shape.name }
 
         shape.days.forEach { day ->
             val dayId = routines.insert(
@@ -244,6 +252,13 @@ class RoutineRepository(
     suspend fun regenerate(
         shape: SplitShape,
         bank: List<Exercise>,
+        /** Advanced widens what asking again can reach (ADR 0013). */
+        experience: Experience = Experience.TRAINED,
+        /**
+         * Back to the first answer rather than on to the next: the one-time offer to rebuild an
+         * old routine from day recipes wants the best-ranked lifts, not the second-best.
+         */
+        fresh: Boolean = false,
     ): Unit = database.withTransaction {
         val routine = routines.routine() ?: return@withTransaction
         val days = routines.days(routine.id)
@@ -254,8 +269,8 @@ class RoutineRepository(
         // the seed where it is. That is deliberate: the seed only climbs, so asking again after
         // undoing moves on past the routine the lifter just turned down rather than offering it
         // straight back.
-        val seed = (routine.seed ?: FIRST_SEED) + 1
-        routines.update(routine.copy(seed = seed))
+        val seed = if (fresh) FIRST_SEED else (routine.seed ?: FIRST_SEED) + 1
+        routines.update(routine.copy(seed = seed, builtWithRecipes = true))
 
         // The step back, taken before anything moves. Replacing the previous one rather than
         // stacking: one step is the whole promise.
@@ -295,6 +310,9 @@ class RoutineRepository(
             cadence = routine.cadence,
             pinned = pinned,
             seed = seed,
+            experience = experience,
+            sessionMinutes = routine.sessionMinutes,
+            cardio = CardioPlacement.valueOf(routine.cardio),
         )
 
         // Days past the end of the shape are the lifter's own, added after it was laid out. The
@@ -315,6 +333,36 @@ class RoutineRepository(
                 )
             }
         }
+    }
+
+    /**
+     * Turns down the one-time offer to rebuild from day recipes (#150): the routine stays exactly
+     * as it is, and the offer is not made again.
+     */
+    suspend fun keepWithoutRecipes() {
+        val routine = routines.routine() ?: return
+        routines.update(routine.copy(builtWithRecipes = true))
+    }
+
+    /**
+     * Puts the next lift for its muscle in place of [exerciseId] in [dayId] (Build it again on one
+     * lift, ADR 0013), keeping its place and set count. Like Replace, it clears the Keep.
+     *
+     * Returns what went in, or null where nothing else could.
+     */
+    suspend fun buildAgainOne(
+        dayId: Long,
+        exerciseId: String,
+        bank: List<Exercise>,
+        experience: Experience,
+    ): Exercise? = database.withTransaction {
+        val routine = routines.routine() ?: return@withTransaction null
+        val current = bank.firstOrNull { it.id == exerciseId } ?: return@withTransaction null
+        val inDay = routines.dayExercises(dayId).mapTo(mutableSetOf()) { it.exerciseId }
+        val next = nextFor(current, inDay, bank, routine.equipment.toSet(), experience)
+            ?: return@withTransaction null
+        replaceExerciseInDay(dayId, exerciseId, next.id)
+        next
     }
 
     /** Whether there is a step back to take. */

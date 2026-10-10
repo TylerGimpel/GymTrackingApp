@@ -191,8 +191,11 @@ class GeneratorTest {
             HYPERTROPHY,
             cadence = 3,
             pinned = mapOf("Push" to listOf(PlannedExercise(kept, 4))),
+            // About the budget, so nothing is trimmed for time: a kept lift never drops, which
+            // would otherwise make the two days trim differently.
+            sessionMinutes = UNHURRIED,
         ).single { it.shape.name == "Push" }
-        val without = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, 3)
+        val without = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, 3, sessionMinutes = UNHURRIED)
             .single { it.shape.name == "Push" }
 
         // A pin takes one of the places chest's budget asked for; the rest are still filled
@@ -203,12 +206,10 @@ class GeneratorTest {
             without.chosen.count { "chest" in it.primaryMuscles },
             withPin.chosen.count { "chest" in it.primaryMuscles },
         )
-        assertEquals(
-            without.exercises.filter { "chest" in it.exercise.primaryMuscles }
-                .sumOf { it.sets ?: 0 },
-            withPin.exercises.filter { "chest" in it.exercise.primaryMuscles }
-                .sumOf { it.sets ?: 0 },
-        )
+        // Within a set: the pin moves which lifts fill chest's other slots, and their different
+        // secondary work moves the whole-set rounding by one.
+        val chestSets = { day: FilledDay -> day.exercises.filter { "chest" in it.exercise.primaryMuscles }.sumOf { it.sets ?: 0 } }
+        assertTrue("${chestSets(without)} vs ${chestSets(withPin)}", kotlin.math.abs(chestSets(without) - chestSets(withPin)) <= 1)
     }
 
     @Test
@@ -285,17 +286,20 @@ class GeneratorTest {
     }
 
     @Test
-    fun `training for strength trains the compounds first`() {
-        val filled = fillDays(pushPullLegs, bank, allEquipment, RoutineGoal.STRENGTH, 3)
+    fun `the recipe's order is the training order, whatever the goal`() {
+        // Every surveyed program trains its compounds first whatever it is for (ADR 0013), so the
+        // order no longer depends on the goal: it is the recipe's, press before pushdown.
+        val forStrength = fillDays(pushPullLegs, bank, allEquipment, RoutineGoal.STRENGTH, 3)
+        val forSize = fillDays(pushPullLegs, bank, allEquipment, HYPERTROPHY, 3)
 
-        filled.filter { it.chosen.isNotEmpty() }.forEach { day ->
-            val compounds = day.chosen.map { it.isCompound }
-            assertEquals(
-                "${day.shape.name} trained an isolation movement before a compound",
-                compounds.sortedByDescending { it },
-                compounds,
-            )
+        // The goals budget differently, so they can hold different lifts; what both hold comes in
+        // the same order.
+        forSize.zip(forStrength).forEach { (size, strength) ->
+            val both = size.chosen.map(Exercise::id).intersect(strength.chosen.map(Exercise::id).toSet())
+            assertEquals(size.chosen.map(Exercise::id).filter { it in both }, strength.chosen.map(Exercise::id).filter { it in both })
         }
+        val push = forSize.first().chosen.map(Exercise::id)
+        assertTrue(push.toString(), push.indexOf("Bench") < push.indexOf("Dip"))
     }
 
     @Test
@@ -367,7 +371,9 @@ class GeneratorTest {
             listOf("upper-lower-4", "push-pull-legs-3", "full-body-2").forEach { id ->
                 val shape = SPLIT_SHAPES.single { it.id == id }
                 listOf(3, 4, 5).forEach { cadence ->
-                    val filled = fillDays(shape, bank, allEquipment, goal, cadence)
+                    // Given the time: a day running long drops optional slots and their sets, which
+                    // is a trade the lifter is told about (see the trimming tests below).
+                    val filled = fillDays(shape, bank, allEquipment, goal, cadence, sessionMinutes = UNHURRIED)
                     val routine = routineFrom(shape, filled, cadence).copy(goal = goal)
                     val budgeted = shape.days.flatMap { it.muscles }.toSet()
                     val outside = routine.whatItTrains()
@@ -460,6 +466,9 @@ class GeneratorTest {
     private val FilledDay.chosen: List<Exercise> get() = exercises.map(PlannedExercise::exercise)
 
     private companion object {
+        /** A session length no generated day comes near, so nothing is trimmed for time. */
+        const val UNHURRIED = 600
+
         val allEquipment = setOf("barbell", "dumbbell", "machine", "body only")
 
         fun exercise(
