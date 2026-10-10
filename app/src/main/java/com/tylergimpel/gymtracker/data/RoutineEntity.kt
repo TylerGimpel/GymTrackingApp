@@ -89,6 +89,16 @@ data class RoutineEntity(
      */
     @ColumnInfo(name = "session_minutes", defaultValue = "90")
     val sessionMinutes: Int = Routine.USUAL_SESSION_MINUTES,
+
+    /**
+     * Whether its lifts came from day recipes (ADR 0013, #150), or the lifter has been offered
+     * that once and answered.
+     *
+     * False for every routine from before: those were filled alphabetically, and are offered one
+     * rebuild. A routine built by hand never is, whatever this says, because it has no shape.
+     */
+    @ColumnInfo(name = "built_with_recipes", defaultValue = "0")
+    val builtWithRecipes: Boolean = false,
 )
 
 /** One ordered position within a routine. Never a calendar day. */
@@ -146,6 +156,7 @@ fun RoutineEntity.toDomain(days: List<RoutineDayWithExercises>) = Routine(
     shape = shapeId?.let { id -> SPLIT_SHAPES.firstOrNull { it.id == id } ?: shapeOf(id) },
     seed = seed,
     sessionMinutes = sessionMinutes,
+    builtWithRecipes = builtWithRecipes,
     days = days.map { it.toDomain(RoutineGoal.valueOf(goal)) },
 )
 

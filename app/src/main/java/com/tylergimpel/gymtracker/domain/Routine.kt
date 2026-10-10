@@ -182,8 +182,19 @@ data class Routine(
     val seed: Int? = null,
     /** How long a session can run, in minutes: the time ceiling each day is checked against (#146). */
     val sessionMinutes: Int = USUAL_SESSION_MINUTES,
+    /** Whether its lifts came from day recipes, or the offer to rebuild it from them was answered. */
+    val builtWithRecipes: Boolean = true,
     val days: List<RoutineDay>,
 ) {
+    /**
+     * Whether to offer, once, to build this routine again from day recipes (ADR 0013, #150).
+     *
+     * Only one the app generated before recipes, and still holding lifts to improve on. One the
+     * lifter built by hand has no shape and is never touched.
+     */
+    val offersRecipes: Boolean
+        get() = shape != null && !builtWithRecipes && days.any { it.exercises.isNotEmpty() }
+
     companion object {
         /** Ninety, what the ceiling was before the lifter could set it. */
         const val USUAL_SESSION_MINUTES = 90

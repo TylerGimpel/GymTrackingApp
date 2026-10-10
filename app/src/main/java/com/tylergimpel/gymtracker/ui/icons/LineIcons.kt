@@ -52,6 +52,7 @@ object AppIcons {
     val Routine = lineIcon("routine", "M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8")
     val More = lineIcon("more", "M4 7h16M4 12h16M4 17h16")
     val List = lineIcon("list", "M4 7h16M4 12h16M4 17h10")
+    val Again = lineIcon("again", "M20 12a8 8 0 1 1-2.3-5.6", "M20 4v5h-5")
     val Swap = lineIcon("swap", "M7 4L3 8l4 4", "M3 8h14", "M17 20l4-4-4-4", "M21 16H7")
     val Chevron = lineIcon("chevron", "M9 6l6 6-6 6")
     val Back = lineIcon("back", "M15 6l-6 6 6 6")

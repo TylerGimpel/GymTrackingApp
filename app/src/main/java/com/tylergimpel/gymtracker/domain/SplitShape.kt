@@ -11,6 +11,14 @@ data class SplitDay(
     val name: String,
     val muscles: List<String>,
     val kind: RoutineDayKind = RoutineDayKind.LIFTING,
+    /**
+     * How proven programs lay out this kind of day (ADR 0013), which the generator fills slot by
+     * slot. Found from what the day is for, since that is what makes a Push day a Push day.
+     *
+     * Empty for a day no program describes — a cardio day, or a shape authored in a test — which
+     * the generator fills muscle by muscle from the same ranking instead.
+     */
+    val recipe: DayRecipe = recipeFor(muscles),
 )
 
 /**
@@ -79,6 +87,33 @@ data class SplitShape(
  * directly, it is secondary work in every pull in the bank, and naming it on an upper day would
  * add a wrist curl to every routine the app generates.
  */
+
+/**
+ * The recipe for a day that is for [muscles], or none where no program describes such a day.
+ *
+ * Matched on the lists below rather than on day names, which a lifter can change.
+ */
+private fun recipeFor(muscles: List<String>): DayRecipe = when (muscles) {
+    UPPER -> UPPER_RECIPE
+    LOWER -> LEGS_RECIPE
+    PUSH -> PUSH_RECIPE
+    PULL -> PULL_RECIPE
+    FULL_BODY_A -> FULL_BODY_A_RECIPE
+    FULL_BODY_B -> FULL_BODY_B_RECIPE
+    FULL_BODY_C -> FULL_BODY_C_RECIPE
+    CHEST_DAY -> CHEST_RECIPE
+    BACK_DAY -> BACK_RECIPE
+    SHOULDERS_DAY -> SHOULDERS_RECIPE
+    ARMS_DAY -> ARMS_RECIPE
+    ARMS_AND_SHOULDERS_DAY -> ARMS_AND_SHOULDERS_RECIPE
+    else -> emptyList()
+}
+
+private val CHEST_DAY = listOf("chest", "triceps")
+private val BACK_DAY = listOf("lats", "middle back", "traps")
+private val SHOULDERS_DAY = listOf("shoulders", "traps")
+private val ARMS_DAY = listOf("biceps", "triceps", "forearms")
+private val ARMS_AND_SHOULDERS_DAY = listOf("biceps", "triceps", "forearms", "shoulders")
 
 /** Everything above the waist that pushes or pulls, traps included. */
 private val UPPER =
@@ -223,10 +258,10 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
         description = "A body part a session",
         rotation = 5,
         days = listOf(
-            SplitDay("Chest", listOf("chest", "triceps")),
-            SplitDay("Back", listOf("lats", "middle back", "traps")),
-            SplitDay("Shoulders", listOf("shoulders", "traps")),
-            SplitDay("Arms", listOf("biceps", "triceps", "forearms")),
+            SplitDay("Chest", CHEST_DAY),
+            SplitDay("Back", BACK_DAY),
+            SplitDay("Shoulders", SHOULDERS_DAY),
+            SplitDay("Arms", ARMS_DAY),
             SplitDay("Legs", LEGS),
         ),
     ),
@@ -237,7 +272,7 @@ val SPLIT_SHAPES: List<SplitShape> = listOf(
         days = listOf(
             SplitDay("Upper", UPPER),
             SplitDay("Lower", LOWER),
-            SplitDay("Arms", listOf("biceps", "triceps", "forearms", "shoulders")),
+            SplitDay("Arms", ARMS_AND_SHOULDERS_DAY),
         ),
     ),
     SplitShape(

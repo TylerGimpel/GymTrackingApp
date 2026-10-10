@@ -607,6 +607,9 @@
     <string name="routine_kept">Kept</string>
     <string name="routine_keep">Keep</string>
     <string name="routine_keep_sub">stays when built again</string>
+    <string name="routine_build_one_sub">the next lift for this muscle</string>
+    <string name="routine_recipes_title">Better lifts are available</string>
+    <string name="routine_recipes_body">Build your routine again? Kept lifts stay.</string>
     <string name="routine_replace">Replace</string>
     <string name="routine_add_day">+ Add day</string>
     <string name="routine_setup">Setup</string>
