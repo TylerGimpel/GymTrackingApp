@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Gym Tracker</string>
+    <string name="app_name">Train Tracks</string>
     <string name="exercise_bank_title">Exercise bank</string>
 
     <string name="exercise_search">Search exercises</string>
