@@ -1,0 +1,13 @@
+{
+  "tickets": ".scratch/*.md",
+  "parser": "./scratchboard.parser.mjs",
+  "lanes": [
+    { "name": "Needs triage", "match": { "field": "status", "equals": "needs-triage" } },
+    { "name": "Needs info", "match": { "field": "status", "equals": "needs-info" } },
+    { "name": "Ready for agent", "match": { "field": "status", "equals": "ready-for-agent" } },
+    { "name": "Ready for human", "match": { "field": "status", "equals": "ready-for-human" } },
+    { "name": "Map", "match": { "field": "status", "equals": "map" } },
+    { "name": "Wontfix", "match": { "field": "status", "equals": "wontfix" }, "collapsed": true },
+    { "name": "Done", "match": { "field": "status", "equals": "done" }, "collapsed": true }
+  ]
+}

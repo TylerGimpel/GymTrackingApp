@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "scripts": {
+    "sync-tickets": "node scripts/sync-scratch-tickets.mjs",
+    "board": "npm run sync-tickets && npx scratchboard --serve"
+  }
+}
