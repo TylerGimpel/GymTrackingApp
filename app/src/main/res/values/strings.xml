@@ -607,6 +607,15 @@
     <string name="routine_kept">Kept</string>
     <string name="routine_keep">Keep</string>
     <string name="routine_keep_sub">stays when built again</string>
+    <string name="permissions_title">Your rest timer</string>
+    <string name="permissions_body">So it can tell you rest is over, even with the phone locked.</string>
+    <string name="permissions_countdown">Show the countdown</string>
+    <string name="permissions_countdown_sub">on your lock screen while you rest</string>
+    <string name="permissions_alarm">Buzz on time</string>
+    <string name="permissions_alarm_sub">the second your rest ends</string>
+    <string name="permissions_allow">Allow</string>
+    <string name="permissions_allowed">Allowed</string>
+    <string name="permissions_skip">Skip for now</string>
     <string name="routine_build_one_sub">the next lift for this muscle</string>
     <string name="routine_recipes_title">Better lifts are available</string>
     <string name="routine_recipes_body">Build your routine again? Kept lifts stay.</string>
