@@ -77,6 +77,9 @@ class RecommendationPersistenceTest {
             database = database,
             exercises = database.exerciseDao(),
             sessions = database.sessionDao(),
+            // The day every test here is asked on, the same one the routines below are built on:
+            // how long an exercise has gone untrained is measured to it, not to the emulator's date.
+            clock = Clock.fixed(at("2026-09-14T18:00"), zone),
             // Pinned like the profile above: the rack a test rounds against is part of what it
             // asserts, and the device's locale deciding it would make these numbers move by
             // emulator.
@@ -182,14 +185,14 @@ class RecommendationPersistenceTest {
 
         // Accepted today: the session it was accepted in carries on as it was, with no ramp
         // halfway down the exercise, and the offer is gone.
-        exercises.resetEstimate(SQUAT, LocalDate.now())
+        exercises.resetEstimate(SQUAT, LocalDate.parse("2026-09-14"))
         val sameDay = recommendations.nextSetWithPlan(exercise(SQUAT))!!
         assertTrue(sameDay.recommendation is Recommendation.Prescribing)
         assertFalse(sameDay.offerReset)
 
         // Found again from the next session (#128): nothing logged since the reset, so the engine
         // calibrates rather than prescribing from a month of weights it kept getting wrong.
-        exercises.resetEstimate(SQUAT, LocalDate.parse("2026-09-14"))
+        exercises.resetEstimate(SQUAT, LocalDate.parse("2026-09-13"))
         val after = recommendations.nextSetWithPlan(exercise(SQUAT))!!
         assertTrue(after.recommendation is Recommendation.Calibrating)
         assertFalse(after.offerReset)
