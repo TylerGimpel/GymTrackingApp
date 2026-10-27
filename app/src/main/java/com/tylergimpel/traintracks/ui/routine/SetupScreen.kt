@@ -1,5 +1,8 @@
 package com.tylergimpel.traintracks.ui.routine
 
+import com.tylergimpel.traintracks.rest.RestNotifications
+import com.tylergimpel.traintracks.rest.RestAlarmScheduler
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
@@ -110,7 +113,8 @@ private fun QuietButton(text: String, onClick: () -> Unit) {
 
 /**
  * Setup (#144): one question to a page, the usual answer already picked, and Next always working;
- * then a summary where any answer can be changed; then Build, which lands on Today.
+ * then a summary where any answer can be changed; then Build, which lands on Today — by way of
+ * the rest timer's permissions (#161) where the phone has not given them yet.
  *
  * Back steps back a page and keeps every answer. Leaving from the first page leaves setup.
  */
@@ -125,6 +129,8 @@ fun SetupScreen(
     var reviewing by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf(false) }
     var usualUnit by rememberSaveable { mutableStateOf<WeightUnit?>(null) }
+    var askingPermissions by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
 
     // The unit starts on, and calls usual, what the lifter already reads in: seeded from the
     // phone's locale until they say.
@@ -134,6 +140,12 @@ fun SetupScreen(
             usualUnit = preferred
             answers = answers.copy(unit = preferred)
         }
+    }
+
+    // Built by now, so there is no going back into the questions: Back, like Skip, carries on.
+    if (askingPermissions) {
+        RestPermissionsPage(onDone = onBuilt)
+        return
     }
 
     fun back() = when {
@@ -216,7 +228,11 @@ fun SetupScreen(
                     stringResource(R.string.setup_build),
                     onClick = {
                         viewModel.buildFromSetup(answers, routineName)
-                        onBuilt()
+                        val missing = restFixesNeeded(
+                            alarmsAreReliable = RestAlarmScheduler(context).canWakeReliably(),
+                            countdownCanBeSeen = RestNotifications(context).canBeSeen(),
+                        )
+                        if (missing.isEmpty()) onBuilt() else askingPermissions = true
                     },
                     modifier = Modifier.fillMaxWidth().testTag(SETUP_BUILD),
                 )

@@ -59,6 +59,8 @@ object AppIcons {
     val Close = lineIcon("close", "M6 6l12 12M18 6L6 18")
     val Plus = lineIcon("plus", "M12 5v14M5 12h14")
     val Check = lineIcon("check", "M5 12l5 5L20 7")
+    val Bell = lineIcon("bell", "M6 16V11a6 6 0 1 1 12 0v5l2 2H4z", "M10 20a2 2 0 0 0 4 0")
+    val Alarm = lineIcon("alarm", circle(12f, 13f, 7f), "M12 9v4l3 2", "M4 5l3-2M20 5l-3-2")
     val Pin = lineIcon("pin", "M12 17v5", "M9 3h6l-1 6 4 4v2H6v-2l4-4z")
     val Search = lineIcon("search", circle(11f, 11f, 7f), "M21 21l-5-5")
     val Up = lineIcon("up", "M6 15l6-6 6 6")
