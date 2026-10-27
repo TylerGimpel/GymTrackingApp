@@ -9,12 +9,17 @@ import com.tylergimpel.traintracks.data.RoutineRepository
 import com.tylergimpel.traintracks.data.sessionRepository
 import com.tylergimpel.traintracks.domain.LoggedSession
 import com.tylergimpel.traintracks.domain.RoutineDay
+import com.tylergimpel.traintracks.domain.Session
 import com.tylergimpel.traintracks.domain.estimatedLengthOf
 import com.tylergimpel.traintracks.ui.MuscleGroup
 import com.tylergimpel.traintracks.ui.muscleGroupsOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +31,7 @@ import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
@@ -51,7 +57,8 @@ data class TodayUiState(
     val week: List<LocalDate> = emptyList(),
     /** The days of [week] something was trained on. */
     val trained: Set<LocalDate> = emptySet(),
-    val today: LocalDate = LocalDate.now(),
+    /** Required rather than defaulted, so that no state can carry a day read when it was made. */
+    val today: LocalDate,
     val last: LoggedSession? = null,
     /** The day being asked about skipping, while it is. */
     val skipping: RoutineDay? = null,
@@ -73,35 +80,61 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val skipping = MutableStateFlow<RoutineDay?>(null)
 
-    private val today = LocalDate.now(clock)
-    private val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    private val week = (0L..6L).map(monday::plusDays)
+    /**
+     * The moment, read again whenever what Today shows can change without the database saying so.
+     *
+     * A ViewModel outlives the night it was made on, so a day read once would leave Today showing
+     * yesterday, and last week, to a lifter who left the app open. Read on every collection too,
+     * so coming back to the app reads the clock afresh rather than trusting a tick that slept.
+     */
+    private val now: Flow<Instant> = flow {
+        while (true) {
+            val now = clock.instant()
+            emit(now)
+            delay(Duration.between(now, nextTurnAfter(now, zone)).toMillis().coerceAtLeast(1))
+        }
+    }
 
-    private val trained = database.sessionDao().observeCalendar(week.first(), week.last())
-        .map { rows -> rows.filter { it.exercise != null }.map { it.date }.toSet() }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val thisWeek: Flow<ThisWeek> = now.map { it.atZone(zone).toLocalDate() }
+        .distinctUntilChanged()
+        .flatMapLatest { today ->
+            val week = weekOf(today)
+            database.sessionDao().observeCalendar(week.first(), week.last()).map { rows ->
+                ThisWeek(today, week, trained = rows.filter { it.exercise != null }.map { it.date }.toSet())
+            }
+        }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<TodayUiState> = combine(
         routines.observeProgress(),
-        sessions.observeActiveSession().flatMapLatest { active ->
-            if (active == null || !active.accepts(clock.instant(), zone)) flowOf(null) else sessions.observeSession(active.id)
-        },
+        // Asked again at each turn of the clock as well as at each change to the session: last
+        // night's unfinished session stops being one to go back to when the training day ends.
+        combine(sessions.observeActiveSession(), now) { active, now -> active?.takeIf { it.accepts(now, zone) }?.id }
+            .distinctUntilChanged()
+            .flatMapLatest { id -> if (id == null) flowOf(null) else sessions.observeSession(id) },
         sessions.observeLastFinished(),
-        trained,
+        thisWeek,
         skipping,
-    ) { progress, active, last, trained, skipping ->
+    ) { progress, active, last, thisWeek, skipping ->
         TodayUiState(
             loaded = true,
             progress = progress,
             next = progress?.let(::nextOf),
             running = active,
-            week = week,
-            trained = trained,
-            today = today,
+            week = thisWeek.week,
+            trained = thisWeek.trained,
+            today = thisWeek.today,
             last = last,
             skipping = skipping,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), TodayUiState(week = week))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), placeholder())
+
+    /** Until the first reading lands: the week drawn empty rather than not at all. */
+    private fun placeholder(): TodayUiState {
+        val today = LocalDate.now(clock)
+        return TodayUiState(week = weekOf(today), today = today)
+    }
 
     private fun nextOf(progress: RoutineProgress): NextDay? {
         val day = progress.cursor ?: return null
@@ -132,4 +165,24 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
     }
+}
+
+/** The day Today is about, Monday to Sunday around it, and which of those were trained on. */
+private data class ThisWeek(val today: LocalDate, val week: List<LocalDate>, val trained: Set<LocalDate>)
+
+/** Monday to Sunday of the week [day] falls in. */
+internal fun weekOf(day: LocalDate): List<LocalDate> {
+    val monday = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    return (0L..6L).map(monday::plusDays)
+}
+
+/**
+ * The next moment after [now] that Today has to look at the clock again: midnight, when the day
+ * and maybe the week turn over, or the hour a training day ends, whichever comes first.
+ */
+internal fun nextTurnAfter(now: Instant, zone: ZoneId): Instant {
+    val local = now.atZone(zone)
+    val midnight = local.toLocalDate().plusDays(1).atStartOfDay(zone)
+    val dayEnds = local.toLocalDate().atTime(Session.TRAINING_DAY_ENDS_AT_HOUR, 0).atZone(zone)
+    return (if (dayEnds.isAfter(local)) dayEnds else midnight).toInstant()
 }
