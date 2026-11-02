@@ -12,7 +12,7 @@ It is real personal training data. This repository is private today, but a repos
 
 ## Where it lives
 
-`C:\Users\tyler\Documents\GymTrackingApp\fixtures\`
+`Documents\GymTrackingApp\fixtures\` in the author's home folder.
 
 Kept there rather than in `Downloads` (which gets emptied) or inside the working tree (where `git clean -xdf` would remove it, ignored files included).
 
