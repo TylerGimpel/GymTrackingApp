@@ -5,6 +5,7 @@ import com.tylergimpel.traintracks.ui.theme.SectionLabel
 import com.tylergimpel.traintracks.ui.theme.LocalGymColors
 import com.tylergimpel.traintracks.ui.theme.CardRow
 import com.tylergimpel.traintracks.ui.theme.AppCard
+import com.tylergimpel.traintracks.ui.theme.AppOutlinedButton
 import com.tylergimpel.traintracks.ui.session.summary
 import com.tylergimpel.traintracks.ui.session.label
 import com.tylergimpel.traintracks.ui.routine.DashedButton
@@ -57,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -71,6 +73,8 @@ fun DayScreen(
     date: LocalDate,
     onBack: () -> Unit,
     onOpenHistory: (Exercise) -> Unit = {},
+    /** Called once a restarted session is in progress again, to go back into it. */
+    onRestarted: () -> Unit = {},
     viewModel: DayViewModel = viewModel(),
 ) {
     LaunchedEffect(date) { viewModel.open(date) }
@@ -79,6 +83,7 @@ fun DayScreen(
         state = state,
         onBack = onBack,
         onOpenHistory = onOpenHistory,
+        onRestart = { sessionId -> viewModel.restart(sessionId, onRestarted) },
         correcting = Corrections(
             onEdit = viewModel::startEditing,
             onEditingChange = viewModel::changeEditingDraft,
@@ -119,6 +124,7 @@ fun DayScreen(
     state: DayUiState,
     onBack: () -> Unit = {},
     onOpenHistory: (Exercise) -> Unit = {},
+    onRestart: (Long) -> Unit = {},
     correcting: Corrections = Corrections(),
 ) {
     Scaffold(
@@ -146,7 +152,8 @@ fun DayScreen(
                 }
             }
             items(state.sessions, key = { it.session.id }) { logged ->
-                PastSession(logged, state, onOpenHistory, correcting)
+                val restart = { onRestart(logged.session.id) }.takeIf { logged.session.id == state.restartable }
+                PastSession(logged, state, onOpenHistory, restart, correcting)
             }
         }
     }
@@ -183,6 +190,8 @@ private fun PastSession(
     logged: LoggedSession,
     state: DayUiState,
     onOpenHistory: (Exercise) -> Unit,
+    /** Puts the session back in progress; null where it cannot be (see [DayUiState.restartable]). */
+    onRestart: (() -> Unit)?,
     correcting: Corrections,
 ) {
     val colors = LocalGymColors.current
@@ -239,6 +248,14 @@ private fun PastSession(
                         }
                     }
                 }
+            }
+            // Correcting a set needs none of this; going on with the workout does.
+            onRestart?.let {
+                AppOutlinedButton(
+                    text = stringResource(R.string.day_restart_workout),
+                    onClick = it,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag(RESTART_WORKOUT),
+                )
             }
         }
     }
@@ -303,3 +320,6 @@ private fun SetLine(number: Int, set: PerformedSet, displayUnit: WeightUnit, lif
         )
     }
 }
+
+/** Handle for the tests. */
+const val RESTART_WORKOUT = "restart-workout"

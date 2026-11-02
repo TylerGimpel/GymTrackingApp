@@ -56,6 +56,7 @@ import java.util.Locale
 
 /** The tag on Start and Resume, whichever the hero card is showing. */
 const val TODAY_START = "today-start"
+const val DONE_CARD = "today-done-card"
 
 /**
  * Today, the home: one hero card with the next day and a big Start, this week, and the last
@@ -85,7 +86,8 @@ fun TodayScreen(
             when {
                 !state.loaded -> Unit
                 state.running != null -> ResumeCard(state, onResume)
-                state.last?.session?.date == state.today -> DoneCard(state.last!!, state.next, onStart)
+                state.last?.session?.date == state.today ->
+                    DoneCard(state.last!!, state.next, onStart, onOpen = { onOpenDay(state.today) })
                 state.next != null -> NextCard(state.next!!, onStart, viewModel::startSkipping)
                 state.progress != null -> EmptyRoutineCard(onJustLog)
                 else -> WaysToStartCard(onLetTheAppBuild, onBuildRoutine, onImportFitNotes, onJustLog)
@@ -171,12 +173,15 @@ private fun ResumeCard(state: TodayUiState, onResume: () -> Unit) {
     }
 }
 
-/** Trained today already: how it went, and the next day a tap away for anybody going again. */
+/**
+ * Trained today already: how it went, and the next day a tap away for anybody going again. The card
+ * itself opens the day, where the workout can be corrected or restarted.
+ */
 @Composable
-private fun DoneCard(last: LoggedSession, next: NextDay?, onStart: () -> Unit) {
+private fun DoneCard(last: LoggedSession, next: NextDay?, onStart: () -> Unit, onOpen: () -> Unit) {
     val session = last.session
     val minutes = session.finishedAt?.let { minutesOf(Duration.between(session.startedAt, it)) }
-    AppCard(Modifier.fillMaxWidth()) {
+    AppCard(Modifier.fillMaxWidth().testTag(DONE_CARD), onClick = onOpen) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SectionLabel(stringResource(R.string.today_done))
             UppercaseText(session.routineDayName ?: stringResource(R.string.today_workout), style = MaterialTheme.typography.displayMedium)

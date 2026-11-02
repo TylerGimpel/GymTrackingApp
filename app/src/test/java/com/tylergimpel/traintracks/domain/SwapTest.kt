@@ -94,6 +94,40 @@ class SwapTest {
         assertEquals(2, swapCandidatesFor(benchPress, banned, GYM, includeDisliked = true).size)
     }
 
+    @Test
+    fun `the lifts programs use come before the rest, best first`() {
+        val press = exercise("Dumbbell_Shoulder_Press", "Dumbbell Shoulder Press", "shoulders", "compound", "dumbbell")
+        val military = exercise("Standing_Military_Press", "Overhead Press", "shoulders", "compound", "barbell")
+        val arnold = exercise("Arnold_Dumbbell_Press", "Arnold Dumbbell Press", "shoulders", "compound", "dumbbell")
+        val machine = exercise("Machine_Shoulder_Military_Press", "Machine Shoulder Press", "shoulders", "compound", "machine")
+
+        val candidates = swapCandidatesFor(press, listOf(arnold, machine, military, press), GYM)
+
+        // Alphabetical would put Arnold first; programs put the overhead press there (ADR 0013).
+        assertEquals(listOf(military, machine, arnold), candidates)
+    }
+
+    @Test
+    fun `a lift that is never generated is offered only once the lifter has trained it`() {
+        val press = exercise("Dumbbell_Shoulder_Press", "Dumbbell Shoulder Press", "shoulders", "compound", "dumbbell")
+        val throwing = exercise("Throw", "Backward Medicine Ball Throw", "shoulders", "compound", "dumbbell")
+            .copy(category = "plyometrics")
+
+        assertFalse(swapCandidatesFor(press, listOf(press, throwing), GYM).contains(throwing))
+        assertTrue(swapCandidatesFor(press, listOf(press, throwing), GYM, trainedBefore = setOf("Throw")).contains(throwing))
+    }
+
+    @Test
+    fun `each candidate says why it is offered`() {
+        val press = exercise("Dumbbell_Shoulder_Press", "Dumbbell Shoulder Press", "shoulders", "compound", "dumbbell")
+        val military = exercise("Standing_Military_Press", "Overhead Press", "shoulders", "compound", "barbell")
+        val arnold = exercise("Arnold_Dumbbell_Press", "Arnold Dumbbell Press", "shoulders", "compound", "dumbbell")
+
+        assertEquals(SwapWhy(SwapReason.DONE_BEFORE, "shoulders"), swapWhyFor(arnold, press, trainedBefore = setOf(arnold.id)))
+        assertEquals(SwapWhy(SwapReason.COMMON, "shoulders"), swapWhyFor(military, press, trainedBefore = emptySet()))
+        assertEquals(SwapWhy(SwapReason.SAME_MUSCLE, "shoulders"), swapWhyFor(arnold, press, trainedBefore = emptySet()))
+    }
+
     private companion object {
         val GYM = setOf("barbell", "machine", "dumbbell")
 

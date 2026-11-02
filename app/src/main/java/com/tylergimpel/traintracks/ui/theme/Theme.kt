@@ -1,6 +1,7 @@
 package com.tylergimpel.traintracks.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -20,7 +21,10 @@ fun TrainTracksTheme(
             colorScheme = colors.toColorScheme(darkTheme),
             typography = GymTypography,
             shapes = GymShapes,
-            content = content,
-        )
+        ) {
+            // Text outside any Surface reads this, and Compose's own default is black: the workout's
+            // big number was black on charcoal until the theme said otherwise.
+            CompositionLocalProvider(LocalContentColor provides colors.text, content = content)
+        }
     }
 }

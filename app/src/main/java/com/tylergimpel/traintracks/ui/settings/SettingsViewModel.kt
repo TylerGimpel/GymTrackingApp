@@ -32,6 +32,8 @@ import com.tylergimpel.traintracks.data.ImportResult
 import com.tylergimpel.traintracks.data.ImportOutcome
 import com.tylergimpel.traintracks.data.ListedImport
 import com.tylergimpel.traintracks.domain.Exercise
+import com.tylergimpel.traintracks.domain.ImportPreview
+import com.tylergimpel.traintracks.domain.NeutralImport
 import com.tylergimpel.traintracks.domain.NameDecision
 import java.time.Instant
 import java.io.File
@@ -61,10 +63,21 @@ data class SettingsUiState(
     val imports: List<ListedImport> = emptyList(),
     /** An import the lifter asked to undo, waiting on them to confirm: it removes history. */
     val confirmingUndo: ListedImport? = null,
-    /** A file read and previewed, waiting on the lifter to go ahead or back out (#99, #103). */
-    val previewing: Previewing? = null,
+    /** A file read and counted, waiting on the lifter to import it or back out (#103). */
+    val confirmingImport: ConfirmImport? = null,
     /** Whether any workout tip has gone, so Show tips again has something to bring back (#156). */
     val tipsGone: Boolean = false,
+)
+
+/**
+ * A FitNotes file read and waiting on the lifter, with nothing yet written (#103): one question,
+ * import or not. Every name the bank does not know becomes an exercise of the lifter's own (#99).
+ */
+data class ConfirmImport(
+    val records: NeutralImport,
+    /** What importing will bring in. */
+    val preview: ImportPreview,
+    val bank: List<Exercise>,
 )
 
 /** A backup ready to restore, and what restoring it would replace. */
@@ -143,7 +156,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         formerNames = { ExerciseAliasStore(application).loadFormerNames() },
     )
     private val confirmingUndo = MutableStateFlow<ListedImport?>(null)
-    private val previewing = MutableStateFlow<Previewing?>(null)
+    private val confirmingImport = MutableStateFlow<ConfirmImport?>(null)
 
     val state: StateFlow<SettingsUiState> = combine(
         combine(
@@ -157,10 +170,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         },
         importer.observeListed(),
         confirmingUndo,
-        previewing,
+        confirmingImport,
         profile.observeTipsDone(),
     ) { settings, imports, undoing, pending, tipsDone ->
-        settings.copy(imports = imports, confirmingUndo = undoing, previewing = pending, tipsGone = tipsDone.isNotEmpty())
+        settings.copy(imports = imports, confirmingUndo = undoing, confirmingImport = pending, tipsGone = tipsDone.isNotEmpty())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SettingsUiState())
 
     fun setDisplayUnit(unit: WeightUnit) {
@@ -287,14 +300,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val records = withContext(Dispatchers.IO) { FitNotesParser.parse(copy) }
                 val bank = ExerciseRepository(database, database.exerciseDao(), database.sessionDao(), profile)
                     .observeBank().first()
-                // A file already in is said so at once, rather than previewed and decided for nothing.
+                // A file already in is said so at once, rather than asked about for nothing.
                 importer.importedAt(records.fingerprint)?.let { DataMessage.AlreadyImported(it) } ?: run {
-                    // Nothing is written until the lifter has seen what will be and gone ahead (#103).
-                    val preview = importer.preview(records, bank)
-                    previewing.value = Previewing(
+                    // Nothing is written until the lifter has said yes (#103).
+                    confirmingImport.value = ConfirmImport(
                         records = records,
-                        preview = preview,
-                        decisions = preview.unmatched.associate { it.name to NameDecision.CreateOwn },
+                        preview = importer.preview(records, bank),
                         bank = bank.filterNot(Exercise::isTombstoned),
                     )
                     null
@@ -310,25 +321,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** Records what one unmatched name means, closing the picker if it was open for it. */
-    fun decide(name: String, decision: NameDecision) {
-        previewing.value = previewing.value?.let {
-            it.copy(decisions = it.decisions + (name to decision), choosingFor = null)
-        }
-    }
-
-    /** Opens the picker to say what [name] is the same as, or closes it with null. */
-    fun chooseSameAs(name: String?) {
-        previewing.value = previewing.value?.copy(choosingFor = name)
-    }
-
-    /** Goes ahead with the previewed import, every name decided. */
-    fun importWithDecisions() {
-        val decided = previewing.value ?: return
-        previewing.value = null
+    /** Imports the confirmed file, every name the bank does not know as the lifter's own. */
+    fun confirmImport() {
+        val confirmed = confirmingImport.value ?: return
+        confirmingImport.value = null
+        val decisions = confirmed.preview.unmatched.associate { it.name to NameDecision.CreateOwn }
         viewModelScope.launch {
             dataMessage.value = try {
-                outcomeMessage(importer.import(decided.records, decided.bank, decided.decisions))
+                outcomeMessage(importer.import(confirmed.records, confirmed.bank, decisions))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failed: Exception) {
@@ -337,9 +337,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** Backs out of the preview with nothing written. */
-    fun cancelPreview() {
-        previewing.value = null
+    /** Backs out with nothing written. */
+    fun cancelImport() {
+        confirmingImport.value = null
     }
 
     private fun outcomeMessage(outcome: ImportOutcome): DataMessage = when (outcome) {

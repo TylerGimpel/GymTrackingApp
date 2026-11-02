@@ -1,8 +1,6 @@
 package com.tylergimpel.traintracks.ui.settings
 
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -11,12 +9,9 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tylergimpel.traintracks.data.Backup
 import com.tylergimpel.traintracks.data.WouldReplace
-import com.tylergimpel.traintracks.domain.Exercise
 import com.tylergimpel.traintracks.data.ImportResult
 import com.tylergimpel.traintracks.domain.FITNOTES
 import com.tylergimpel.traintracks.domain.ImportPreview
-import com.tylergimpel.traintracks.domain.LoggingType
-import com.tylergimpel.traintracks.domain.NameDecision
 import com.tylergimpel.traintracks.domain.NeutralImport
 import com.tylergimpel.traintracks.domain.Unmatched
 import com.tylergimpel.traintracks.ui.RestFix
@@ -104,97 +99,42 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun unmatchedNamesAreCountedUpFrontAndEachIsTheLiftersOwnUntilSaidOtherwise() {
+    fun aPickedFileAsksOnceWithWhatItWillBringIn() {
+        var cancelled = 0
         var imported = 0
-        var choosing: String? = null
         compose.setContent {
             SettingsScreen(
-                state = SettingsUiState(previewing = previewing()),
-                onChooseSameAs = { choosing = it },
-                onImportWithDecisions = { imported++ },
+                state = SettingsUiState(confirmingImport = confirming()),
+                section = SettingsSection.DATA,
+                onConfirmImport = { imported++ },
+                onCancelImport = { cancelled++ },
             )
         }
 
-        // The size of the chore before any of it (#99), and the default for every name.
-        compose.onNodeWithText("2 exercise names from FitNotes need a decision").assertExists()
-        compose.onNodeWithText("Hammer Strength Row · 14 sets").assertExists()
-        compose.onAllNodesWithText("My own").assertCountEquals(2)
-        compose.onAllNodesWithText("My own")[0].assertIsSelected()
+        // Before anything is written (#103): how much and over when, and nothing else to decide.
+        compose.onNodeWithText("Import from FitNotes?").assertExists()
+        compose.onNodeWithText("212 sessions and 2234 sets, Jan 8, 2024 – Mar 2, 2026.").assertExists()
+        compose.onNodeWithText("My own").assertDoesNotExist()
 
-        compose.onAllNodesWithText("Same as…")[0].performClick()
-        assertEquals("Hammer Strength Row", choosing)
-
+        compose.onNodeWithText("Cancel").performClick()
+        assertEquals(1, cancelled)
         compose.onNodeWithTag(IMPORT_GO).performClick()
         assertEquals(1, imported)
     }
 
     @Test
-    fun aNameIsSaidToBeTheSameAsAnExerciseChosenFromTheBank() {
-        var decided: Pair<String, NameDecision>? = null
-        compose.setContent {
-            SettingsScreen(
-                state = SettingsUiState(previewing = previewing().copy(choosingFor = "Hammer Strength Row")),
-                onDecide = { name, decision -> decided = name to decision },
-            )
-        }
-
-        // Only what is here to choose from: a mapped name never makes a new exercise.
-        compose.onNodeWithText("Hammer Strength Row is the same as").assertExists()
-        compose.onNodeWithText("Add new", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("Bent Over Barbell Row").performClick()
-
-        assertEquals("Hammer Strength Row" to NameDecision.SameAs("Bent_Over_Barbell_Row"), decided)
-    }
-
-    @Test
-    fun aDecidedNameSaysWhatItIsTheSameAs() {
-        val decided = previewing().let {
-            it.copy(decisions = it.decisions + ("Pec Deck Machine" to NameDecision.SameAs("Bent_Over_Barbell_Row")))
-        }
-        compose.setContent { SettingsScreen(state = SettingsUiState(previewing = decided)) }
-
-        compose.onNodeWithText("Same as Bent Over Barbell Row").assertIsSelected()
-    }
-
-    @Test
-    fun aPickedFileSaysWhatItWillBringInAndBackingOutWritesNothing() {
-        var cancelled = 0
-        var imported = 0
-        compose.setContent {
-            SettingsScreen(
-                state = SettingsUiState(previewing = previewing()),
-                onCancelPreview = { cancelled++ },
-                onImportWithDecisions = { imported++ },
-            )
-        }
-
-        // Before anything is written (#103): how much, over when, what is left out, and the
-        // honest word on volume.
-        compose.onNodeWithText("212").assertExists()
-        compose.onNodeWithText("2234").assertExists()
-        compose.onNodeWithText("Jan 8, 2024 – Mar 2, 2026").assertExists()
-        compose.onNodeWithText("5 sets cannot be read", substring = true).assertExists()
-        compose.onNodeWithText("volume from before the import is approximate", substring = true).assertExists()
-
-        compose.onNodeWithText("Cancel").performClick()
-        assertEquals(1, cancelled)
-        assertEquals(0, imported)
-    }
-
-    @Test
     fun aFileWithNothingReadableCannotBeImported() {
-        val empty = previewing().copy(
+        val empty = confirming().copy(
             preview = ImportPreview(from = null, to = null, sessions = 0, sets = 0, unreadable = 4, unmatched = emptyList()),
-            decisions = emptyMap(),
         )
-        compose.setContent { SettingsScreen(state = SettingsUiState(previewing = empty)) }
+        compose.setContent { SettingsScreen(state = SettingsUiState(confirmingImport = empty), section = SettingsSection.DATA) }
 
         compose.onNodeWithText("Nothing in this file can be brought in.").assertExists()
         compose.onNodeWithTag(IMPORT_GO).assertIsNotEnabled()
     }
 
     @Test
-    fun theSummarySaysWhatWasLeftBehindThatVolumeIsApproximateAndHowToUndo() {
+    fun anImportSaysHowManySessionsItBroughtInAndNoMore() {
         val result = ImportResult(
             batchId = 1,
             sessions = 212,
@@ -205,42 +145,22 @@ class SettingsScreenTest {
         )
         compose.setContent { SettingsScreen(state = SettingsUiState(dataMessage = DataMessage.Imported(result)), section = SettingsSection.DATA) }
 
-        compose.onNodeWithText("Brought in 212 sessions, 2229 sets.", substring = true).assertExists()
-        compose.onNodeWithText("5 sets could not be read", substring = true).assertExists()
-        compose.onNodeWithText("strength history is reliable all the way back", substring = true).assertExists()
-        compose.onNodeWithText("use Undo next to it", substring = true).assertExists()
+        compose.onNodeWithText("Imported 212 sessions.").assertExists()
+        compose.onNodeWithText("approximate", substring = true).assertDoesNotExist()
     }
 
-    private fun previewing(): Previewing {
-        val unmatched = listOf(Unmatched("Hammer Strength Row", sets = 14), Unmatched("Pec Deck Machine", sets = 3))
-        return Previewing(
-            records = NeutralImport(source = FITNOTES, fingerprint = "f", sets = emptyList()),
-            preview = ImportPreview(
-                from = LocalDate.parse("2024-01-08"),
-                to = LocalDate.parse("2026-03-02"),
-                sessions = 212,
-                sets = 2234,
-                unreadable = 5,
-                unmatched = unmatched,
-            ),
-            decisions = unmatched.associate { it.name to NameDecision.CreateOwn },
-            bank = listOf(
-                Exercise(
-                    id = "Bent_Over_Barbell_Row",
-                    bankName = "Bent Over Barbell Row",
-                    primaryMuscles = listOf("middle back"),
-                    secondaryMuscles = emptyList(),
-                    equipment = "barbell",
-                    mechanic = "compound",
-                    force = "pull",
-                    category = "strength",
-                    level = "beginner",
-                    loggingType = LoggingType.WEIGHT_REPS,
-                    unilateral = false,
-                ),
-            ),
-        )
-    }
+    private fun confirming() = ConfirmImport(
+        records = NeutralImport(source = FITNOTES, fingerprint = "f", sets = emptyList()),
+        preview = ImportPreview(
+            from = LocalDate.parse("2024-01-08"),
+            to = LocalDate.parse("2026-03-02"),
+            sessions = 212,
+            sets = 2234,
+            unreadable = 5,
+            unmatched = listOf(Unmatched("Hammer Strength Row", sets = 14)),
+        ),
+        bank = emptyList(),
+    )
 
     @Test
     fun aRestTimerThatWorksHasNothingToFix() {

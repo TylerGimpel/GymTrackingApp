@@ -439,6 +439,22 @@ class SessionRepository(
         sessions.update(session.copy(note = note?.takeIf(String::isNotBlank)))
     }
 
+    /**
+     * Puts a finished session back in progress, so the workout screen picks it up where it ended.
+     * Its sets, plan and the day it realised all stay, and Finish files it the same way again.
+     *
+     * Refused, returning false, when it is past its training day or another session is running:
+     * two sessions taking sets at once would leave nobody knowing which one a set went to.
+     */
+    suspend fun reopenSession(sessionId: Long): Boolean = database.withTransaction {
+        val now = clock.instant()
+        val session = sessions.session(sessionId)?.toDomain() ?: return@withTransaction false
+        val running = sessions.activeSession()?.toDomain()?.takeIf { it.accepts(now, zone) }
+        if (running != null || !session.canReopen(now, zone)) return@withTransaction false
+        sessions.update(session.reopen().toEntity())
+        true
+    }
+
     /** Refiles the session onto [date]. When it was trained is untouched. */
     suspend fun refile(sessionId: Long, date: LocalDate) {
         val session = sessions.session(sessionId) ?: return

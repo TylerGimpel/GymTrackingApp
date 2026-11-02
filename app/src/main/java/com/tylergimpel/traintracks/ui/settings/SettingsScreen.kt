@@ -48,10 +48,9 @@ import com.tylergimpel.traintracks.domain.WeightUnit
 import com.tylergimpel.traintracks.ui.RestFix
 import com.tylergimpel.traintracks.ui.WeightUnitChips
 import com.tylergimpel.traintracks.ui.settingsFor
-import com.tylergimpel.traintracks.data.ImportResult
 import com.tylergimpel.traintracks.data.RefusedBecause
 import com.tylergimpel.traintracks.data.ListedImport
-import com.tylergimpel.traintracks.domain.NameDecision
+import com.tylergimpel.traintracks.domain.ImportPreview
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import java.time.Instant
@@ -143,10 +142,8 @@ fun SettingsScreen(
         onAskToUndo = viewModel::askToUndo,
         onUndoImport = viewModel::undoImport,
         onKeepImport = viewModel::keepImport,
-        onDecide = viewModel::decide,
-        onChooseSameAs = viewModel::chooseSameAs,
-        onImportWithDecisions = viewModel::importWithDecisions,
-        onCancelPreview = viewModel::cancelPreview,
+        onConfirmImport = viewModel::confirmImport,
+        onCancelImport = viewModel::cancelImport,
     )
 }
 
@@ -173,10 +170,8 @@ fun SettingsScreen(
     onAskToUndo: (ListedImport) -> Unit = {},
     onUndoImport: () -> Unit = {},
     onKeepImport: () -> Unit = {},
-    onDecide: (String, NameDecision) -> Unit = { _, _ -> },
-    onChooseSameAs: (String?) -> Unit = {},
-    onImportWithDecisions: () -> Unit = {},
-    onCancelPreview: () -> Unit = {},
+    onConfirmImport: () -> Unit = {},
+    onCancelImport: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -185,18 +180,6 @@ fun SettingsScreen(
             )
         },
     ) { insets ->
-        // A previewed import takes the whole screen until the lifter goes ahead or backs out.
-        state.previewing?.let { previewing ->
-            ImportPreviewScreen(
-                previewing = previewing,
-                insets = insets,
-                onDecide = onDecide,
-                onChooseSameAs = onChooseSameAs,
-                onImport = onImportWithDecisions,
-                onCancel = onCancelPreview,
-            )
-            return@Scaffold
-        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -314,7 +297,7 @@ fun SettingsScreen(
                                 },
                             )
                             DataMessage.NotImportable -> stringResource(R.string.settings_not_importable)
-                            is DataMessage.Imported -> importedText(message.result)
+                            is DataMessage.Imported -> stringResource(R.string.import_done, message.result.sessions)
                             is DataMessage.AlreadyImported -> stringResource(
                                 R.string.import_already,
                                 message.importedAt.asLocalDay(),
@@ -365,6 +348,10 @@ fun SettingsScreen(
                 )
             }
 
+            state.confirmingImport?.let {
+                ConfirmImportDialog(it.preview, onConfirm = onConfirmImport, onCancel = onCancelImport)
+            }
+
             state.confirmingRestore?.let {
                 ConfirmRestoreDialog(confirm = it, onConfirm = onConfirmRestore, onCancel = onCancelRestore)
             }
@@ -408,37 +395,30 @@ private fun ConfirmRestoreDialog(confirm: ConfirmRestore, onConfirm: () -> Unit,
 private fun Instant.asLocalDay(): String =
     atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
 
-/**
- * What an import did, and what it did not: nothing left behind goes unsaid, because a gap found
- * later is a gap the lifter stops trusting the whole import over.
- */
+/** One question before a FitNotes file is written: how much it brings in, import or not (#103). */
 @Composable
-private fun importedText(result: ImportResult): String = buildList {
-    add(stringResource(R.string.import_done, result.sessions, result.sets))
-    if (result.alreadyHere > 0) add(stringResource(R.string.import_already_here, result.alreadyHere))
-    if (result.created.isNotEmpty()) add(stringResource(R.string.import_created, result.created.size))
-    if (result.createdWithoutMuscles.isNotEmpty()) {
-        add(
-            stringResource(
-                R.string.import_created_without_muscles,
-                result.createdWithoutMuscles.sorted().joinToString(", "),
-            ),
-        )
-    }
-    if (result.unmatched.isNotEmpty()) {
-        add(
-            stringResource(
-                R.string.import_unmatched,
-                result.unmatched.values.sum(),
-                result.unmatched.keys.sorted().joinToString(", "),
-            ),
-        )
-    }
-    val later = result.notYetSupported.values.sum()
-    if (later > 0) add(stringResource(R.string.import_unreadable, later))
-    if (!result.volumeReliable) add(stringResource(R.string.import_volume_approximate))
-    add(stringResource(R.string.import_how_to_undo))
-}.joinToString(" ")
+private fun ConfirmImportDialog(preview: ImportPreview, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val dates = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.import_confirm_title)) },
+        text = {
+            Text(
+                if (preview.from != null && preview.to != null && preview.sessions > 0) {
+                    stringResource(R.string.import_confirm_body, preview.sessions, preview.sets, preview.from.format(dates), preview.to.format(dates))
+                } else {
+                    stringResource(R.string.import_nothing)
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = preview.sessions > 0, modifier = Modifier.testTag(IMPORT_GO)) {
+                Text(stringResource(R.string.import_confirm_go))
+            }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) } },
+    )
+}
 
 @Composable
 private fun Setting(label: String, why: String? = null, content: @Composable () -> Unit) {
@@ -493,3 +473,6 @@ internal fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
 
 /** Handle for the tests. */
 const val SHOW_TIPS_AGAIN = "show-tips-again"
+
+/** The tag on the import pop-up's Import button. */
+const val IMPORT_GO = "import-go"

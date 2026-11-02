@@ -318,6 +318,7 @@ private fun TrainTracks(
                         date = LocalDate.parse(it),
                         onBack = navigator::back,
                         onOpenHistory = { exercise -> navigator.openHistory(exercise.id) },
+                        onRestarted = { navigator.open(Destination.WORKOUT) },
                     )
                 }
 

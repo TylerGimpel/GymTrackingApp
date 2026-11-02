@@ -46,7 +46,9 @@ import com.tylergimpel.traintracks.domain.SessionPace
 import com.tylergimpel.traintracks.domain.afterLogging
 import com.tylergimpel.traintracks.domain.SessionPlan
 import com.tylergimpel.traintracks.domain.SetDraft
+import com.tylergimpel.traintracks.domain.SwapWhy
 import com.tylergimpel.traintracks.domain.swapCandidatesFor
+import com.tylergimpel.traintracks.domain.swapWhyFor
 import com.tylergimpel.traintracks.domain.WeightUnit
 import com.tylergimpel.traintracks.domain.WorkoutTip
 import com.tylergimpel.traintracks.domain.asAmountText
@@ -217,6 +219,8 @@ private data class ScreenState(
      * which is a real answer and one the sheet says out loud rather than looking broken.
      */
     val swapCandidates: List<Exercise>? = null,
+    /** Why each candidate is offered, by exercise id, said under its name. */
+    val swapReasons: Map<String, SwapWhy> = emptyMap(),
     /** Whether the only things left to suggest are ones the lifter has banned. */
     val swappingLeavesOnlyDisliked: Boolean = false,
     /**
@@ -315,6 +319,8 @@ data class SessionUiState(
     val editingExercise: ExerciseDetails? = null,
     /** What to train instead, while the lifter is looking. Null while the sheet is closed. */
     val swapCandidates: List<Exercise>? = null,
+    /** Why each candidate is offered, by exercise id. */
+    val swapReasons: Map<String, SwapWhy> = emptyMap(),
     /**
      * Whether the only candidates left are ones the lifter has banned.
      *
@@ -590,6 +596,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 skipping = cycle.skipping,
                 editingExercise = screen.editingExercise,
                 swapCandidates = screen.swapCandidates,
+                swapReasons = screen.swapReasons,
                 pickerBank = screen.pickerBank,
                 swappingLeavesOnlyDisliked = screen.swappingLeavesOnlyDisliked,
                 // The first one they have not answered about yet, and only one at a time.
@@ -994,6 +1001,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     picking = Picking.ADD,
                     // What they have done before first, because those need no calibrating.
                     swapCandidates = bank.filter { exercise -> exercise.id in trained && !exercise.isDisliked },
+                    swapReasons = emptyMap(),
                     swappingLeavesOnlyDisliked = false,
                     pickerBank = bank,
                 )
@@ -1122,6 +1130,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 it.copy(
                     picking = Picking.SWAP,
                     swapCandidates = candidates.ifEmpty { leastBad },
+                    swapReasons = candidates.ifEmpty { leastBad }.associate { it.id to swapWhyFor(it, replacing, trained) },
                     swappingLeavesOnlyDisliked = leastBad.isNotEmpty(),
                     pickerBank = bank,
                 )
@@ -1170,7 +1179,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun cancelSwapping() =
-        screen.update { it.copy(swapCandidates = null, swappingLeavesOnlyDisliked = false, picking = null) }
+        screen.update { it.copy(swapCandidates = null, swapReasons = emptyMap(), swappingLeavesOnlyDisliked = false, picking = null) }
 
     /**
      * Trains [instead] for the rest of this session.
@@ -1195,7 +1204,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 }
                 else -> now.additions + Addition(instead, replaces = here.id)
             }
-            now.copy(additions = additions, swapCandidates = null, swappingLeavesOnlyDisliked = false, picking = null)
+            now.copy(additions = additions, swapCandidates = null, swapReasons = emptyMap(), swappingLeavesOnlyDisliked = false, picking = null)
         }
         select(instead)
     }

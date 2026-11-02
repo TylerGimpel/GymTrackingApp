@@ -117,6 +117,32 @@ class SessionTest {
     }
 
     @Test
+    fun `a session finished earlier today can be reopened, and then takes sets again`() {
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+            .finish(at("2026-09-14T19:45"))
+
+        assertTrue(session.canReopen(at("2026-09-14T21:00"), zone))
+        assertTrue(session.reopen().accepts(at("2026-09-14T21:00"), zone))
+    }
+
+    @Test
+    fun `a session cannot be reopened once its training day is over`() {
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+            .finish(at("2026-09-14T19:45"))
+
+        assertFalse(session.canReopen(at("2026-09-15T05:00"), zone))
+    }
+
+    @Test
+    fun `an imported session cannot be reopened`() {
+        val session = Session.start(at("2026-09-14T18:30"), zone)
+            .finish(at("2026-09-14T19:45"))
+            .copy(importBatchId = 1)
+
+        assertFalse(session.canReopen(at("2026-09-14T21:00"), zone))
+    }
+
+    @Test
     fun `a session filed on the day it was trained is not backdated`() {
         val session = Session.start(at("2026-09-14T18:30"), zone)
 
