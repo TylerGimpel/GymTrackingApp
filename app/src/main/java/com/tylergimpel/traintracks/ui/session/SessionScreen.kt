@@ -82,6 +82,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylergimpel.traintracks.R
+import com.tylergimpel.traintracks.domain.SwapReason
+import com.tylergimpel.traintracks.domain.SwapWhy
 import com.tylergimpel.traintracks.domain.Avoided
 import com.tylergimpel.traintracks.domain.Effort
 import com.tylergimpel.traintracks.domain.Exercise
@@ -559,6 +561,7 @@ fun SessionScreen(
                 candidates.isEmpty() && state.picking == Picking.SWAP -> stringResource(R.string.swap_nothing)
                 else -> null
             },
+            reason = { exercise -> state.swapReasons[exercise.id]?.let { swapReasonText(it) } },
         )
     }
 
@@ -1171,3 +1174,11 @@ const val FINISH_WORKOUT = "finish-workout"
 const val EXERCISE_NAME = "exercise-name"
 const val REST_BAR = "rest-bar"
 const val ADD_EXERCISE = "add-exercise"
+
+/** Why a swap candidate is offered, in the words under its name. */
+@Composable
+private fun swapReasonText(why: SwapWhy): String = when (why.reason) {
+    SwapReason.DONE_BEFORE -> stringResource(R.string.swap_reason_done_before)
+    SwapReason.COMMON -> stringResource(R.string.swap_reason_common, why.muscle.orEmpty())
+    SwapReason.SAME_MUSCLE -> stringResource(R.string.swap_reason_same_muscle, why.muscle.orEmpty())
+}

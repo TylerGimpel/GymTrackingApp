@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.tylergimpel.traintracks.R
 import com.tylergimpel.traintracks.domain.Exercise
 import com.tylergimpel.traintracks.domain.offeredFor
+import com.tylergimpel.traintracks.ui.theme.LocalGymColors
 
 /** The picker's list, so a test can find it wherever it was opened from. */
 const val EXERCISE_PICKER = "exercise-picker"
@@ -51,6 +52,7 @@ const val EXERCISE_PICKER_SEARCH = "exercise-picker-search"
  * @param suggested what the caller ranked, shown until something is typed. Empty is ordinary.
  * @param note something to say before the list — that the bans have left nothing good, or that
  *   what they just picked is one they said they did not want. Never a reason to refuse.
+ * @param reason why an exercise is offered, said under its name; null says nothing.
  */
 @Composable
 fun ExercisePicker(
@@ -63,6 +65,7 @@ fun ExercisePicker(
     onCancel: () -> Unit,
     suggested: List<Exercise> = emptyList(),
     note: String? = null,
+    reason: @Composable (Exercise) -> String? = { null },
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var muscle by rememberSaveable { mutableStateOf<String?>(null) }
@@ -134,7 +137,14 @@ fun ExercisePicker(
                     modifier = Modifier.heightIn(max = 320.dp).testTag(EXERCISE_PICKER),
                 ) {
                     items(offered, key = Exercise::id) { exercise ->
-                        TextButton(onClick = { onPick(exercise) }) { Text(exercise.name) }
+                        TextButton(onClick = { onPick(exercise) }, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Text(exercise.name)
+                                reason(exercise)?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall, color = LocalGymColors.current.dim)
+                                }
+                            }
+                        }
                     }
                 }
             }

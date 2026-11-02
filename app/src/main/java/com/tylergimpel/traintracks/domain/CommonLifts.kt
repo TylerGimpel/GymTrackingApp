@@ -286,7 +286,7 @@ internal fun List<Exercise>.fallbackFor(muscle: String, widened: Boolean): List<
 private val SECOND_TIER: Set<String> by lazy { SLOTS.flatMapTo(mutableSetOf()) { it.secondTier } - SLOTS.flatMap { it.ranked }.toSet() }
 
 /** Each common lift for [muscle], to its place in the ranking across that muscle's slots. */
-private fun commonRankFor(muscle: String, widened: Boolean): Map<String, Int> =
+internal fun commonRankFor(muscle: String, widened: Boolean): Map<String, Int> =
     SLOTS.filter { it.muscle == muscle }
         .flatMap { it.ranked + if (widened) it.secondTier else emptyList() }
         .distinct()

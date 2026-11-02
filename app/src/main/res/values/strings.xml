@@ -103,6 +103,9 @@
     <string name="avoided_swap">Swap it</string>
     <string name="avoided_remove">Take it out</string>
     <string name="swap_title">Train something else</string>
+    <string name="swap_reason_done_before">Done before</string>
+    <string name="swap_reason_common">Common for %1$s · new</string>
+    <string name="swap_reason_same_muscle">Works %1$s · new</string>
     <string name="swap_nothing">Nothing close by in your gym. Search the whole list, or add what you are using.</string>
     <string name="picker_search">Search by name</string>
     <string name="picker_everything">Everything</string>
