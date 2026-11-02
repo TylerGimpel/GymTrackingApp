@@ -62,8 +62,13 @@ class RecommendationRepository(
     private val database: GymDatabase,
     private val exercises: ExerciseDao,
     private val sessions: SessionDao,
-    /** What day it is, which is half of how long a lifter has been away from an exercise. */
-    private val clock: Clock = Clock.systemDefaultZone(),
+    /**
+     * What day it is, which is half of how long a lifter has been away from an exercise.
+     *
+     * Required rather than defaulted to the device's: a caller that forgot it would age every
+     * estimate by however long ago its history was written, which a test only notices weeks later.
+     */
+    private val clock: Clock,
     /**
      * How an estimate ages while an exercise goes untrained.
      *
