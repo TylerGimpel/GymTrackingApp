@@ -75,6 +75,17 @@ data class Session(
 
     fun finish(at: Instant): Session = copy(finishedAt = at)
 
+    /** The same session, in progress again, so the lifter can go on with it. */
+    fun reopen(): Session = copy(finishedAt = null)
+
+    /**
+     * Whether this session can be put back in progress at [now]: one logged here and finished, and
+     * only while the training day it belongs to is still going, which is when it would take a set.
+     * Reopening Tuesday's session on Thursday would file Thursday's sets under Tuesday.
+     */
+    fun canReopen(now: Instant, zone: ZoneId): Boolean =
+        !isActive && !isImported && reopen().accepts(now, zone)
+
     /**
      * The same session, recorded as having realised [day] of [routine].
      *

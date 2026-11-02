@@ -28,7 +28,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 data class DayUiState(
     val date: LocalDate? = null,
@@ -43,6 +45,8 @@ data class DayUiState(
     val adding: AddingSet? = null,
     /** What the lifter weighed that day, the latest reading, if they weighed in. */
     val weight: Kilograms? = null,
+    /** The finished session that can be put back in progress, if one can: today's, with nothing running. */
+    val restartable: Long? = null,
 )
 
 /** A set the lifter missed, being added to [sessionExerciseId] after the fact (#120). */
@@ -68,7 +72,8 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
                 sessions.observeOnDate(day),
                 profile.observeDisplayUnit(),
                 database.bodyweightDao().observeBetween(day, day),
-            ) { onThatDay, unit, readings ->
+                sessions.observeActiveSession(),
+            ) { onThatDay, unit, readings, active ->
                 val batches = onThatDay.mapNotNull { it.session.importBatchId }.toSet()
                 val sources = if (batches.isEmpty()) {
                     emptyMap()
@@ -76,7 +81,15 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
                     database.importBatchDao().all().filter { it.id in batches }
                         .associate { it.id to importSourceWithId(it.source) }
                 }
-                DayUiState(day, onThatDay, unit, sources, weight = readings.maxByOrNull { it.recordedAt }?.let { Kilograms(it.weightKg) })
+                val now = Instant.now()
+                val zone = ZoneId.systemDefault()
+                val running = active?.takeIf { it.accepts(now, zone) }
+                DayUiState(
+                    day, onThatDay, unit, sources,
+                    weight = readings.maxByOrNull { it.recordedAt }?.let { Kilograms(it.weightKg) },
+                    restartable = onThatDay.lastOrNull { it.session.canReopen(now, zone) }
+                        ?.session?.id?.takeIf { running == null },
+                )
             }
         }
 
@@ -148,6 +161,13 @@ class DayViewModel(application: Application) : AndroidViewModel(application) {
         val open = adding.value ?: return
         viewModelScope.launch {
             if (sessions.addSetTo(open.sessionExerciseId, open.draft, open.exerciseUnit)) adding.value = null
+        }
+    }
+
+    /** Puts [sessionId] back in progress, then hands over to the workout screen. */
+    fun restart(sessionId: Long, onRestarted: () -> Unit) {
+        viewModelScope.launch {
+            if (sessions.reopenSession(sessionId)) onRestarted()
         }
     }
 
